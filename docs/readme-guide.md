@@ -1,28 +1,24 @@
 # README Guide
 
-Principles and patterns for writing effective README files for internal tool collections shared with engineering colleagues. Optimized for discoverability and adoption by people who already trust you, not for convincing strangers.
+Principles and patterns for writing effective README files. Synthesized from research on developer-facing open-source projects (Oh My Zsh, HTTPie, Glow, shadcn/ui, Homebrew, nvm) and developer documentation best practices.
 
 ---
 
 ## Core Principles
 
-1. **The README is a map, not a storefront.** It answers three questions in 30 seconds: What's here? What's relevant to me right now? How do I get started? Everything else links out.
+1. **The README is a storefront, not a manual.** It answers three questions in 30 seconds: What is this? Why should I care? How do I start? Everything else links out.
 
-2. **State benefits directly.** Your readers are colleagues, not skeptics. "This saves you from writing commit messages manually" is faster than making someone infer value from an example. Be explicit about what each tool does for them.
+2. **Show, don't claim.** Developers distrust vague promises. Instead of "saves you hours," show a workflow that obviously saves time. Let the reader draw their own conclusions.
 
-3. **Describe, don't dramatize.** There's a line between stating a benefit and dressing it up. "Automates commit messages" is direct. "Transforms your commit workflow" is performing. When you optimize every phrase for impact, you cross from helpful colleague into copywriter. Plain descriptions build more trust than polished ones.
+3. **Write like a knowledgeable colleague.** Not a marketer, not a professor. Conversational, direct, technically precise, and respectful of the reader's time.
 
-4. **Write like a knowledgeable colleague.** Not a marketer, not a professor. Conversational, direct, technically precise, and respectful of the reader's time.
+4. **Progressive disclosure.** Front-load the most important information. Push complexity into later sections, collapsible blocks, or linked docs.
 
-5. **Progressive disclosure.** Front-load the most important information. Push complexity into later sections, collapsible blocks, or linked docs.
+5. **Benefits are implicit in examples.** Rather than stating "improves your productivity," show the tool doing something useful in three lines. The value should be self-evident.
 
-6. **Situational triggers over feature descriptions.** Developers don't think "I want to use tool X." They think "I'm about to review a PR" or "I need to debug something." Map tools to the situations that trigger their use.
+6. **Scanability is non-negotiable.** Engineers scan, they don't read. Short paragraphs (2-3 sentences max), headers as signposts, tables for comparisons, code blocks for anything executable.
 
-7. **Scanability is non-negotiable.** Engineers scan, they don't read. Short paragraphs (2-3 sentences max), headers as signposts, tables for comparisons, code blocks for anything executable.
-
-8. **The top section is a navigation aid.** Everything above installation should orient the reader to what exists and help them find what's relevant. Everything below is detail for people who've located what they need.
-
-9. **Installation is adoption.** If the install is friction-free, people use the tool. If it's not, they don't. Treat installation as co-primary with the overview — not an afterthought buried below a feature tour.
+7. **The top 20% is the pitch.** Everything above the installation section should work as a standalone pitch. Everything below is reference material for people already convinced.
 
 ---
 
@@ -32,22 +28,16 @@ Principles and patterns for writing effective README files for internal tool col
 # Project Name
 > One-line tagline: names the category and key differentiator
 
-## Prerequisites
-Shared dependencies needed before anything else.
-List tools, versions, and a one-liner install for each.
+## What This Is
+2-3 sentences. What it does, who it's for, what problem it solves.
 
-## What's Included
-Scannable table grouped by situation/workflow.
-Format: Name | What it does | When to reach for it
-State the benefit of each tool directly.
+## What's Included (for collections) / Features (for single tools)
+Scannable table or categorized list.
+Group by use case, not alphabetically.
+Format: Name | What it does | When to use it
 
 ## Quick Start / Install
-Copy-paste ready. One block per action.
-Fastest path to a working result.
-
-## Workflows
-How the tools combine in practice.
-Organized by developer situation, not by tool.
+Fastest path to a working result. Copy-paste ready.
 
 ## Usage Examples (if not covered above)
 2-3 concrete examples progressing from simple to complex.
@@ -60,6 +50,9 @@ How to get new versions.
 
 ## Contributing (if applicable)
 Brief guidance or link to CONTRIBUTING.md.
+
+## License
+One line with link.
 ```
 
 ### Structural Decisions
@@ -74,6 +67,8 @@ Brief guidance or link to CONTRIBUTING.md.
 - Advanced configuration
 - Anything useful to 20% of readers but noise for the other 80%
 
+**Badges:** 3-5 max. Build status, version, license. More than that signals insecurity, not quality.
+
 ---
 
 ## Tone Guidelines
@@ -86,8 +81,7 @@ Senior engineer explaining their tool to a peer. Confident without being boastfu
 
 | Principle | Example |
 |-----------|---------|
-| State benefits directly | "Automates commit messages so you skip writing them by hand." |
-| Describe plainly, don't dramatize | "Slash commands for verifying code" not "Slash commands that verify your code actually works" |
+| State facts, let value be obvious | "Generates type-safe API clients from OpenAPI specs in under 5 seconds." |
 | Use second person, active voice | "Run the command to install the skill into your project." |
 | Be specific, not superlative | "Reduces boilerplate by eliminating manual model mapping." |
 | Acknowledge tradeoffs honestly | "Optimized for speed over flexibility — if you need custom X, see alternatives." |
@@ -102,8 +96,6 @@ Senior engineer explaining their tool to a peer. Confident without being boastfu
 | Condescending simplifiers | "Simply run the command" / "It's easy" | Implies the reader is foolish if they struggle |
 | Overly formal | "The aforementioned utility enables acquisition of..." | Creates distance, wastes time |
 | Excessive punctuation | "Check out these amazing features!!!" | Reads as desperate |
-| Implicit-only value | Showing an example without stating what it saves you | Makes the reader do inference work your sentence could do |
-| Dramatized descriptions | "Transforms your commit workflow" / "Turns plain English into structured tickets" | Reads as polished rather than honest — plain description builds more trust |
 
 ### Word Choice
 
@@ -118,23 +110,6 @@ Senior engineer explaining their tool to a peer. Confident without being boastfu
 - Too informal: "Dude! This API is totally awesome!"
 - Just right: "This API lets you collect data about what your users like."
 - Too formal: "The API documented by this page may enable the acquisition of information pertaining to user preferences."
-
----
-
-## Prerequisites Section
-
-When multiple tools share common dependencies, document them once at the top rather than repeating per-tool.
-
-```markdown
-## Prerequisites
-
-Before installing anything, make sure you have:
-
-- **UV** — Python package manager. Install: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- **Node 20+** — `brew install node` or use your preferred version manager
-```
-
-This removes the most common adoption blocker upfront. A reader who hits a dependency error during installation will abandon the process. Catching this first prevents that.
 
 ---
 
@@ -210,61 +185,40 @@ When the README covers multiple tools, commands, or features, discoverability is
 ### Use Three-Column Tables
 
 ```markdown
-| Tool | What it does | When to reach for it |
-|------|-------------|----------------------|
-| `tool-a` | Verb-first description + explicit benefit | Concrete trigger scenario |
-| `tool-b` | Verb-first description + explicit benefit | Concrete trigger scenario |
+| Tool | What it does | When to use it |
+|------|-------------|----------------|
+| `tool-a` | Verb-first description of action | Concrete trigger scenario |
+| `tool-b` | Verb-first description of action | Concrete trigger scenario |
 ```
 
-The "When to reach for it" column is what makes a collection useful. Without it, the reader has to read each tool's full documentation to know if it's relevant.
+The "When to use it" column is what makes a collection useful. Without it, the reader has to read each tool's full documentation to know if it's relevant.
 
-State the benefit in the description column. Not "Analyzes code" but "Catches structural issues before they reach code review."
+### Group by Use Case
 
-### Group by Situation
+Don't alphabetize — group by workflow or problem domain. A developer looking for "something to help with code review" will scan category headers, not an alphabetical list.
 
-Don't alphabetize — group by the *developer situation* that triggers use. A developer looking for "something to help with code review" will scan category headers, not an alphabetical list.
+### Add a Workflow Section
+
+After listing the tools, show how they connect:
 
 ```markdown
-### Writing Code
-| Tool | ... | ... |
+## How These Fit Together
 
-### Reviewing Code
-| Tool | ... | ... |
-
-### Debugging
-| Tool | ... | ... |
+**Writing code:** Use X after implementing, then Y before merging.
+**Reviewing code:** Run Z to catch issues A does not cover.
 ```
 
-### Show How Tools Compose
-
-After listing the tools, show how they chain together in real workflows. This turns a list of independent tools into a coherent system.
-
-```markdown
-## Workflows
-
-**Implementing a feature:**
-1. Use `plan` to break down the ticket
-2. Build the feature
-3. Run `review` to catch issues before pushing
-4. Run `commit` to generate a commit message
-
-**Debugging a production issue:**
-1. Run `debug` to start a structured investigation
-2. Use `research:deep-dive` if you need to understand unfamiliar code
-3. Fix and run `verify-work` to confirm the fix holds
-```
-
-Workflow sections are the highest-value content in a collection README. They transform "here are some tools" into "here is how your day gets better."
+This turns a list of independent tools into a coherent system.
 
 ---
 
 ## Common Pitfalls
 
-1. **Wall of text at the top.** If the first three paragraphs are prose, most readers are gone. Lead with a one-liner, then a table or code block.
+1. **Wall of text at the top.** If the first three paragraphs are prose, most readers are gone. Lead with a one-liner, then a code block or table.
 
-2. **Feature lists without context.** "Supports X, Y, Z" means nothing without showing when and why to use each. Pair features with situational triggers.
+2. **Feature lists without context.** "Supports X, Y, Z" means nothing without showing when and why to use each. Pair features with use cases.
 
-3. **Making the reader infer value.** Internal colleagues trust direct statements. "This automates X so you don't have to do Y" is more respectful of their time than an example they have to decode.
+3. **Assuming the reader already cares.** Answer "why should I use this?" before "how do I use this?"
 
 4. **Burying the quick start.** If the reader scrolls past a table of contents, feature matrix, philosophy section, and architecture diagram before finding how to install, the README has failed.
 
@@ -276,6 +230,21 @@ Workflow sections are the highest-value content in a collection README. They tra
 
 8. **Not saying when NOT to use it.** Honest scoping builds trust. "If you need X, check out Y" makes people trust your recommendations for when your tool *is* appropriate.
 
-9. **Listing tools without showing composition.** A collection of independent tools is less compelling than a system of tools that work together. Always show workflows.
+---
 
-10. **Missing prerequisites.** A reader who hits a dependency error during installation will abandon the process. Document shared dependencies once at the top.
+## Reference READMEs
+
+### [Oh My Zsh](https://github.com/ohmyzsh/ohmyzsh)
+Masters progressive disclosure and personality. Opens with a self-aware joke, provides multiple installation paths, manages a massive plugin/theme collection in a scannable way. The tone is fun without being unprofessional.
+
+**Steal:** How it balances humor with utility. How it handles a large collection with categorized lists.
+
+### [HTTPie CLI](https://github.com/httpie/cli)
+Clean visual hierarchy, concise self-description ("human-friendly"), progressive code examples from simple to complex, strategic linking to full docs.
+
+**Steal:** Features as a bulleted list of verb phrases. Examples progressing from basic to advanced.
+
+### [Glow](https://github.com/charmbracelet/glow)
+Animated GIF demo at the top immediately shows value. Crisp one-line description. Handles 13+ installation methods without overwhelming by grouping them logically.
+
+**Steal:** Visual-first approach. Installation methods organized by platform. The broader Charm org is worth studying for how to present a collection of related tools with consistent tone.
