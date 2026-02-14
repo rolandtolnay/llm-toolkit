@@ -16,80 +16,60 @@ Slash commands you invoke directly in Claude Code (e.g., `/verify-work`).
 
 #### Workflow Commands
 
-- **`/work-ticket`** — Fetch a Linear ticket, explore context, plan, implement, and commit.<br>
-  Starting work on an existing ticket.
-
-- **`/verify-work`** — Check that code changes achieve requirements using goal-backward analysis.<br>
-  After implementing a feature or fix — catches gaps that tests alone miss.
-
-- **`/verify-refactor`** — Confirm refactored code preserves behavior and handles edge cases.<br>
-  After restructuring code, before you commit.
-
-- **`/handoff`** — Generate a handoff document with full context for a fresh session.<br>
-  When a conversation is getting long or you need to continue elsewhere.
-
-- **`/work-report`** — Generate a time-tracked work report from git commit history.<br>
-  Reporting what you worked on during a period.
-
-- **`/find-conversation`** — Search previous Claude Code conversations by description.<br>
-  Locating a past conversation you need to revisit.
+- **`/work-ticket`** — Fetch a Linear ticket, explore context, plan, implement, and commit.
+  - Use when: starting work on an existing ticket.
+- **`/verify-work`** — Check that changes satisfy the requirement using goal-backward analysis.
+  - Use when: after implementing a feature or fix — catches gaps tests alone miss.
+- **`/verify-refactor`** — Confirm a refactor preserves behavior and covers edge cases.
+  - Use when: after restructuring code, before committing.
+- **`/handoff`** — Generate a handoff doc with full context for a fresh session.
+  - Use when: the conversation is long or you need to continue elsewhere.
+- **`/work-report`** — Generate a time-tracked report from git commit history.
+  - Use when: reporting work done during a period.
+- **`/find-conversation`** — Search prior Claude Code conversations by description.
+  - Use when: you need to locate a past discussion quickly.
 
 #### Documentation Commands
 
-- **`/generate-readme`** — Generate a README following proven developer communication patterns.<br>
-  Creating or rewriting a project README.
-
-- **`/heal-docs`** — Restructure Markdown docs for effective LLM consumption.<br>
-  Optimizing reference docs, skills, or guides.
-
-- **`/heal-claude-md`** — Apply priority hierarchy and self-verification patterns to CLAUDE.md files.<br>
-  Improving project instructions for Claude Code.
-
-- **`/extract-pattern`** — Pull reusable patterns from project code into portable reference docs.<br>
-  Capturing implementation conventions as documentation.
-
-- **`/prime-prompt-quality`** — Load the prompt quality guide into context.<br>
-  Before writing or reviewing prompts.
+- **`/generate-readme`** — Generate a README following proven developer communication patterns.
+  - Use when: creating or rewriting a project README.
+- **`/heal-docs`** — Restructure Markdown docs for effective LLM consumption.
+  - Use when: optimizing reference docs, skills, or guides.
+- **`/heal-claude-md`** — Apply priority hierarchy and self-verification patterns to CLAUDE.md files.
+  - Use when: improving project instructions for Claude Code.
+- **`/extract-pattern`** — Pull reusable patterns from project code into portable reference docs.
+  - Use when: capturing implementation conventions as documentation.
+- **`/prime-prompt-quality`** — Load the prompt quality guide into context.
+  - Use when: before writing or reviewing prompts.
 
 #### Mental Frameworks (`/consider:*`)
 
 Twelve decision-making frameworks, each guiding you through a structured analysis. Use `/analyze-problem` to describe your situation and get a recommendation for which framework fits best.
 
-- **`/consider:first-principles`** — Break a problem down to fundamentals and rebuild.<br>
-  Designing a new system or redesigning an existing one — gather research, constraints, and intuition, then build up from base truths instead of copying what exists.
-
-- **`/consider:5-whys`** — Drill to root cause by asking "why" repeatedly.<br>
-  A bug keeps coming back after you fix it, or CI keeps breaking in different ways — the surface symptoms vary but something deeper is wrong.
-
-- **`/consider:inversion`** — Identify what would guarantee failure, then avoid it.<br>
-  Planning a migration, major refactor, or production rollout — instead of hoping it goes well, map out what would make it fail and guard against each one.
-
-- **`/consider:second-order`** — Map consequences of consequences.<br>
-  Choosing between two architectural approaches that both work today — surface the long-term effects of each to decide based on where the codebase is heading, not just what's convenient now.
-
-- **`/consider:pareto`** — Apply the 80/20 rule to find highest-impact actions.<br>
-  An audit surfaces a dozen issues but you can only address a few — find the changes that deliver the most improvement with the least disruption.
-
-- **`/consider:eisenhower-matrix`** — Sort tasks by urgency and importance.<br>
-  Sprint planning with a mix of bugs, tech debt, feature requests, and infra work — separate what needs attention now from what just feels urgent.
-
-- **`/consider:10-10-10`** — Evaluate impact across three time horizons.<br>
-  Tempted to hardcode a value, skip the abstraction, or merge without tests — check how the shortcut feels in 10 days, 10 months, and 10 years.
-
-- **`/consider:swot`** — Map strengths, weaknesses, opportunities, and threats.<br>
-  Evaluating whether to adopt a new framework or library — systematically weigh ecosystem support, learning curve, lock-in risk, and what it unlocks.
-
-- **`/consider:occams-razor`** — Find the explanation that fits all facts with fewest assumptions.<br>
-  A bug has three plausible causes and you're tempted to chase the exotic one — start with the simplest explanation that accounts for all the symptoms.
-
-- **`/consider:one-thing`** — Identify the single highest-leverage action.<br>
-  A large project has too many open threads and progress has stalled — find the one action that would unblock the most downstream work.
-
-- **`/consider:opportunity-cost`** — Analyze what you give up by choosing each option.<br>
-  Deciding between building in-house or using a third-party service — make the trade-off explicit: development time vs. ongoing dependency and reduced control.
-
-- **`/consider:via-negativa`** — Improve by removing rather than adding.<br>
-  A prompt, config file, or module has grown bloated — you know it has more than it needs but aren't sure what to cut. Systematically identify what can go without losing value.
+- **`/consider:first-principles`** — Break a problem down to fundamentals and rebuild.
+  - Use when: designing a new system or redesigning one from multiple inputs and constraints.
+- **`/consider:5-whys`** — Drill to root cause by asking "why" repeatedly.
+  - Use when: a bug keeps resurfacing or CI keeps breaking in different ways.
+- **`/consider:inversion`** — Identify what would guarantee failure, then avoid it.
+  - Use when: planning a migration, major refactor, or production rollout.
+- **`/consider:second-order`** — Map consequences of consequences.
+  - Use when: choosing between architectural approaches that both work today but diverge long-term.
+- **`/consider:pareto`** — Apply the 80/20 rule to find highest-impact actions.
+  - Use when: an audit surfaces many issues but you can only address a few.
+- **`/consider:eisenhower-matrix`** — Sort tasks by urgency and importance.
+  - Use when: sprint planning with a mix of bugs, tech debt, features, and infra work.
+- **`/consider:10-10-10`** — Evaluate impact across three time horizons.
+  - Use when: tempted to take a shortcut — hardcode a value, skip tests, merge without review.
+- **`/consider:swot`** — Map strengths, weaknesses, opportunities, and threats.
+  - Use when: evaluating whether to adopt a new framework, library, or tool.
+- **`/consider:occams-razor`** — Find the explanation that fits all facts with fewest assumptions.
+  - Use when: a bug has multiple plausible causes and you're tempted to chase the exotic one.
+- **`/consider:one-thing`** — Identify the single highest-leverage action.
+  - Use when: a large project has stalled with too many open threads.
+- **`/consider:opportunity-cost`** — Analyze what you give up by choosing each option.
+  - Use when: deciding between building in-house vs. using a third-party service.
+- **`/consider:via-negativa`** — Improve by removing rather than adding.
+  - Use when: a prompt, config, or module feels bloated but you're unsure what to cut.
 
 ### Linear Integration
 
@@ -107,23 +87,18 @@ The skill activates when you mention creating tickets, updating issues, or check
 
 Modular capabilities with domain expertise, workflows, and templates. Claude Code activates these automatically based on what you're doing.
 
-- **`create-slash-command`** — Generate slash command files with proper YAML frontmatter and structure.<br>
-  Creating custom `/commands` for Claude Code.
-
-- **`create-agent-skill`** — Produce SKILL.md files following the router pattern with workflows and references.<br>
-  Building new skills for Claude Code.
-
-- **`create-subagent`** — Configure subagent specs with tool restrictions and orchestration patterns.<br>
-  Defining specialized agents for the Task tool.
-
-- **`create-hook`** — Write hook configurations for PreToolUse, PostToolUse, and other events.<br>
-  Adding event-driven automation or safety guardrails.
-
-- **`create-prompt`** — Create standalone prompt files with effective instruction patterns.<br>
-  Writing reusable prompts for any LLM task.
-
-- **`audit-prompt`** — Check prompts for wasted tokens, poor positioning, and vague instructions.<br>
-  Reviewing prompt quality before shipping.
+- **`create-slash-command`** — Generate slash command files with proper YAML frontmatter and structure.
+  - Activates when: creating custom `/commands` for Claude Code.
+- **`create-agent-skill`** — Produce SKILL.md files following the router pattern with workflows and references.
+  - Activates when: building new skills for Claude Code.
+- **`create-subagent`** — Configure subagent specs with tool restrictions and orchestration patterns.
+  - Activates when: defining specialized agents for the Task tool.
+- **`create-hook`** — Write hook configurations for PreToolUse, PostToolUse, and other events.
+  - Activates when: adding event-driven automation or safety guardrails.
+- **`create-prompt`** — Create standalone prompt files with effective instruction patterns.
+  - Activates when: writing reusable prompts for any LLM task.
+- **`audit-prompt`** — Check prompts for wasted tokens, poor positioning, and vague instructions.
+  - Activates when: reviewing prompt quality before shipping.
 
 ### Reference Guides
 
