@@ -27,7 +27,7 @@ Current project path: !`pwd`
    Pick terms that are specific enough to narrow results — proper nouns, technical terms, ticket IDs, feature names.
    Avoid generic words like "the", "code", "work", "changes".
 
-3. **Search today's sessions first, then expand if needed.**
+3. **Search today's sessions first, then expand progressively.**
    List JSONL files sorted by modification time (`ls -lt`).
    Focus on files from the relevant timeframe. If the user mentions "today", "yesterday", or a date, filter accordingly.
    For each candidate file, count keyword matches:
@@ -35,6 +35,7 @@ Current project path: !`pwd`
    grep -c "keyword1\|keyword2\|keyword3" <file>
    ```
    Rank files by hit count. The file with the most combined hits is the strongest candidate.
+   If no strong match found today, expand to the last 7 days, then all sessions.
 
 4. **Verify the top candidate.**
    For the top 1-2 candidates, extract matching lines to confirm relevance:
@@ -58,8 +59,7 @@ Current project path: !`pwd`
 </process>
 
 <success_criteria>
-- Correct session ID identified and returned
-- User can immediately copy-paste the resume command
-- If ambiguous, user was presented with clear options to choose from
 - No false positives — verified the session content matches the description
+- If ambiguous, user was presented with clear options to choose from
+- User can immediately copy-paste the resume command
 </success_criteria>
