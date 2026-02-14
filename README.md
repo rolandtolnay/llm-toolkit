@@ -1,4 +1,4 @@
-# claude-code-toolkit
+# llm-toolkit
 
 > A skills repository for Claude Code: commands, mental frameworks, and prompt engineering resources grounded in LLM research
 
