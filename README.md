@@ -16,45 +16,80 @@ Slash commands you invoke directly in Claude Code (e.g., `/verify-work`).
 
 #### Workflow Commands
 
-| Command | What it does | When to use it |
-|---------|-------------|----------------|
-| `/work-ticket` | Fetches a Linear ticket, explores context, plans, implements, and commits | Starting work on an existing ticket |
-| `/verify-work` | Checks that code changes achieve requirements using goal-backward analysis | After implementing a feature or fix |
-| `/verify-refactor` | Confirms refactored code preserves behavior and handles edge cases | After restructuring code |
-| `/handoff` | Generates a handoff document with full context for a fresh session | When a conversation is getting long or you need to continue elsewhere |
-| `/work-report` | Generates a time-tracked work report from git commit history | Reporting what you worked on during a period |
-| `/find-conversation` | Searches previous Claude Code conversations by description | Locating a past conversation you need to revisit |
+- **`/work-ticket`** — Fetch a Linear ticket, explore context, plan, implement, and commit.<br>
+  *Starting work on an existing ticket.*
+
+- **`/verify-work`** — Check that code changes achieve requirements using goal-backward analysis.<br>
+  *After implementing a feature or fix — catches gaps that tests alone miss.*
+
+- **`/verify-refactor`** — Confirm refactored code preserves behavior and handles edge cases.<br>
+  *After restructuring code, before you commit.*
+
+- **`/handoff`** — Generate a handoff document with full context for a fresh session.<br>
+  *When a conversation is getting long or you need to continue elsewhere.*
+
+- **`/work-report`** — Generate a time-tracked work report from git commit history.<br>
+  *Reporting what you worked on during a period.*
+
+- **`/find-conversation`** — Search previous Claude Code conversations by description.<br>
+  *Locating a past conversation you need to revisit.*
 
 #### Documentation Commands
 
-| Command | What it does | When to use it |
-|---------|-------------|----------------|
-| `/generate-readme` | Generates a README following proven developer communication patterns | Creating or rewriting a project README |
-| `/heal-docs` | Restructures Markdown docs for effective LLM consumption | Optimizing reference docs, skills, or guides |
-| `/heal-claude-md` | Applies priority hierarchy and self-verification patterns to CLAUDE.md files | Improving project instructions for Claude Code |
-| `/extract-pattern` | Pulls reusable patterns from project code into portable reference docs | Capturing implementation conventions as documentation |
-| `/prime-prompt-quality` | Loads the prompt quality guide into context | Before writing or reviewing prompts |
+- **`/generate-readme`** — Generate a README following proven developer communication patterns.<br>
+  *Creating or rewriting a project README.*
+
+- **`/heal-docs`** — Restructure Markdown docs for effective LLM consumption.<br>
+  *Optimizing reference docs, skills, or guides.*
+
+- **`/heal-claude-md`** — Apply priority hierarchy and self-verification patterns to CLAUDE.md files.<br>
+  *Improving project instructions for Claude Code.*
+
+- **`/extract-pattern`** — Pull reusable patterns from project code into portable reference docs.<br>
+  *Capturing implementation conventions as documentation.*
+
+- **`/prime-prompt-quality`** — Load the prompt quality guide into context.<br>
+  *Before writing or reviewing prompts.*
 
 #### Mental Frameworks (`/consider:*`)
 
-Twelve decision-making frameworks, each guiding you through a structured analysis.
+Twelve decision-making frameworks, each guiding you through a structured analysis. Use `/analyze-problem` to describe your situation and get a recommendation for which framework fits best.
 
-| Framework | What it does | When to use it |
-|-----------|-------------|----------------|
-| `/consider:first-principles` | Breaks a problem down to fundamentals and rebuilds | Tackling something where conventional wisdom may be wrong |
-| `/consider:5-whys` | Drills to root cause by asking "why" repeatedly | Debugging or diagnosing recurring issues |
-| `/consider:inversion` | Identifies what would guarantee failure, then avoids it | Planning where risks are unclear |
-| `/consider:second-order` | Maps consequences of consequences | Evaluating a decision with non-obvious downstream effects |
-| `/consider:pareto` | Applies the 80/20 rule to find highest-impact actions | Prioritizing when everything feels important |
-| `/consider:eisenhower-matrix` | Sorts tasks by urgency and importance | Managing a backlog or deciding what to work on next |
-| `/consider:10-10-10` | Evaluates impact across three time horizons | Making a decision you'll need to live with |
-| `/consider:swot` | Maps strengths, weaknesses, opportunities, and threats | Strategic planning or competitive analysis |
-| `/consider:occams-razor` | Finds the explanation that fits all facts with fewest assumptions | Choosing between competing hypotheses |
-| `/consider:one-thing` | Identifies the single highest-leverage action | When you're spread too thin |
-| `/consider:opportunity-cost` | Analyzes what you give up by choosing each option | Comparing mutually exclusive alternatives |
-| `/consider:via-negativa` | Improves by removing rather than adding | When complexity is the problem |
+- **`/consider:first-principles`** — Break a problem down to fundamentals and rebuild.<br>
+  *Tackling something where conventional wisdom may be wrong.*
 
-Use `/analyze-problem` to describe your situation and get a recommendation for which framework fits best.
+- **`/consider:5-whys`** — Drill to root cause by asking "why" repeatedly.<br>
+  *Debugging or diagnosing recurring issues.*
+
+- **`/consider:inversion`** — Identify what would guarantee failure, then avoid it.<br>
+  *Planning where risks are unclear.*
+
+- **`/consider:second-order`** — Map consequences of consequences.<br>
+  *Evaluating a decision with non-obvious downstream effects.*
+
+- **`/consider:pareto`** — Apply the 80/20 rule to find highest-impact actions.<br>
+  *Prioritizing when everything feels important.*
+
+- **`/consider:eisenhower-matrix`** — Sort tasks by urgency and importance.<br>
+  *Managing a backlog or deciding what to work on next.*
+
+- **`/consider:10-10-10`** — Evaluate impact across three time horizons.<br>
+  *Making a decision you'll need to live with.*
+
+- **`/consider:swot`** — Map strengths, weaknesses, opportunities, and threats.<br>
+  *Strategic planning or competitive analysis.*
+
+- **`/consider:occams-razor`** — Find the explanation that fits all facts with fewest assumptions.<br>
+  *Choosing between competing hypotheses.*
+
+- **`/consider:one-thing`** — Identify the single highest-leverage action.<br>
+  *When you're spread too thin.*
+
+- **`/consider:opportunity-cost`** — Analyze what you give up by choosing each option.<br>
+  *Comparing mutually exclusive alternatives.*
+
+- **`/consider:via-negativa`** — Improve by removing rather than adding.<br>
+  *When complexity is the problem.*
 
 ### Linear Integration
 
@@ -72,25 +107,32 @@ The skill activates when you mention creating tickets, updating issues, or check
 
 Modular capabilities with domain expertise, workflows, and templates. Claude Code activates these automatically based on what you're doing.
 
-| Skill | What it does | When it activates |
-|-------|-------------|-------------------|
-| `create-slash-command` | Generates slash command files with proper YAML frontmatter and structure | Creating custom `/commands` for Claude Code |
-| `create-agent-skill` | Produces SKILL.md files following the router pattern with workflows and references | Building new skills for Claude Code |
-| `create-subagent` | Configures subagent specs with tool restrictions and orchestration patterns | Defining specialized agents for the Task tool |
-| `create-hook` | Writes hook configurations for PreToolUse, PostToolUse, and other events | Adding event-driven automation or safety guardrails |
-| `create-prompt` | Creates standalone prompt files with effective instruction patterns | Writing reusable prompts for any LLM task |
-| `audit-prompt` | Checks prompts for wasted tokens, poor positioning, and vague instructions | Reviewing prompt quality before shipping |
+- **`create-slash-command`** — Generate slash command files with proper YAML frontmatter and structure.<br>
+  *Creating custom `/commands` for Claude Code.*
+
+- **`create-agent-skill`** — Produce SKILL.md files following the router pattern with workflows and references.<br>
+  *Building new skills for Claude Code.*
+
+- **`create-subagent`** — Configure subagent specs with tool restrictions and orchestration patterns.<br>
+  *Defining specialized agents for the Task tool.*
+
+- **`create-hook`** — Write hook configurations for PreToolUse, PostToolUse, and other events.<br>
+  *Adding event-driven automation or safety guardrails.*
+
+- **`create-prompt`** — Create standalone prompt files with effective instruction patterns.<br>
+  *Writing reusable prompts for any LLM task.*
+
+- **`audit-prompt`** — Check prompts for wasted tokens, poor positioning, and vague instructions.<br>
+  *Reviewing prompt quality before shipping.*
 
 ### Reference Guides
 
-| Guide | What it covers |
-|-------|---------------|
-| `prompt-quality-guide.md` | How LLMs process instructions: finite capacity, interference, positional bias, context depletion |
-| `docs/prompt-engineering-research-2025.md` | Academic research on instruction-following capacity and degradation patterns |
-| `docs/readme-guide.md` | Writing effective READMEs (the principles behind `/generate-readme`) |
-| `docs/skill-description-guide.md` | Writing YAML skill descriptions that Claude Code reliably discovers |
-| `docs/hooks-official-reference.md` | Complete reference for the Claude Code hooks system |
-| `docs/skills-official-reference.md` | Complete reference for the Claude Code skills system |
+- **`prompt-quality-guide.md`** — How LLMs process instructions: finite capacity, interference, positional bias, context depletion.
+- **`docs/prompt-engineering-research-2025.md`** — Academic research on instruction-following capacity and degradation patterns.
+- **`docs/readme-guide.md`** — Writing effective READMEs (the principles behind `/generate-readme`).
+- **`docs/skill-description-guide.md`** — Writing YAML skill descriptions that Claude Code reliably discovers.
+- **`docs/hooks-official-reference.md`** — Complete reference for the Claude Code hooks system.
+- **`docs/skills-official-reference.md`** — Complete reference for the Claude Code skills system.
 
 ### How These Fit Together
 
