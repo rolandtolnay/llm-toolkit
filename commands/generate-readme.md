@@ -12,7 +12,7 @@ The README is a storefront, not a manual. It answers three questions in 30 secon
 
 - **Show, don't claim.** Instead of "saves you hours," show a workflow that obviously saves time. Let the reader draw conclusions.
 - **Progressive disclosure.** Front-load the most important information. Push complexity into later sections, collapsible blocks, or linked docs.
-- **Scanability.** Short paragraphs (2-3 sentences max), headers as signposts, tables for comparisons, code blocks for anything executable.
+- **Scanability.** Short paragraphs (2-3 sentences max), headers as signposts, bullet lists for collections, code blocks for anything executable.
 - **The top 20% is the pitch.** Everything above installation should work as a standalone pitch. Everything below is reference material for people already convinced.
 </readme-principles>
 
@@ -37,8 +37,8 @@ Voice: senior engineer explaining their tool to a peer. Confident without boastf
 
 <formatting-rules>
 **Tables vs lists vs prose:**
-- Tables for comparing items with multiple attributes (features, commands, options)
-- Bullet lists for enumerating items with one attribute each
+- Tables for comparing items with short, uniform attributes (~30 chars per cell). If content wraps on GitHub, switch to bullet lists.
+- Bullet lists for everything else, including collections with longer descriptions.
 - Prose only for narrative context (the "What This Is" section)
 
 **Collapsible sections** (`<details>`) for content useful to <20% of readers: platform-specific installs, advanced config.
@@ -52,8 +52,12 @@ Voice: senior engineer explaining their tool to a peer. Confident without boastf
 - Use `bash` syntax highlighting
 
 **Collections** (multiple tools/commands/features):
-- Use three-column tables: Name | What it does | When to use it
 - Group by use case, not alphabetically
+- Format each item as:
+  ```
+  - **`name`** — Verb-first description of what it does.
+    - Use when: short trigger scenario that helps the reader recognize relevance.
+  ```
 - Add a "How These Fit Together" section showing how tools connect in a workflow
 </formatting-rules>
 
@@ -86,8 +90,7 @@ Voice: senior engineer explaining their tool to a peer. Confident without boastf
    2-3 sentences. What it does, who it's for, what problem it solves.
 
    ## Features / What's Included
-   Scannable table or categorized list grouped by use case.
-   For collections: Name | What it does | When to use it
+   Scannable list grouped by use case, using the bullet + "Use when:" format from formatting-rules.
 
    ## Quick Start
    Fastest path to working result. Copy-paste ready.
@@ -114,7 +117,7 @@ Voice: senior engineer explaining their tool to a peer. Confident without boastf
 
 <success_criteria>
 1. Honest scoping — mentions when NOT to use the tool if applicable
-2. Features grouped by use case with "when to use it" context, not bare lists
+2. Features grouped by use case with "Use when:" context on each item, not bare lists
 3. Top 20% works as standalone pitch — answers what/why/how in 30 seconds
 4. Tagline names category and key differentiator in one line
 5. Quick start appears early — not buried below feature matrices or philosophy sections
