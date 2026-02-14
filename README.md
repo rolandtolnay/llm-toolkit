@@ -80,7 +80,6 @@ Modular capabilities with domain expertise, workflows, and templates. Claude Cod
 | `docs/skill-description-guide.md` | Writing YAML skill descriptions that Claude Code reliably discovers |
 | `docs/hooks-official-reference.md` | Complete reference for the Claude Code hooks system |
 | `docs/skills-official-reference.md` | Complete reference for the Claude Code skills system |
-| `references/` | Damage control patterns for safe agentic coding |
 
 ### How These Fit Together
 

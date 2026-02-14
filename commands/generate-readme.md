@@ -61,7 +61,7 @@ Voice: senior engineer explaining their tool to a peer. Confident without boastf
 1. **Explore the project**
    Launch parallel explore agents (Task tool, subagent_type=Explore) to investigate the codebase concurrently. Split exploration by concern:
    - **Agent 1 — Project identity:** Read manifest files (package.json, Cargo.toml, pubspec.yaml, pyproject.toml, go.mod, or equivalent). Identify name, description, dependencies, scripts, and installation mechanism.
-   - **Agent 2 — Core functionality:** Scan top-level directory structure. Read entry points (main.*, index.*, lib.*), exported modules, and CLI definitions. Summarize what the project does and its key features.
+   - **Agent 2 — Core functionality:** Scan top-level directory structure. Read entry points (main.*, index.*, lib.*), exported modules, and CLI definitions. Check `.gitignore` to identify excluded files and folders. Summarize what the project does and its key features.
    - **Agent 3 — Existing docs:** Read existing README.md (note content worth preserving: badges, links, license). Read any docs/ folder for additional context.
 
    From the exploration results, determine the project type: CLI tool, library, framework, collection of tools, web app, API, or other. Note primary language, ecosystem, and installation mechanism.
@@ -120,4 +120,5 @@ Voice: senior engineer explaining their tool to a peer. Confident without boastf
 5. Quick start appears early — not buried below feature matrices or philosophy sections
 6. No banned words appear anywhere in the output
 7. Code blocks have no `$` prefix and are independently copy-pasteable
+8. No gitignored files or folders are documented
 </success_criteria>
