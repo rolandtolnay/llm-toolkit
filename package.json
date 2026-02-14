@@ -1,0 +1,11 @@
+{
+  "name": "claude-code-toolkit",
+  "version": "1.0.0",
+  "description": "Curated commands, skills, and mental models for Claude Code",
+  "bin": {
+    "claude-code-toolkit": "install.js"
+  },
+  "engines": {
+    "node": ">=16.7.0"
+  }
+}
