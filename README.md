@@ -56,6 +56,18 @@ Twelve decision-making frameworks, each guiding you through a structured analysi
 
 Use `/analyze-problem` to describe your situation and get a recommendation for which framework fits best.
 
+### Linear Integration
+
+A conversational interface to Linear, built as a Claude Code skill. Describe what you're working on and it handles the rest — creating tickets, assigning work, updating status, and querying issues without leaving your terminal.
+
+What sets it apart from a basic API wrapper:
+
+- **Effort and impact estimation** — infers priority (user impact) and estimate (implementation effort) from your description, calibrated for AI-assisted development
+- **Project and label discovery** — fetches available projects and labels, matches them to your ticket's domain, and suggests assignments
+- **Scope-change awareness** — when a comment or description update changes the scope of work, automatically re-evaluates priority and estimate
+
+The skill activates when you mention creating tickets, updating issues, or checking assignments. Configure with a `.linear.json` in your project root and a `LINEAR_API_KEY` in `.claude/settings.local.json`.
+
 ### Skills
 
 Modular capabilities with domain expertise, workflows, and templates. Claude Code activates these automatically based on what you're doing.
@@ -68,7 +80,6 @@ Modular capabilities with domain expertise, workflows, and templates. Claude Cod
 | `create-hook` | Writes hook configurations for PreToolUse, PostToolUse, and other events | Adding event-driven automation or safety guardrails |
 | `create-prompt` | Creates standalone prompt files with effective instruction patterns | Writing reusable prompts for any LLM task |
 | `audit-prompt` | Checks prompts for wasted tokens, poor positioning, and vague instructions | Reviewing prompt quality before shipping |
-| `linear` | Manages Linear issues through a conversational interface | Working with Linear tickets from Claude Code |
 
 ### Reference Guides
 
@@ -145,6 +156,14 @@ Claude reads your recent changes, traces them back to the original requirement, 
 ```
 
 Describe your situation and Claude recommends which of the 12 frameworks fits best, then walks you through the analysis.
+
+**Create a Linear ticket from a description:**
+
+```
+Users lose their draft when the app goes to background — save it to local storage
+```
+
+Claude infers priority (High — degraded core flow), estimate (S — 1-2 files, known approach), matches the right project and labels, asks you to confirm, and creates the ticket.
 
 **Generate a README for a project:**
 
