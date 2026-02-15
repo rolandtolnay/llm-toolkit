@@ -18,7 +18,7 @@ Usage: `/finalize-ticket MIN-42`
 
 1. **Load Linear skill.** Invoke the `linear` skill using the Skill tool.
 
-2. **Commit changes.** Invoke `/commit-commands:commit` with `[$ARGUMENTS]` as the prefix in the commit message (e.g., `[MIN-42] ...`). If there are no uncommitted changes, skip this step and use the most recent commit.
+2. **Commit changes.** Invoke `/commit-commands:commit` with `[$ARGUMENTS]` as a **suffix** on the first line of the commit message (e.g., `feat(scope): description [MIN-42]`). Check `git log --oneline -5` first to match the repository's commit message style. If there are no uncommitted changes, skip this step and use the most recent commit.
 
 3. **Comment on the ticket.** Run the Linear CLI `comment` command on `$ARGUMENTS` with a concise solution summary. Derive from the conversation context and commit message. Focus on decisions and approach — not a file-by-file inventory.
 
@@ -42,7 +42,7 @@ Usage: `/finalize-ticket MIN-42`
 
 <success_criteria>
 - [ ] Comment posted with meaningful solution summary (not a diff inventory)
-- [ ] Commit includes `[$ARGUMENTS]` prefix in message
+- [ ] Commit includes `[$ARGUMENTS]` suffix on first line (matching repo's commit style)
 - [ ] Commit attached to ticket via `attach-commit`
 - [ ] Ticket state set to Done
 </success_criteria>
