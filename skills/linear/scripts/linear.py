@@ -33,6 +33,9 @@ Commands:
     create-project  Create a new project
     update-project  Update an existing project
     delete-project  Delete a project by name
+    milestones      List milestones for a project
+    create-milestone  Create a project milestone
+    delete-milestone  Delete a project milestone
     labels          List labels
     create-label    Create a new label
     delete-label    Delete a label by name
@@ -76,6 +79,7 @@ class ErrorCode(str, Enum):
     LABEL_NOT_FOUND = "LABEL_NOT_FOUND"
     FILE_NOT_FOUND = "FILE_NOT_FOUND"
     UPLOAD_FAILED = "UPLOAD_FAILED"
+    MILESTONE_NOT_FOUND = "MILESTONE_NOT_FOUND"
 
 
 class LinearError(Exception):
@@ -334,6 +338,10 @@ query Issue($id: String!) {
       id
       name
     }
+    projectMilestone {
+      id
+      name
+    }
     labels {
       nodes {
         id
@@ -416,6 +424,10 @@ query Issue($id: String!) {
       }
     }
     project {
+      id
+      name
+    }
+    projectMilestone {
       id
       name
     }
@@ -565,6 +577,7 @@ query Issues($filter: IssueFilter, $first: Int) {
       assignee { id name email }
       creator { id name email }
       project { id name }
+      projectMilestone { id name }
       labels { nodes { id name } }
       team { id key name }
     }
@@ -623,6 +636,10 @@ mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
         }
       }
       project {
+        id
+        name
+      }
+      projectMilestone {
         id
         name
       }
@@ -883,6 +900,47 @@ mutation LabelUpdate($id: String!, $input: IssueLabelUpdateInput!) {
 }
 """
 
+QUERY_PROJECT_MILESTONES = """
+query ProjectMilestones($projectId: String!) {
+  project(id: $projectId) {
+    projectMilestones {
+      nodes {
+        id
+        name
+        description
+        targetDate
+        status
+        sortOrder
+      }
+    }
+  }
+}
+"""
+
+MUTATION_CREATE_MILESTONE = """
+mutation ProjectMilestoneCreate($input: ProjectMilestoneCreateInput!) {
+  projectMilestoneCreate(input: $input) {
+    success
+    projectMilestone {
+      id
+      name
+      description
+      targetDate
+      status
+      project { id name }
+    }
+  }
+}
+"""
+
+MUTATION_DELETE_MILESTONE = """
+mutation ProjectMilestoneDelete($id: String!) {
+  projectMilestoneDelete(id: $id) {
+    success
+  }
+}
+"""
+
 
 # =============================================================================
 # Linear API Client
@@ -1036,6 +1094,75 @@ class LinearClient:
             message=f"Project '{project_name}' not found",
             suggestions=[f"Available projects: {available}"],
         )
+
+    def get_milestones(self, project_id: str) -> list[dict[str, Any]]:
+        """Get milestones for a project."""
+        data = self._request(QUERY_PROJECT_MILESTONES, {"projectId": project_id})
+        return data.get("project", {}).get("projectMilestones", {}).get("nodes", [])
+
+    def find_milestone_by_name(self, milestone_name: str, project_id: str) -> dict[str, Any]:
+        """Find a milestone by name within a project."""
+        milestones = self.get_milestones(project_id)
+        milestone_name_lower = milestone_name.lower()
+
+        # Exact match first
+        for milestone in milestones:
+            if milestone["name"].lower() == milestone_name_lower:
+                return milestone
+
+        # Partial match
+        for milestone in milestones:
+            if milestone_name_lower in milestone["name"].lower():
+                return milestone
+
+        available = ", ".join(sorted(set(m["name"] for m in milestones)))
+        raise LinearError(
+            code=ErrorCode.MILESTONE_NOT_FOUND,
+            message=f"Milestone '{milestone_name}' not found",
+            suggestions=[f"Available milestones: {available}"] if available else ["No milestones exist for this project"],
+        )
+
+    def create_milestone(
+        self,
+        name: str,
+        project_id: str,
+        target_date: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a project milestone."""
+        input_data: dict[str, Any] = {
+            "name": name,
+            "projectId": project_id,
+        }
+
+        if target_date:
+            input_data["targetDate"] = target_date
+        if description:
+            input_data["description"] = description
+
+        data = self._request(MUTATION_CREATE_MILESTONE, {"input": input_data})
+        result = data.get("projectMilestoneCreate", {})
+
+        if not result.get("success"):
+            raise LinearError(
+                code=ErrorCode.API_ERROR,
+                message="Failed to create milestone",
+            )
+
+        return result.get("projectMilestone", {})
+
+    def delete_milestone(self, milestone_id: str) -> bool:
+        """Delete a project milestone by its ID."""
+        data = self._request(MUTATION_DELETE_MILESTONE, {"id": milestone_id})
+        result = data.get("projectMilestoneDelete", {})
+
+        if not result.get("success"):
+            raise LinearError(
+                code=ErrorCode.API_ERROR,
+                message="Failed to delete milestone",
+            )
+
+        return True
 
     def get_labels(self, team_id: str | None = None) -> list[dict[str, Any]]:
         """Get labels, optionally filtered by team."""
@@ -1354,6 +1481,7 @@ class LinearClient:
         estimate: int | None = None,
         no_estimate: bool = False,
         label_ids: list[str] | None = None,
+        milestone_name: str | None = None,
         limit: int = 25,
     ) -> list[dict[str, Any]]:
         """List issues with optional filters.
@@ -1371,6 +1499,7 @@ class LinearClient:
             estimate: Filter by specific estimate value
             no_estimate: Filter for issues with null estimate
             label_ids: Filter by label IDs (AND logic for multiple)
+            milestone_name: Filter by milestone name (exact match)
             limit: Maximum number of results (default 25)
 
         Returns:
@@ -1407,6 +1536,9 @@ class LinearClient:
                     filter_obj = {"and": [filter_obj] + label_filters}
                 else:
                     filter_obj = {"and": label_filters}
+
+        if milestone_name:
+            filter_obj["projectMilestone"] = {"name": {"eq": milestone_name}}
 
         variables: dict[str, Any] = {"first": limit}
         if filter_obj:
@@ -1498,6 +1630,7 @@ class LinearClient:
         removed_label_ids: list[str] | None = None,
         assignee_id: str | None = None,
         project_id: str | None = None,
+        milestone_id: str | None = None,
     ) -> dict[str, Any]:
         """Update an existing issue."""
         input_data: dict[str, Any] = {}
@@ -1522,6 +1655,8 @@ class LinearClient:
             input_data["assigneeId"] = assignee_id or None
         if project_id is not None:
             input_data["projectId"] = project_id or None
+        if milestone_id is not None:
+            input_data["projectMilestoneId"] = milestone_id or None
 
         if not input_data:
             raise LinearError(
@@ -2204,6 +2339,16 @@ def update(
         "--no-project",
         help="Remove from project",
     ),
+    milestone: Optional[str] = typer.Option(
+        None,
+        "--milestone",
+        help="Milestone name (resolved within issue's project)",
+    ),
+    no_milestone: bool = typer.Option(
+        False,
+        "--no-milestone",
+        help="Remove milestone from the issue",
+    ),
 ) -> None:
     """Update an existing issue.
 
@@ -2219,6 +2364,8 @@ def update(
         linear.py update ABC-123 --no-assignee
         linear.py update ABC-123 --project "My Project"
         linear.py update ABC-123 --no-project
+        linear.py update ABC-123 --milestone "v1.0"
+        linear.py update ABC-123 --no-milestone
     """
     command = "update"
 
@@ -2271,6 +2418,22 @@ def update(
             found = client.find_project_by_name(project, config.team_id)
             project_id = found["id"]
 
+        # Resolve milestone
+        milestone_id = None
+        if no_milestone:
+            milestone_id = ""  # Empty string signals removal
+        elif milestone:
+            current_issue = client.get_issue(issue_id)
+            issue_project = current_issue.get("project")
+            if not issue_project:
+                raise LinearError(
+                    code=ErrorCode.INVALID_INPUT,
+                    message="Cannot set milestone: issue has no project",
+                    suggestions=["Assign a project first with --project"],
+                )
+            found_milestone = client.find_milestone_by_name(milestone, issue_project["id"])
+            milestone_id = found_milestone["id"]
+
         issue = client.update_issue(
             issue_id=issue_id,
             title=title,
@@ -2282,6 +2445,7 @@ def update(
             removed_label_ids=removed_label_ids,
             assignee_id=assignee_id,
             project_id=project_id,
+            milestone_id=milestone_id,
         )
 
         result_data: dict[str, Any] = {
@@ -2296,6 +2460,9 @@ def update(
         project_node = issue.get("project")
         if project_node:
             result_data["project"] = project_node.get("name")
+        milestone_node = issue.get("projectMilestone")
+        if milestone_node:
+            result_data["milestone"] = milestone_node.get("name")
 
         response = format_success(
             command=command,
@@ -2684,6 +2851,12 @@ def get(
                     "id": project.get("id"),
                     "name": project.get("name"),
                 }
+            milestone_data = issue.get("projectMilestone")
+            if milestone_data:
+                result["milestone"] = {
+                    "id": milestone_data.get("id"),
+                    "name": milestone_data.get("name"),
+                }
             label_nodes = issue.get("labels", {}).get("nodes", [])
             if label_nodes:
                 result["labels"] = [{"id": l["id"], "name": l["name"]} for l in label_nodes]
@@ -2703,6 +2876,9 @@ def get(
             project = issue.get("project")
             if project:
                 result["project"] = project.get("name")
+            milestone_data = issue.get("projectMilestone")
+            if milestone_data:
+                result["milestone"] = milestone_data.get("name")
             label_nodes = issue.get("labels", {}).get("nodes", [])
             if label_nodes:
                 result["labels"] = [l["name"] for l in label_nodes]
@@ -3114,6 +3290,174 @@ def update_project(
 
 
 @app.command()
+def milestones(
+    project_name: str = typer.Argument(..., help="Project name"),
+    team: Optional[str] = typer.Option(
+        None,
+        "--team",
+        "-t",
+        help="Team ID to scope project lookup",
+    ),
+) -> None:
+    """List milestones for a project.
+
+    Examples:
+        linear.py milestones "AI Tooling"
+        linear.py milestones "Backend" --team abc123-team-uuid
+    """
+    command = "milestones"
+
+    try:
+        client = LinearClient()
+        team_id = team
+        if not team_id:
+            try:
+                config = load_config()
+                team_id = config.team_id
+            except LinearError:
+                pass
+
+        project = client.find_project_by_name(project_name, team_id)
+        milestones_list = client.get_milestones(project["id"])
+
+        # Sort by sortOrder
+        milestones_list.sort(key=lambda m: m.get("sortOrder", 0))
+
+        formatted = []
+        for m in milestones_list:
+            entry: dict[str, Any] = {
+                "id": m.get("id"),
+                "name": m.get("name"),
+                "status": m.get("status"),
+            }
+            if m.get("targetDate"):
+                entry["targetDate"] = m["targetDate"]
+            if m.get("description"):
+                desc = m["description"]
+                entry["description"] = desc[:100] + "..." if len(desc) > 100 else desc
+            formatted.append(entry)
+
+        response = format_success(
+            command=command,
+            result={
+                "project": project.get("name"),
+                "milestones": formatted,
+            },
+            metadata={"count": len(formatted)},
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command("create-milestone")
+def create_milestone_cmd(
+    name: str = typer.Argument(..., help="Milestone name"),
+    project_name: str = typer.Option(
+        ...,
+        "--project",
+        help="Project name (required)",
+    ),
+    target_date: Optional[str] = typer.Option(
+        None,
+        "--target-date",
+        help="Target date (YYYY-MM-DD)",
+    ),
+    description: Optional[str] = typer.Option(
+        None,
+        "--description",
+        "-d",
+        help="Milestone description",
+    ),
+) -> None:
+    """Create a project milestone.
+
+    Examples:
+        linear.py create-milestone "v1.0" --project "AI Tooling"
+        linear.py create-milestone "Beta" --project "Backend" --target-date 2026-03-01
+        linear.py create-milestone "MVP" --project "Mobile" -d "Minimum viable product"
+    """
+    command = "create-milestone"
+
+    try:
+        config = load_config()
+        client = LinearClient()
+
+        project = client.find_project_by_name(project_name, config.team_id)
+        milestone = client.create_milestone(
+            name=name,
+            project_id=project["id"],
+            target_date=target_date,
+            description=description,
+        )
+
+        result_data: dict[str, Any] = {
+            "id": milestone.get("id"),
+            "name": milestone.get("name"),
+            "status": milestone.get("status"),
+        }
+        if milestone.get("targetDate"):
+            result_data["targetDate"] = milestone["targetDate"]
+        if milestone.get("description"):
+            result_data["description"] = milestone["description"]
+        proj = milestone.get("project")
+        if proj:
+            result_data["project"] = proj.get("name")
+
+        response = format_success(command=command, result=result_data)
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command("delete-milestone")
+def delete_milestone_cmd(
+    milestone_name: str = typer.Argument(..., help="Milestone name to delete"),
+    project_name: str = typer.Option(
+        ...,
+        "--project",
+        help="Project name (required)",
+    ),
+) -> None:
+    """Delete a project milestone by name.
+
+    Examples:
+        linear.py delete-milestone "v1.0" --project "AI Tooling"
+    """
+    command = "delete-milestone"
+
+    try:
+        config = load_config()
+        client = LinearClient()
+
+        project = client.find_project_by_name(project_name, config.team_id)
+        milestone = client.find_milestone_by_name(milestone_name, project["id"])
+        client.delete_milestone(milestone["id"])
+
+        response = format_success(
+            command=command,
+            result={
+                "id": milestone.get("id"),
+                "name": milestone.get("name"),
+                "project": project.get("name"),
+                "deleted": True,
+            },
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def labels(
     team_id: Optional[str] = typer.Option(
         None,
@@ -3431,6 +3775,11 @@ def list_cmd(
         "--label",
         help="Filter by label name (repeatable, AND logic)",
     ),
+    milestone: Optional[str] = typer.Option(
+        None,
+        "--milestone",
+        help="Filter by milestone name",
+    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
@@ -3453,6 +3802,7 @@ def list_cmd(
         linear.py list --estimate none          # Unestimated issues
         linear.py list --estimate 3             # Issues with estimate=3
         linear.py list --label mobile           # Issues with mobile label
+        linear.py list --milestone "v1.0"       # Issues in milestone v1.0
     """
     command = "list"
     global _verbose
@@ -3579,6 +3929,7 @@ def list_cmd(
             estimate=estimate_val,
             no_estimate=no_estimate,
             label_ids=label_ids,
+            milestone_name=milestone,
             limit=limit,
         )
 
@@ -3620,6 +3971,8 @@ def list_cmd(
             filters_applied.append(f"estimate={estimate}")
         if label:
             filters_applied.append(f"label={','.join(label)}")
+        if milestone:
+            filters_applied.append(f"milestone={milestone}")
         if team_id:
             filters_applied.append(f"team={team_id[:8]}...")
         if filters_applied:
