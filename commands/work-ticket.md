@@ -40,10 +40,16 @@ uv run ~/.claude/skills/linear/scripts/linear.py state $ARGUMENTS "In Progress"
 ```
 </step>
 
+<step name="load_skills">
+Scan the skill list in your system message for skills matching the ticket's technology or domain. Invoke each match via the Skill tool before proceeding — skills contain conventions and patterns that change what you look for during exploration.
+
+- One clear match → invoke it directly
+- Multiple candidates → use AskUserQuestion to let the user choose
+- No match → proceed without
+</step>
+
 <step name="explore_codebase">
 Do not proceed to planning until the codebase is deeply understood.
-
-**Before exploring, load domain skills.** Check available skills for any that match the ticket's domain (e.g., Flutter/Dart tickets, debugging tickets, code quality work). Load matching skills now so their guidance informs both exploration and planning.
 
 Launch parallel Explore agents to understand the areas the ticket touches. Base search terms on ticket title, description, and any file/component names mentioned.
 

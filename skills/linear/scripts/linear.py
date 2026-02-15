@@ -734,6 +734,14 @@ mutation CommentCreate($input: CommentCreateInput!) {
 }
 """
 
+MUTATION_DELETE_COMMENT = """
+mutation CommentDelete($id: String!) {
+  commentDelete(id: $id) {
+    success
+  }
+}
+"""
+
 MUTATION_CREATE_ATTACHMENT = """
 mutation AttachmentCreate($input: AttachmentCreateInput!) {
   attachmentCreate(input: $input) {
@@ -1943,6 +1951,26 @@ class LinearClient:
             )
 
         return result.get("comment", {})
+
+    def delete_comment(self, comment_id: str) -> bool:
+        """Delete a comment by its ID.
+
+        Args:
+            comment_id: UUID of the comment to delete
+
+        Returns:
+            True if successful
+        """
+        data = self._request(MUTATION_DELETE_COMMENT, {"id": comment_id})
+        result = data.get("commentDelete", {})
+
+        if not result.get("success"):
+            raise LinearError(
+                code=ErrorCode.API_ERROR,
+                message="Failed to delete comment",
+            )
+
+        return True
 
 
 # =============================================================================
@@ -3875,6 +3903,38 @@ def comment(
                 "title": result.get("issue", {}).get("title"),
                 "commentId": result.get("id"),
                 "url": result.get("url"),
+            },
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command("delete-comment")
+def delete_comment_cmd(
+    comment_id: str = typer.Argument(..., help="Comment UUID to delete"),
+) -> None:
+    """Delete a comment by its UUID.
+
+    The comment UUID can be found in the output of `get --comments`.
+
+    Examples:
+        linear.py delete-comment "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    """
+    command = "delete-comment"
+
+    try:
+        client = LinearClient()
+        client.delete_comment(comment_id)
+
+        response = format_success(
+            command=command,
+            result={
+                "commentId": comment_id,
+                "deleted": True,
             },
         )
         typer.echo(output_json(response))
