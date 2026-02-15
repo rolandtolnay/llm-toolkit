@@ -269,8 +269,9 @@ Use FIRST/THEN/ONLY THEN/FINALLY to enforce sequence and encourage exploration b
 ```markdown
 ## Working Effectively
 
-**FIRST:** Check your available skills for one that provides domain expertise relevant to
-this project's architecture and conventions. If found, invoke it via the Skill tool.
+**FIRST:** Scan the skill list in your system message for skills matching this project's
+technology or domain. Invoke each match via the Skill tool — skills contain conventions
+and patterns that change what you look for during exploration.
 
 **THEN:** Explore before committing. Use parallel explorer agents to understand existing
 patterns, conventions, and how similar features are implemented in this codebase.
