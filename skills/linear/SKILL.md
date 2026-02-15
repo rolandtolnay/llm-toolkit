@@ -1,6 +1,10 @@
 ---
 name: linear
-description: Manage Linear issues through conversation. Use when creating tickets, updating status, assigning work, or checking issue details. Trigger phrases: "create a ticket", "update the issue", "what's assigned to me".
+description: >
+  Create, update, and comment on Linear tickets. Use when creating issues,
+  adding comments, changing status, assigning work, or referencing issue IDs
+  like ABC-123. Examples: "create a ticket", "add a comment", "mark done",
+  "my issues".
 ---
 
 <objective>
