@@ -57,6 +57,15 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
    - Findings by category (counts)
    - Top 3 highest-impact fixes
 
+6. **Next steps:** After presenting the summary, use the `AskUserQuestion` tool to ask the user how to proceed. Offer these options:
+   - **Fix top 3**: Apply only the top 3 highest-impact fixes. Minimal changes, lowest regression risk.
+   - **Fix all issues**: Address every finding from the audit. More comprehensive but still generally safe.
+   - **Report only**: No fixes needed — the user just wanted the audit.
+
+   The tool's built-in free text input lets the user specify custom scope (e.g. pick specific issues, disagree with findings).
+
+   Then apply the selected fixes directly to the files.
+
 </process>
 
 <success_criteria>
