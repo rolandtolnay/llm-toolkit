@@ -6,7 +6,7 @@ argument-hint: [situation or leave blank for current context]
 <objective>
 Apply via negativa to $ARGUMENTS (or the current discussion if no arguments provided).
 
-Instead of asking "What should I add?", ask "What should I remove?" Subtraction often beats addition.
+Instead of asking "What should I add?", ask "What should I remove?"
 </objective>
 
 <process>
@@ -37,9 +37,8 @@ Instead of asking "What should I add?", ask "What should I remove?" Subtraction 
 </output_format>
 
 <success_criteria>
-- Identifies genuine bloat vs. essential elements
-- Removes without breaking core function
-- Creates space and simplicity
-- Reduces maintenance burden
-- Improves by doing less, not more
+- Each subtraction candidate cites a specific cost (maintenance, complexity, attention)
+- Removals don't break core function — distinguish load-bearing from dead weight
+- Keep items survived genuine challenge, not just familiarity bias
+- Subtraction candidates outnumber keep items (bias toward removal)
 </success_criteria>
