@@ -35,6 +35,8 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
    - `Specificity` → Specificity Over Abstraction + Patterns and Anti-Patterns (vague instructions, missing contrastive examples)
    - `Structure` → project conventions (semantic XML tags, plan format, output format specs)
 
+   **Success criteria require skip-risk verification before recommending removal.** The 5-7 guideline is a dilution heuristic, not a hard cap — 9 genuinely skip-prone items beats 6 where one was load-bearing. Multi-step behaviors (ask user → act on answer), optional/conditional steps, and post-completion actions (commits, state updates) are inherently skip-prone. Prefer merging over removing.
+
 4. **Report per file:**
 
    ```
@@ -72,4 +74,5 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
 - [ ] Every finding cites a specific quality guide principle — no subjective opinions
 - [ ] Suggestions are concrete ("change X to Y"), not vague ("could be improved")
 - [ ] Valid patterns (peripheral reinforcement, corrective rationale, contrastive examples) not flagged as waste
+- [ ] Success criteria removals justified by skip-risk assessment, not solely by count
 </success_criteria>
