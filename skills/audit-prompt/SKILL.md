@@ -28,7 +28,7 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
 
 2. **For each file, read full content.** For uncommitted files, also run `git diff HEAD -- <file>` to isolate what changed. Focus audit on changed sections but flag pre-existing issues only if severe.
 
-3. **Evaluate against the quality guide.** Apply The Reliability Test to each instruction. Check against the Common Waste and Common Value tables. Map findings to these categories:
+3. **Evaluate against the quality guide.** Apply The Reliability Test to each instruction. Check against the Common Waste and Common Value tables. **XML boundary verification:** When an XML structural issue appears at the first or last line of Read output, verify the tag exists in the file with Grep before reporting — the Read tool's `</output>` framing is easily confused with file content in XML-heavy files. Map findings to these categories:
    - `Budget waste` → Common Waste table (fluff, filler, verbose restatements, unlikely negations)
    - `Positioning` → Positional Attention Bias (critical constraints buried in middle, success criteria ordering)
    - `Context efficiency` → Context Is a Shared, Depletable Resource + Progressive Disclosure (eager vs lazy loading)
