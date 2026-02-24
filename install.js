@@ -128,15 +128,23 @@ const targetDir = hasGlobal
   : path.join(process.cwd(), '.claude');
 
 const mode = hasLink ? 'link' : 'copy';
-const manifestDir = path.join(targetDir, 'claude-code-toolkit');
+const manifestDir = path.join(targetDir, 'llm-toolkit');
 const manifestPath = path.join(manifestDir, '.manifest.json');
 
 // ── Phase 2: Read old manifest ──────────────────────────────────────────────
 
 function readManifest() {
   try {
-    if (!fs.existsSync(manifestPath)) return null;
-    return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (fs.existsSync(manifestPath)) {
+      return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    }
+    // Fallback: check for manifest from before the rename (claude-code-toolkit -> llm-toolkit)
+    const legacyManifestPath = path.join(targetDir, 'claude-code-toolkit', '.manifest.json');
+    if (fs.existsSync(legacyManifestPath)) {
+      console.log(`  Migrating manifest from claude-code-toolkit to llm-toolkit`);
+      return JSON.parse(fs.readFileSync(legacyManifestPath, 'utf8'));
+    }
+    return null;
   } catch {
     console.log(`  ${yellow}Warning:${reset} manifest corrupted, treating as fresh install`);
     return null;
@@ -639,6 +647,13 @@ async function main() {
 
   // Phase 9: Write new manifest
   buildAndWriteManifest(newFiles, keep);
+
+  // Phase 10: Clean up legacy manifest directory
+  const legacyManifestDir = path.join(targetDir, 'claude-code-toolkit');
+  if (fs.existsSync(legacyManifestDir)) {
+    fs.rmSync(legacyManifestDir, { recursive: true });
+    console.log(`  Removed legacy ${legacyManifestDir.replace(os.homedir(), '~')}`);
+  }
 
   // Summary
   const total = counts.commands + counts.skills + counts.references;
