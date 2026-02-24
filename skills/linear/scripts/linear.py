@@ -1646,7 +1646,7 @@ class LinearClient:
         if estimate is not None:
             input_data["estimate"] = estimate
         if parent_id is not None:
-            input_data["parentId"] = parent_id
+            input_data["parentId"] = parent_id or None
         if removed_label_ids:
             input_data["removedLabelIds"] = removed_label_ids
         if label_ids:
@@ -2309,6 +2309,11 @@ def update(
         "--parent",
         help="Parent issue ID for reparenting (e.g., ABC-123)",
     ),
+    no_parent: bool = typer.Option(
+        False,
+        "--no-parent",
+        help="Remove parent (make standalone issue)",
+    ),
     label: Optional[list[str]] = typer.Option(
         None,
         "--label",
@@ -2358,6 +2363,7 @@ def update(
         linear.py update ABC-123 -p 2
         linear.py update ABC-123 -e 3
         linear.py update ABC-123 --parent ABC-456
+        linear.py update ABC-123 --no-parent
         linear.py update ABC-123 --label mobile --label backend
         linear.py update ABC-123 --no-labels
         linear.py update ABC-123 --assignee "Roland"
@@ -2375,7 +2381,9 @@ def update(
 
         # Resolve parent identifier to UUID if provided
         parent_id = None
-        if parent:
+        if no_parent:
+            parent_id = ""  # Empty string signals removal
+        elif parent:
             parent_issue = client.get_issue(parent)
             parent_id = parent_issue.get("id")
 
