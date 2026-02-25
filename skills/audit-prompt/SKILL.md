@@ -26,7 +26,7 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
    - Filter to prompt-related files — any `.md` or `.yaml` that contains LLM instructions (slash commands, workflows, agent definitions, skills, templates, references, CLAUDE.md files). When unclear, check for XML tags, YAML frontmatter, or behavioral instructions
    - If no prompt-related files found, report "No prompt-related changes detected" and stop
 
-2. **For each file, read full content.** For uncommitted files, also run `git diff HEAD -- <file>` to isolate what changed. Focus audit on changed sections but flag pre-existing issues only if severe.
+2. **For each file, read full content.** For uncommitted files, also run `git diff HEAD -- <file>` to isolate what changed. Focus audit on changed sections but flag pre-existing issues only if they cause incorrect behavior (wrong tool invoked, skipped steps, misrouted logic) or major budget waste (>10 lines of pure fluff).
 
 3. **Evaluate against the quality guide.** Apply The Reliability Test to each instruction. Check against the Common Waste and Common Value tables. **XML boundary verification:** When an XML structural issue appears at the first or last line of Read output, verify the tag exists in the file with Grep before reporting — the Read tool's `</output>` framing is easily confused with file content in XML-heavy files. Map findings to these categories:
    - `Budget waste` → Common Waste table (fluff, filler, verbose restatements, unlikely negations)
@@ -36,6 +36,8 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
    - `Structure` → project conventions (semantic XML tags, plan format, output format specs)
 
    **Section-level removal requires per-instruction verification.** When flagging a multi-instruction block (a principles section, a numbered list, a guidelines block) as redundant, verify each instruction individually. A section can be 80% redundant while one instruction carries unique semantics — decision gates, priority orderings, conditional skip logic — not captured elsewhere. Recommend surgical extraction (promote the unique content, remove the rest), not wholesale removal.
+
+   **Merging instructions requires trigger-pattern and rationale verification.** Two instructions can be semantically identical but activate on different input patterns ("saves you hours" vs "improves your productivity" both mean "show, don't claim" but catch different phrasings). When recommending a merge, verify the merged version preserves all trigger examples. Also verify no corrective rationale is lost — a rule ("banned words: simply, just") and its rationale ("implies the step is trivial") serve different functions; the rule is a filter, the rationale enables generalization to equivalent phrases not in the list.
 
    **Success criteria require skip-risk verification before recommending removal.** The 5-7 guideline is a dilution heuristic, not a hard cap — 9 genuinely skip-prone items beats 6 where one was load-bearing. Multi-step behaviors (ask user → act on answer), optional/conditional steps, and post-completion actions (commits, state updates) are inherently skip-prone. Prefer merging over removing.
 
@@ -77,5 +79,6 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
 - [ ] Suggestions are concrete ("change X to Y"), not vague ("could be improved")
 - [ ] Valid patterns (peripheral reinforcement, corrective rationale, contrastive examples) not flagged as waste
 - [ ] Success criteria removals justified by skip-risk assessment, not solely by count
+- [ ] Merge recommendations verified to preserve all trigger patterns and corrective rationale
 - [ ] Section removals verified per-instruction — no unique semantics lost in wholesale removal
 </success_criteria>
