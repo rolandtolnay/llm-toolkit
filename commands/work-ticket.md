@@ -53,7 +53,11 @@ Do not proceed to planning until the codebase is deeply understood.
 
 Launch parallel Explore agents to understand the areas the ticket touches. Base search terms on ticket title, description, and any file/component names mentioned.
 
-Run in parallel:
+**Scope-adaptive agent count:**
+- **1 agent** — Focused ticket with named files/components (bug fix, small feature in a known area)
+- **2-3 agents** — Ticket touching multiple areas or unfamiliar domain
+
+Search focuses (select based on scope):
 1. **Architecture search** — Find files, modules, and patterns related to the ticket's domain
 2. **Convention search** — Find existing patterns for the type of change described (e.g., how similar features are implemented)
 3. **Dependency search** — Find code that depends on or is depended upon by the target area
@@ -61,30 +65,40 @@ Run in parallel:
 After agents return, read the key files yourself — do not rely solely on agent summaries.
 </step>
 
-<step name="clarify_requirements">
+<step name="present_and_clarify">
 **Do NOT proceed to planning until you have 95% confidence that you know what to build.**
 
-Contrast ticket requirements against codebase findings. Actively look for:
-- Ambiguous acceptance criteria
-- Missing technical details (which API, which component, which pattern to follow)
-- Edge cases not addressed in the ticket
-- Conflicts between ticket description and existing code
-- Behavioral questions (what happens when X? should Y also change?)
-- Scope boundaries (what is explicitly NOT part of this ticket?)
+Externalize your understanding so the user reacts to concrete proposals instead of answering open-ended questions. Tickets are written by humans for humans and almost always underspecify — Claude knows code, user knows intent.
 
-Ask as many rounds of clarifying questions as needed. Do not batch unrelated questions.
+**Briefing — requirements focus:**
+- What the ticket requires (your interpretation of acceptance criteria)
+- Your assumptions about expected behavior, scope boundaries, and edge cases — each marked with confidence: **high** / **medium** / **low** to focus user attention on uncertain areas
+- Conflicts or gaps between ticket description and existing code
 
-Tickets are written by humans for humans and almost always underspecify implementation details. If you believe there are zero gaps, state your full understanding of the requirements and ask the user to confirm before proceeding.
+**AskUserQuestion — cross the information asymmetry boundary:**
+- Q1 (always): "Are these assumptions correct?" with options:
+  - Looks right
+  - Some corrections (let me clarify)
+  - Let me reframe what's needed
+- Additional questions (conditional): Only when ticket + exploration surfaced genuine behavioral ambiguity the user must resolve. Frame with codebase context discovered during exploration.
+
+**What NOT to ask** (Claude determines these from exploration):
+- Technical patterns to follow
+- Error handling strategy
+- Implementation details the user can't meaningfully influence
+- Only ask about: user intent, expected behavior, scope boundaries
+
+**On corrections:** Absorb user feedback. Do not re-present the full briefing — proceed with updated understanding.
 </step>
 
 <step name="design_solution">
-**Do NOT enter plan mode yet.** Present to the user:
+**Do NOT enter plan mode yet.** Present the solution design:
 
 1. **Current situation** — What exists in the codebase today: relevant patterns, current behavior, key files.
-2. **Problem** — What needs to change and why, grounded in ticket requirements and clarified details.
-3. **Proposed solutions** — 2-3 approaches with trade-offs for each (effort, risk, maintainability, scope of change). Include restructuring options when the existing code is part of the problem.
+2. **Problem** — What needs to change and why, grounded in ticket requirements and clarified assumptions.
+3. **Proposed approach** — Present the dominant approach with rationale. Only present alternatives when there is genuine ambiguity — do not manufacture options for the sake of choice.
 
-Use AskUserQuestion to get the user's direction on which approach to take. Iterate until the user confirms the solution direction.
+This is a collaboration checkpoint — wait for user input. The user may confirm, challenge assumptions, or run their own analysis. Engage fully; proceed to planning only when the user explicitly signals readiness.
 </step>
 
 <step name="plan">
@@ -105,9 +119,9 @@ Do NOT combine steps 3 and 4 into a single skill invocation — they are separat
 </process>
 
 <success_criteria>
-- Solution direction confirmed by user before entering plan mode
 - Ticket marked as Done (explicitly verified, not assumed)
-- Commit message includes `[$ARGUMENTS]` for git-Linear traceability
 - Solution summary comment left on ticket
-- Requirement gaps closed via user clarification before planning
+- Commit message includes `[$ARGUMENTS]` for git-Linear traceability
+- Requirements validated via assumptions-first briefing
+- Solution approach confirmed by user through collaborative design step before entering plan mode
 </success_criteria>
