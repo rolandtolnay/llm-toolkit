@@ -1,6 +1,7 @@
 ---
 name: readme-best-practices
 description: Apply consistent structure, tone, and formatting to README.md files. Use when drafting, rewriting, or reviewing a project README to make it scannable and developer-friendly.
+user-invocable: false
 ---
 
 <objective>
