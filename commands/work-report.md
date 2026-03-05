@@ -5,8 +5,6 @@ argument-hint: <period> [buffer]
 
 <objective>
 Generate a comprehensive work report based on git commit timestamps for the specified time period.
-
-This helps track work hours by analyzing first/last commit times per day, adding configurable buffers, counting commits, and summarizing accomplishments. The report displays in chat first, then offers optional markdown export.
 </objective>
 
 <context>
@@ -17,10 +15,10 @@ Current date: ! `date +%Y-%m-%d`
 
 <process>
 1. **Validate environment**
-   - If not in a git repository, display a helpful error message and stop
+   - If not in a git repository, display an error message and stop
    - Confirm the git user name for filtering commits
 
-2. **Parse the time period from ``**
+2. **Parse the time period from the user's arguments**
    - Interpret flexible period formats:
      - Month names: "january", "jan", "January 2026"
      - ISO format: "2026-01", "2026-01-15"
@@ -29,7 +27,7 @@ Current date: ! `date +%Y-%m-%d`
    - If period is ambiguous, ask user for clarification
 
 3. **Parse buffer time (default: 30 minutes)**
-   - Check if `` includes a buffer override (e.g., "january 45min", "this week 1hour")
+   - Check if the user's arguments include a buffer override (e.g., "january 45min", "this week 1hour")
    - Supported formats: "30min", "45min", "1hour", "1h", "60min"
    - Default to 30 minutes before first commit and 30 minutes after last commit
 
@@ -62,7 +60,6 @@ Current date: ! `date +%Y-%m-%d`
    - For each day, analyze all commit messages
    - Create a 1-2 sentence summary of accomplishments
    - Focus on features, fixes, and major changes
-   - Use action verbs and be concise
 
 8. **Build the report with these sections**
 
@@ -102,14 +99,11 @@ Current date: ! `date +%Y-%m-%d`
 </process>
 
 <success_criteria>
-- Git repository validated before processing
 - Time period correctly interpreted from user input
-- All commits within period captured and grouped by day
 - Work sessions detected using 2-hour gap threshold
 - Work hours calculated per session with appropriate buffers
-- Daily summaries accurately reflect commit activity
+- Both Est. Hours and Rounded columns present; Rounded used for all totals
 - Report displays cleanly in chat with proper markdown formatting
-- Export works correctly if requested
 - Handles edge cases: no commits in period, single-day period, single commit days, single-commit sessions
 </success_criteria>
 
