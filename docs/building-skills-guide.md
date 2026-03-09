@@ -6,9 +6,7 @@
 - [Chapter 1: Fundamentals](#chapter-1-fundamentals)
 - [Chapter 2: Planning and Design](#chapter-2-planning-and-design)
 - [Chapter 3: Testing and Iteration](#chapter-3-testing-and-iteration)
-- [Chapter 4: Distribution and Sharing](#chapter-4-distribution-and-sharing)
-- [Chapter 5: Patterns and Troubleshooting](#chapter-5-patterns-and-troubleshooting)
-- [Chapter 6: Resources and References](#chapter-6-resources-and-references)
+- [Chapter 4: Patterns and Troubleshooting](#chapter-4-patterns-and-troubleshooting)
 - [Reference A: Quick Checklist](#reference-a-quick-checklist)
 - [Reference B: YAML Frontmatter](#reference-b-yaml-frontmatter)
 - [Reference C: Complete Skill Examples](#reference-c-complete-skill-examples)
@@ -21,26 +19,12 @@ A **skill** is a set of instructions - packaged as a simple folder - that teache
 
 Skills are powerful when you have repeatable workflows: generating frontend designs from specs, conducting research with consistent methodology, creating documents that follow your team's style guide, or orchestrating multi-step processes. They work well with Claude's built-in capabilities like code execution and document creation. For those building MCP integrations, skills add another powerful layer helping turn raw tool access into reliable, optimized workflows.
 
-This guide covers everything you need to know to build effective skills - from planning and structure to testing and distribution. Whether you're building a skill for yourself, your team, or for the community, you'll find practical patterns and real-world examples throughout.
-
 **What you'll learn:**
 
 - Technical requirements and best practices for skill structure
 - Patterns for standalone skills and MCP-enhanced workflows
 - Patterns we've seen work well across different use cases
 - How to test, iterate, and distribute your skills
-
-**Who this is for:**
-
-- Developers who want Claude to follow specific workflows consistently
-- Power users who want Claude to follow specific workflows
-- Teams looking to standardize how Claude works across their organization
-
-### Two Paths Through This Guide
-
-Building standalone skills? Focus on Fundamentals, Planning and Design, and category 1-2. Enhancing an MCP integration? The "Skills + MCP" section and category 3 are for you. Both paths share the same technical requirements, but you choose what's relevant to your use case.
-
-**What you'll get out of this guide:** By the end, you'll be able to build a functional skill in a single sitting. Expect about 15-30 minutes to build and test your first working skill using the skill-creator.
 
 ---
 
@@ -75,44 +59,9 @@ Claude can load multiple skills simultaneously. Your skill should work well alon
 
 Skills work identically across Claude.ai, Claude Code, and API. Create a skill once and it works across all surfaces without modification, provided the environment supports any dependencies the skill requires.
 
-### For MCP Builders: Skills + Connectors
+### Skills + MCP
 
-> *Building standalone skills without MCP? Skip to Planning and Design - you can always return here later.*
-
-If you already have a working MCP server, you've done the hard part. Skills are the knowledge layer on top - capturing the workflows and best practices you already know, so Claude can apply them consistently.
-
-#### The kitchen analogy
-
-**MCP provides the professional kitchen:** access to tools, ingredients, and equipment.
-
-**Skills provide the recipes:** step-by-step instructions on how to create something valuable.
-
-Together, they enable users to accomplish complex tasks without needing to figure out every step themselves.
-
-#### How they work together
-
-| MCP (Connectivity) | Skills (Knowledge) |
-|---|---|
-| Connects Claude to your service (Notion, Asana, Linear, etc.) | Teaches Claude how to use your service effectively |
-| Provides real-time data access and tool invocation | Captures workflows and best practices |
-| What Claude can do | How Claude should do it |
-
-#### Why this matters for your MCP users
-
-**Without skills:**
-
-- Users connect your MCP but don't know what to do next
-- Support tickets asking "how do I do X with your integration"
-- Each conversation starts from scratch
-- Inconsistent results because users prompt differently each time
-- Users blame your connector when the real issue is workflow guidance
-
-**With skills:**
-
-- Pre-built workflows activate automatically when needed
-- Consistent, reliable tool usage
-- Best practices embedded in every interaction
-- Lower learning curve for your integration
+MCP provides connectivity — it connects Claude to your service and provides real-time data access and tool invocation. Skills provide knowledge — they teach Claude how to use your service effectively, capturing workflows and best practices. Together, they enable users to accomplish complex tasks without needing to figure out every step themselves.
 
 ---
 
@@ -165,7 +114,7 @@ At Anthropic, we've observed three common use cases:
 
 **Used for:** Multi-step processes that benefit from consistent methodology, including coordination across multiple MCP servers.
 
-*Real example: skill-creator skill*
+*Real example: create-skill skill*
 
 "Interactive guide for creating new skills. Walks the user through use case definition, frontmatter generation, instruction writing, and validation."
 
@@ -195,7 +144,7 @@ At Anthropic, we've observed three common use cases:
 
 How will you know your skill is working?
 
-These are aspirational targets - rough benchmarks rather than precise thresholds. Aim for rigor but accept that there will be an element of vibes-based assessment. We are actively developing more robust measurement guidance and tooling.
+These are aspirational targets - rough benchmarks rather than precise thresholds. Aim for rigor but accept that there will be an element of vibes-based assessment.
 
 **Quantitative metrics:**
 
@@ -412,7 +361,7 @@ Result: Campaign created with confirmation link
 
 #### Be specific and actionable
 
-✅ **Good:**
+Good:
 
 ```
 Run `python scripts/validate.py --input {filename}` to check data format.
@@ -421,7 +370,7 @@ If validation fails, common issues include:
 - Invalid date formats (use YYYY-MM-DD)
 ```
 
-❌ **Bad:**
+Bad:
 
 ```
 Validate the data before proceeding.
@@ -450,7 +399,7 @@ Before writing queries, consult `references/api-patterns.md` for:
 
 #### Use progressive disclosure
 
-Keep SKILL.md focused on core instructions. Move detailed documentation to `references/` and link to it. (See Core Design Principles for how the three-level system works.)
+Keep SKILL.md focused on core instructions. Move detailed documentation to `references/` and link to it.
 
 ---
 
@@ -462,114 +411,7 @@ Skills can be tested at varying levels of rigor depending on your needs:
 - **Scripted testing in Claude Code** - Automate test cases for repeatable validation across changes.
 - **Programmatic testing via skills API** - Build evaluation suites that run systematically against defined test sets.
 
-Choose the approach that matches your quality requirements and the visibility of your skill. A skill used internally by a small team has different testing needs than one deployed to thousands of enterprise users.
-
-> **Pro Tip:** Iterate on a single task before expanding
-
-We've found that the most effective skill creators iterate on a single challenging task until Claude succeeds, then extract the winning approach into a skill. This leverages Claude's in-context learning and provides faster signal than broad testing. Once you have a working foundation, expand to multiple test cases for coverage.
-
-### Recommended testing approach
-
-Based on early experience, effective skills testing typically covers three areas:
-
-#### 1. Triggering tests
-
-**Goal:** Ensure your skill loads at the right times.
-
-**Test cases:**
-
-- ✅ Triggers on obvious tasks
-- ✅ Triggers on paraphrased requests
-- ❌ Doesn't trigger on unrelated topics
-
-**Example test suite:**
-
-```
-Should trigger:
-- "Help me set up a new ProjectHub workspace"
-- "I need to create a project in ProjectHub"
-- "Initialize a ProjectHub project for Q4 planning"
-
-Should NOT trigger:
-- "What's the weather in San Francisco?"
-- "Help me write Python code"
-- "Create a spreadsheet" (unless ProjectHub skill handles sheets)
-```
-
-#### 2. Functional tests
-
-**Goal:** Verify the skill produces correct outputs.
-
-**Test cases:**
-
-- Valid outputs generated
-- API calls succeed
-- Error handling works
-- Edge cases covered
-
-**Example:**
-
-```
-Test: Create project with 5 tasks
-Given: Project name "Q4 Planning", 5 task descriptions
-When: Skill executes workflow
-Then:
-    - Project created in ProjectHub
-    - 5 tasks created with correct properties
-    - All tasks linked to project
-    - No API errors
-```
-
-#### 3. Performance comparison
-
-**Goal:** Prove the skill improves results vs. baseline.
-
-Use the metrics from Define Success Criteria. Here's what a comparison might look like.
-
-**Baseline comparison:**
-
-```
-Without skill:
-- User provides instructions each time
-- 15 back-and-forth messages
-- 3 failed API calls requiring retry
-- 12,000 tokens consumed
-
-With skill:
-- Automatic workflow execution
-- 2 clarifying questions only
-- 0 failed API calls
-- 6,000 tokens consumed
-```
-
-### Using the skill-creator skill
-
-The `skill-creator` skill - available in Claude.ai via plugin directory or download for Claude Code - can help you build and iterate on skills. If you have an MCP server and know your top 2-3 workflows, you can build and test a functional skill in a single sitting - often in 15-30 minutes.
-
-**Creating skills:**
-
-- Generate skills from natural language descriptions
-- Produce properly formatted SKILL.md with frontmatter
-- Suggest trigger phrases and structure
-
-**Reviewing skills:**
-
-- Flag common issues (vague descriptions, missing triggers, structural problems)
-- Identify potential over/under-triggering risks
-- Suggest test cases based on the skill's stated purpose
-
-**Iterative improvement:**
-
-- After using your skill and encountering edge cases or failures, bring those examples back to skill-creator
-- Example: "Use the issues & solution identified in this chat to improve how the skill handles [specific edge case]"
-
-**To use:**
-
-```
-"Use the skill-creator skill to help me build a skill for [your use case]"
-```
-
-*Note: skill-creator helps you design and refine skills but does not execute automated test suites or produce quantitative evaluation results.*
+> **Pro Tip:** Iterate on a single task before expanding. The most effective skill creators iterate on a single challenging task until Claude succeeds, then extract the winning approach into a skill.
 
 ### Iteration based on feedback
 
@@ -601,137 +443,11 @@ Skills are living documents. Plan to iterate based on:
 
 ---
 
-## Chapter 4: Distribution and Sharing
-
-Skills make your MCP integration more complete. As users compare connectors, those with skills offer a faster path to value, giving you an edge over MCP-only alternatives.
-
-### Current distribution model (January 2026)
-
-**How individual users get skills:**
-
-1. Download the skill folder
-2. Zip the folder (if needed)
-3. Upload to Claude.ai via Settings > Capabilities > Skills
-4. Or place in Claude Code skills directory
-
-**Organization-level skills:**
-
-- Admins can deploy skills workspace-wide (shipped December 18, 2025)
-- Automatic updates
-- Centralized management
-
-### An open standard
-
-We've published Agent Skills as an open standard. Like MCP, we believe skills should be portable across tools and platforms - the same skill should work whether you're using Claude or other AI platforms. That said, some skills are designed to take full advantage of a specific platform's capabilities; authors can note this in the skill's `compatibility` field. We've been collaborating with members of the ecosystem on the standard, and we're excited by early adoption.
-
-### Using skills via API
-
-For programmatic use cases - such as building applications, agents, or automated workflows that leverage skills - the API provides direct control over skill management and execution.
-
-**Key capabilities:**
-
-- `/v1/skills` endpoint for listing and managing skills
-- Add skills to Messages API requests via the `container.skills` parameter
-- Version control and management through the Claude Console
-- Works with the Claude Agent SDK for building custom agents
-
-**When to use skills via the API vs. Claude.ai:**
-
-| Use Case | Best Surface |
-|---|---|
-| End users interacting with skills directly | Claude.ai / Claude Code |
-| Manual testing and iteration during development | Claude.ai / Claude Code |
-| Individual, ad-hoc workflows | Claude.ai / Claude Code |
-| Applications using skills programmatically | API |
-| Production deployments at scale | API |
-| Automated pipelines and agent systems | API |
-
-**Note:** Skills in the API require the Code Execution Tool beta, which provides the secure environment skills need to run.
-
-For implementation details, see:
-
-- Skills API Quickstart
-- Create Custom skills
-- Skills in the Agent SDK
-
-### Recommended approach today
-
-Start by hosting your skill on GitHub with a public repo, clear README (for human visitors — this is separate from your skill folder, which should not contain a README.md), and example usage with screenshots. Then add a section to your MCP documentation that links to the skill, explains why using both together is valuable, and provides a quick-start guide.
-
-**1. Host on GitHub**
-
-- Public repo for open-source skills
-- Clear README with installation instructions
-- Example usage and screenshots
-
-**2. Document in Your MCP Repo**
-
-- Link to skills from MCP documentation
-- Explain the value of using both together
-- Provide quick-start guide
-
-**3. Create an Installation Guide**
-
-```markdown
-## Installing the [Your Service] skill
-
-1. Download the skill:
-    - Clone repo: `git clone https://github.com/yourcompany/skills`
-    - Or download ZIP from Releases
-
-2. Install in Claude:
-    - Open Claude.ai > Settings > skills
-    - Click "Upload skill"
-    - Select the skill folder (zipped)
-
-3. Enable the skill:
-    - Toggle on the [Your Service] skill
-    - Ensure your MCP server is connected
-
-4. Test:
-    - Ask Claude: "Set up a new project in [Your Service]"
-```
-
-### Positioning your skill
-
-How you describe your skill determines whether users understand its value and actually try it. When writing about your skill — in your README, documentation, or marketing - keep these principles in mind.
-
-**Focus on outcomes, not features:**
-
-✅ **Good:**
-
-```
-"The ProjectHub skill enables teams to set up complete project
-workspaces in seconds — including pages, databases, and
-templates — instead of spending 30 minutes on manual setup."
-```
-
-❌ **Bad:**
-
-```
-"The ProjectHub skill is a folder containing YAML frontmatter
-and Markdown instructions that calls our MCP server tools."
-```
-
-**Highlight the MCP + skills story:**
-
-```
-"Our MCP server gives Claude access to your Linear projects.
-Our skills teach Claude your team's sprint planning workflow.
-Together, they enable AI-powered project management."
-```
-
----
-
-## Chapter 5: Patterns and Troubleshooting
+## Chapter 4: Patterns and Troubleshooting
 
 These patterns emerged from skills created by early adopters and internal teams. They represent common approaches we've seen work well, not prescriptive templates.
 
 ### Choosing your approach: Problem-first vs. tool-first
-
-Think of it like Home Depot. You might walk in with a problem - "I need to fix a kitchen cabinet" - and an employee points you to the right tools. Or you might pick out a new drill and ask how to use it for your specific job.
-
-Skills work the same way:
 
 - **Problem-first:** "I need to set up a project workspace" → Your skill orchestrates the right MCP calls in the right sequence. Users describe outcomes; the skill handles the tools.
 - **Tool-first:** "I have Notion MCP connected" → Your skill teaches Claude the optimal workflows and best practices. Users have access; the skill provides expertise.
@@ -1062,7 +778,7 @@ CRITICAL: Before calling create_project, verify:
 - Start date is not in the past
 ```
 
-> **Advanced technique:** For critical validations, consider bundling a script that performs the checks programmatically rather than relying on language instructions. Code is deterministic; language interpretation isn't. See the Office skills for examples of this pattern.
+> **Advanced technique:** For critical validations, consider bundling a script that performs the checks programmatically rather than relying on language instructions. Code is deterministic; language interpretation isn't.
 
 4. **Model "laziness"** — Add explicit encouragement:
 
@@ -1099,72 +815,7 @@ CRITICAL: Before calling create_project, verify:
 
 ---
 
-## Chapter 6: Resources and References
-
-If you're building your first skill, start with the Best Practices Guide, then reference the API docs as needed.
-
-### Official Documentation
-
-**Anthropic Resources:**
-
-- Best Practices Guide
-- Skills Documentation
-- API Reference
-- MCP Documentation
-
-**Blog Posts:**
-
-- Introducing Agent Skills
-- Engineering Blog: Equipping Agents for the Real World
-- Skills Explained
-- How to Create Skills for Claude
-- Building Skills for Claude Code
-- Improving Frontend Design through Skills
-
-### Example skills
-
-**Public skills repository:**
-
-- GitHub: anthropics/skills
-- Contains Anthropic-created skills you can customize
-
-### Tools and Utilities
-
-**skill-creator skill:**
-
-- Built into Claude.ai and available for Claude Code
-- Can generate skills from descriptions
-- Reviews and provides recommendations
-- Use: "Help me build a skill using skill-creator"
-
-**Validation:**
-
-- skill-creator can assess your skills
-- Ask: "Review this skill and suggest improvements"
-
-### Getting Support
-
-**For Technical Questions:**
-
-- General questions: Community forums at the Claude Developers Discord
-
-**For Bug Reports:**
-
-- GitHub Issues: anthropics/skills/issues
-- Include: Skill name, error message, steps to reproduce
-
----
-
 ## Reference A: Quick Checklist
-
-Use this checklist to validate your skill before and after upload. If you want a faster start, use the skill-creator skill to generate your first draft, then run through this list to make sure you haven't missed anything.
-
-### Before you start
-
-- [ ] Identified 2-3 concrete use cases
-- [ ] Tools identified (built-in or MCP)
-- [ ] Reviewed this guide and example skills
-- [ ] Planned folder structure
 
 ### During development
 
@@ -1187,14 +838,6 @@ Use this checklist to validate your skill before and after upload. If you want a
 - [ ] Functional tests pass
 - [ ] Tool integration works (if applicable)
 - [ ] Compressed as .zip file
-
-### After upload
-
-- [ ] Test in real conversations
-- [ ] Monitor for under/over-triggering
-- [ ] Collect user feedback
-- [ ] Iterate on description and instructions
-- [ ] Update version in metadata
 
 ---
 
@@ -1249,5 +892,6 @@ For full, production-ready skills demonstrating the patterns in this guide:
 - **Document Skills** - PDF, DOCX, PPTX, XLSX creation
 - **Example Skills** - Various workflow patterns
 - **Partner Skills Directory** - View skills from various partners such as Asana, Atlassian, Canva, Figma, Sentry, Zapier, and more
+- **Public skills repository:** GitHub: anthropics/skills — contains Anthropic-created skills you can customize
 
 These repositories stay up-to-date and include additional examples beyond what's covered here. Clone them, modify them for your use case, and use them as templates.
