@@ -103,12 +103,6 @@ Restructure Markdown docs so LLMs can consume them more effectively. Use when op
 
 Apply priority hierarchy and self-verification patterns to CLAUDE.md files. Use when improving project instructions for Claude Code.
 
-```
-/prime-prompt-quality
-```
-
-Load the prompt quality guide into context as a reference. Use before writing or reviewing prompts.
-
 #### Mental frameworks (`/consider:*`)
 
 Twelve decision-making frameworks for structured analysis. Run `/analyze-problem` to describe your situation and get a recommendation for which one fits.
