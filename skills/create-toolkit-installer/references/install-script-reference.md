@@ -1,3 +1,70 @@
+# Install Script Reference
+
+Complete template for toolkit installation scripts. Customize the 6 constants at the top — the rest adapts automatically.
+
+## Configuration Constants
+
+| Constant | Purpose | Example |
+|---|---|---|
+| `TOOLKIT_NAME` | Manifest subdirectory, log messages (kebab-case) | `flutter-llm-toolkit` |
+| `TOOLKIT_DESCRIPTION` | Help text one-liner | `Flutter/Dart skills and commands for Claude Code` |
+| `REPO_URL` | Clone URL in help examples | `https://github.com/user/my-toolkit.git` |
+| `REPO_CLONE_NAME` | Directory name in help examples | `my-toolkit` |
+| `INSTALLABLE_DIRS` | Which directories the toolkit ships | `['commands', 'skills', 'references']` |
+| `LEGACY_MANIFEST_DIR_NAME` | Old toolkit name for migration, or `null` | `'old-toolkit-name'` |
+
+`INSTALLABLE_DIRS` drives everything: file collection, migration scanning, install counts, orphan protection, and summary output. Add or remove entries to match what your toolkit ships.
+
+## Architecture
+
+10-phase pipeline, each phase isolated in its own function:
+
+1. **CLI parsing** — flags, backward-compat no-ops, Windows check, self-install guard
+2. **Read manifest** — from `<target>/<TOOLKIT_NAME>/.manifest.json`, with legacy fallback
+3. **Migrate legacy symlinks** — build synthetic manifest from existing symlinks (first run only)
+4. **Build file list** — recursive scan of INSTALLABLE_DIRS
+5. **Compare manifests** — detect orphans (removed files), tracked modifications, and unmanaged destination collisions
+6. **Resolve conflicts** — interactive prompt, force mode, or strict-non-interactive error
+7. **Install files** — symlink or copy, with skill directory-level symlinks in link mode
+8. **Remove orphans** — delete tracked files no longer in the toolkit, clean empty dirs
+9. **Write manifest** — record checksums for next run's conflict detection
+10. **Summary** — report what changed
+
+## Gotchas
+
+**1. Symlink resolution requires realpathSync.** `fs.readlinkSync` returns the raw target, which may be relative. Always resolve through `path.resolve(path.dirname(linkPath), target)` then `realpathSync`. String prefix matching like `target.startsWith(SCRIPT_DIR)` breaks with relative symlinks. The template uses `symlinkPointsIntoScriptDir()` which handles this correctly.
+
+**2. Skills get directory-level symlinks.** In link mode, each skill directory becomes a single symlink (`skills/my-skill -> repo/skills/my-skill`), not individual file symlinks. This means conflict detection during copy-to-link migration must check the entire skill directory for changes, not individual files. The `hasSkillDirLocalChanges()` function handles this.
+
+**3. Link-mode uninstall must remove skill symlink roots, not tracked files inside them.** The manifest still records per-file checksums for skills, but uninstall cannot blindly `unlink target/skills/my-skill/...` because that path traverses the directory symlink into the source repo. Remove the skill directory symlink itself (`target/skills/my-skill`) and skip per-file deletion for linked skills.
+
+**4. Legacy migration must tolerate broken symlinks.** Old installs can leave stale symlinks behind. When scanning legacy symlinks, `fs.statSync(linkPath)` may throw even if `lstat` says the entry is a symlink. Catch that and skip the broken entry so a partially broken install does not abort migration.
+
+**5. Fresh installs must treat unmanaged destinations as conflicts.** A missing manifest does not mean the target is empty. If `.claude/commands/foo.md` or `skills/my-skill` already exists and is not tracked by this toolkit, do not silently replace it in non-interactive mode. Surface it as a conflict and require interactive confirmation or `--force`.
+
+**6. Copy mode must unlink skill dir symlinks first.** Writing files "into" a symlinked skill directory actually writes into the source repo. The install function unlinks skill directory symlinks pointing into the script dir before any copy-mode writes.
+
+**7. Self-install guard prevents circular symlinks.** Without it, running `install.js` from inside the toolkit repo creates `.claude/` with symlinks pointing at itself. The guard compares `realpathSync(process.cwd())` against `SCRIPT_DIR_REAL`.
+
+**8. Manifest lives in a subdirectory.** Path: `<target>/<TOOLKIT_NAME>/.manifest.json`. Multiple toolkits coexist at the same target (`~/.claude/`), each with its own manifest directory. Never use a flat manifest at target root.
+
+**9. Protected directories survive orphan cleanup.** Top-level category dirs (`agents/`, `commands/`, etc.) are never deleted during cleanup — other toolkits or user files may live there.
+
+**10. Copy-to-link migration needs strict conflict handling.** Switching from copy to link replaces entire skill directories with symlinks. In non-interactive mode, this throws an error (strictNonInteractive) rather than silently overwriting. Users must run interactively or with `--force`.
+
+**11. Unmanaged collisions should also trigger strict non-interactive handling.** If the installer would overwrite user-owned files or symlinks that are not in the manifest, non-interactive mode must stop instead of defaulting to overwrite. Silent replacement is only acceptable for already-tracked destinations, and even then only within the existing conflict policy.
+
+**12. Windows symlinks require admin.** Default to erroring with `--copy` suggestion when `process.platform === 'win32'` and `--copy` isn't set.
+
+**13. Backward-compat flags are silent no-ops.** When defaults change (e.g., link becomes default instead of copy), keep old flags (`--link`, `--local`) accepted but ignored. Prevents breaking existing scripts or documentation.
+
+**14. Executables need chmod after copy.** Files ending in `.sh` or `.py` get `chmod 755` after copying. Symlinks inherit source permissions automatically.
+
+## Complete Template
+
+Only the 6 constants at the top need customization. Remove entries from `INSTALLABLE_DIRS` for directories your toolkit doesn't ship.
+
+```js
 #!/usr/bin/env node
 
 const fs = require('fs');
@@ -5,6 +72,16 @@ const path = require('path');
 const os = require('os');
 const readline = require('readline');
 const crypto = require('crypto');
+
+// ── Configuration ───────────────────────────────────────────────────────────
+// Customize these constants for your toolkit. Everything else adapts automatically.
+
+const TOOLKIT_NAME = 'my-toolkit';
+const TOOLKIT_DESCRIPTION = 'skills, commands, and references for Claude Code';
+const REPO_URL = 'https://github.com/user/my-toolkit.git';
+const REPO_CLONE_NAME = 'my-toolkit';
+const INSTALLABLE_DIRS = ['agents', 'commands', 'skills', 'references'];
+const LEGACY_MANIFEST_DIR_NAME = null; // Set to old name if renaming a toolkit
 
 // ── Colors ──────────────────────────────────────────────────────────────────
 const green = '\x1b[32m';
@@ -22,8 +99,7 @@ const hasForce = has('--force', '-f');
 const hasHelp = has('--help', '-h');
 const hasUninstall = has('--uninstall');
 
-// Hidden backward-compat flags (no-ops)
-// --local / -l is the default scope, --link is the default mode
+// Backward-compat no-ops
 const _hasLocal = has('--local', '-l');
 const _hasLink = has('--link');
 
@@ -31,36 +107,23 @@ if (hasHelp) {
   console.log(`
 Usage: ${process.argv[1]} [options]
 
-Installs skills, agents, commands, and references for Claude Code
+Installs ${TOOLKIT_DESCRIPTION}
 by creating symlinks from your project (or global ~/.claude/) to this toolkit.
 
 Options:
-  -g, --global   Install to ~/.claude/ (default: current project ./.claude/)
-      --copy     Copy files instead of symlinking
-  -f, --force    Overwrite modified files without prompting
+  -g, --global     Install to ~/.claude/ (default: current project ./.claude/)
+      --copy       Copy files instead of symlinking
+  -f, --force      Overwrite modified files without prompting
       --uninstall  Remove all toolkit files from the target scope
-  -h, --help     Show this help message
+  -h, --help       Show this help message
 
 Examples:
-  # Clone the toolkit once
-  git clone https://github.com/rolandtolnay/llm-toolkit.git ~/toolkits/llm-toolkit
+  git clone ${REPO_URL} ~/toolkits/${REPO_CLONE_NAME}
 
-  # Install into a project (creates symlinks in ./.claude/)
-  cd your-project
-  ~/toolkits/llm-toolkit/install.js
-
-  # Install globally (creates symlinks in ~/.claude/)
-  ~/toolkits/llm-toolkit/install.js --global
-
-  # Copy files instead of symlinking (e.g. for team sharing via git)
-  ~/toolkits/llm-toolkit/install.js --copy
-
-  # Uninstall from a project
-  cd your-project
-  ~/toolkits/llm-toolkit/install.js --uninstall
-
-  # Uninstall globally
-  ~/toolkits/llm-toolkit/install.js --uninstall --global
+  cd your-project && ~/toolkits/${REPO_CLONE_NAME}/install.js
+  ~/toolkits/${REPO_CLONE_NAME}/install.js --global
+  ~/toolkits/${REPO_CLONE_NAME}/install.js --copy
+  ~/toolkits/${REPO_CLONE_NAME}/install.js --uninstall
 `);
   process.exit(0);
 }
@@ -79,7 +142,7 @@ const SCRIPT_DIR_REAL = fs.realpathSync(SCRIPT_DIR);
 const MANIFEST_VERSION = '1.0.0';
 const SKIP_PATTERNS = ['.DS_Store', '__pycache__', '.git'];
 
-// Safety check: don't install into the toolkit repo itself
+// Safety: don't install into the toolkit repo itself
 if (!hasGlobal && !hasUninstall && fs.realpathSync(process.cwd()) === SCRIPT_DIR_REAL) {
   console.error('Error: Run this from your project directory, not from the toolkit repo.');
   console.error('  cd your-project');
@@ -108,8 +171,7 @@ function relToFsPath(rel) {
 function getSkillNameFromRel(rel) {
   const normalized = normalizeRelPath(rel);
   if (!normalized.startsWith('skills/')) return null;
-  const parts = normalized.split('/');
-  return parts[1] || null;
+  return normalized.split('/')[1] || null;
 }
 
 function getKeptSkillDirs(keep) {
@@ -118,9 +180,7 @@ function getKeptSkillDirs(keep) {
     const normalized = normalizeRelPath(rel);
     const skillName = getSkillNameFromRel(normalized);
     if (!skillName) continue;
-    if (normalized.split('/').length === 2) {
-      keptSkillDirs.add(skillName);
-    }
+    if (normalized.split('/').length === 2) keptSkillDirs.add(skillName);
   }
   return keptSkillDirs;
 }
@@ -137,20 +197,18 @@ function resolveSymlinkTargetAbsolute(linkPath) {
 
 function resolveSymlinkTargetForScopeCheck(linkPath) {
   const resolved = resolveSymlinkTargetAbsolute(linkPath);
-  try {
-    return fs.realpathSync(resolved);
-  } catch {
-    return resolved;
-  }
+  try { return fs.realpathSync(resolved); } catch { return resolved; }
 }
 
 function symlinkPointsIntoScriptDir(linkPath) {
   try {
     const resolvedTarget = resolveSymlinkTargetForScopeCheck(linkPath);
     return isPathWithinOrEqual(SCRIPT_DIR_REAL, resolvedTarget);
-  } catch {
-    return false;
-  }
+  } catch { return false; }
+}
+
+function isSymlink(p) {
+  try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; }
 }
 
 function assertFilePathIsNotDirectory(fullPath) {
@@ -163,33 +221,21 @@ function assertFilePathIsNotDirectory(fullPath) {
 
 function normalizeManifestFiles(files = {}) {
   const normalized = {};
-  const source = files || {};
-  for (const [rel, checksum] of Object.entries(source)) {
+  for (const [rel, checksum] of Object.entries(files || {})) {
     normalized[normalizeRelPath(rel)] = checksum;
   }
   return normalized;
 }
 
-/**
- * Recursively collect files from a directory, returning relative paths.
- * @param {string} dir - Directory to scan
- * @param {string} prefix - Path prefix for the destination
- * @returns {Array<{rel: string, abs: string}>}
- */
 function collectFiles(dir, prefix) {
   const results = [];
   if (!fs.existsSync(dir)) return results;
-
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (SKIP_PATTERNS.includes(entry.name)) continue;
     const abs = path.join(dir, entry.name);
     const rel = normalizeRelPath(prefix ? path.posix.join(prefix, entry.name) : entry.name);
-    if (entry.isDirectory()) {
-      results.push(...collectFiles(abs, rel));
-    } else {
-      results.push({ rel, abs });
-    }
+    if (entry.isDirectory()) results.push(...collectFiles(abs, rel));
+    else results.push({ rel, abs });
   }
   return results;
 }
@@ -201,7 +247,7 @@ const targetDir = hasGlobal
   : path.join(process.cwd(), '.claude');
 
 const mode = hasCopy ? 'copy' : 'link';
-const manifestDir = path.join(targetDir, 'llm-toolkit');
+const manifestDir = path.join(targetDir, TOOLKIT_NAME);
 const manifestPath = path.join(manifestDir, '.manifest.json');
 
 // ── Phase 2: Read old manifest ──────────────────────────────────────────────
@@ -211,11 +257,12 @@ function readManifest() {
     if (fs.existsSync(manifestPath)) {
       return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     }
-    // Fallback: check for manifest from before the rename (claude-code-toolkit -> llm-toolkit)
-    const legacyManifestPath = path.join(targetDir, 'claude-code-toolkit', '.manifest.json');
-    if (fs.existsSync(legacyManifestPath)) {
-      console.log(`  Migrating manifest from claude-code-toolkit to llm-toolkit`);
-      return JSON.parse(fs.readFileSync(legacyManifestPath, 'utf8'));
+    if (LEGACY_MANIFEST_DIR_NAME) {
+      const legacyPath = path.join(targetDir, LEGACY_MANIFEST_DIR_NAME, '.manifest.json');
+      if (fs.existsSync(legacyPath)) {
+        console.log(`  Migrating manifest from ${LEGACY_MANIFEST_DIR_NAME} to ${TOOLKIT_NAME}`);
+        return JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
+      }
     }
     return null;
   } catch {
@@ -224,19 +271,14 @@ function readManifest() {
   }
 }
 
-// ── Phase 3: Migrate from install.sh ────────────────────────────────────────
+// ── Phase 3: Migrate legacy symlinks ────────────────────────────────────────
 
-/**
- * If no manifest exists, scan for symlinks pointing into this toolkit repo.
- * Build a synthetic manifest so orphan/conflict logic works on first migration.
- */
-function migrateFromInstallSh() {
+function migrateFromLegacySymlinks() {
   const files = {};
 
   function scanForSymlinks(dir, prefix) {
     if (!fs.existsSync(dir)) return;
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       const rel = normalizeRelPath(prefix ? path.posix.join(prefix, entry.name) : entry.name);
 
@@ -246,31 +288,16 @@ function migrateFromInstallSh() {
           try {
             targetStat = fs.statSync(full);
           } catch {
-            // Broken legacy symlink; ignore it and let normal cleanup handle it later.
             continue;
           }
-
-          // This is a symlink into our repo
           if (targetStat.isDirectory()) {
-            // Directory symlink (e.g. skills/linear -> repo/skills/linear/)
-            // Expand into individual file entries
-            const realFiles = collectFiles(full, rel);
-            for (const f of realFiles) {
-              try {
-                const content = fs.readFileSync(f.abs, 'utf8');
-                files[f.rel] = computeChecksum(content);
-              } catch {
-                files[f.rel] = 'migrated';
-              }
+            for (const f of collectFiles(full, rel)) {
+              try { files[f.rel] = computeChecksum(fs.readFileSync(f.abs, 'utf8')); }
+              catch { files[f.rel] = 'migrated'; }
             }
           } else {
-            // File symlink
-            try {
-              const content = fs.readFileSync(full, 'utf8');
-              files[rel] = computeChecksum(content);
-            } catch {
-              files[rel] = 'migrated';
-            }
+            try { files[rel] = computeChecksum(fs.readFileSync(full, 'utf8')); }
+            catch { files[rel] = 'migrated'; }
           }
         }
       } else if (entry.isDirectory()) {
@@ -279,35 +306,46 @@ function migrateFromInstallSh() {
     }
   }
 
-  // Scan the directories the old install.sh would have touched
-  scanForSymlinks(path.join(targetDir, 'agents'), 'agents');
-  scanForSymlinks(path.join(targetDir, 'commands'), 'commands');
-  scanForSymlinks(path.join(targetDir, 'skills'), 'skills');
-  scanForSymlinks(path.join(targetDir, 'references'), 'references');
+  for (const dir of INSTALLABLE_DIRS) {
+    scanForSymlinks(path.join(targetDir, dir), dir);
+  }
 
   if (Object.keys(files).length === 0) return null;
 
-  console.log(`  Migrating from install.sh (found ${Object.keys(files).length} tracked files)`);
-  return {
-    version: '0.0.0',
-    installedAt: new Date().toISOString(),
-    mode: 'link',
-    files
-  };
+  console.log(`  Migrating legacy symlinks (found ${Object.keys(files).length} tracked files)`);
+  return { version: '0.0.0', installedAt: new Date().toISOString(), mode: 'link', files };
 }
 
 // ── Phase 4: Build new file list ────────────────────────────────────────────
 
 function buildFileList() {
   const files = [];
-  files.push(...collectFiles(path.join(SCRIPT_DIR, 'agents'), 'agents'));
-  files.push(...collectFiles(path.join(SCRIPT_DIR, 'commands'), 'commands'));
-  files.push(...collectFiles(path.join(SCRIPT_DIR, 'skills'), 'skills'));
-  files.push(...collectFiles(path.join(SCRIPT_DIR, 'references'), 'references'));
+  for (const dir of INSTALLABLE_DIRS) {
+    files.push(...collectFiles(path.join(SCRIPT_DIR, dir), dir));
+  }
   return files;
 }
 
 // ── Phase 5: Compare manifests ──────────────────────────────────────────────
+
+function hasSkillDirLocalChanges(skillSourceDir, skillInstallDir) {
+  const sourceFiles = collectFiles(skillSourceDir, '');
+  const sourceSet = new Set(sourceFiles.map(f => normalizeRelPath(f.rel)));
+
+  for (const f of sourceFiles) {
+    const rel = normalizeRelPath(f.rel);
+    const dest = path.join(skillInstallDir, relToFsPath(rel));
+    if (!fs.existsSync(dest) || isSymlink(dest)) return true;
+    if (fs.statSync(dest).isDirectory()) return true;
+    if (!fs.readFileSync(f.abs).equals(fs.readFileSync(dest))) return true;
+  }
+
+  for (const f of collectFiles(skillInstallDir, '')) {
+    if (!sourceSet.has(normalizeRelPath(f.rel))) return true;
+  }
+
+  return false;
+}
 
 function compareManifests(oldManifest, newFiles) {
   const orphans = [];
@@ -324,9 +362,7 @@ function compareManifests(oldManifest, newFiles) {
 
   const addConflict = (rel, options = {}) => {
     conflicts.add(rel);
-    if (options.unmanaged) {
-      hasUnmanagedConflicts = true;
-    }
+    if (options.unmanaged) hasUnmanagedConflicts = true;
   };
 
   const hasTrackedFile = (rel) => Object.prototype.hasOwnProperty.call(oldFiles, rel);
@@ -335,19 +371,11 @@ function compareManifests(oldManifest, newFiles) {
     const dest = path.join(targetDir, relToFsPath(f.rel));
     if (!fs.existsSync(dest) || isSymlink(dest)) return false;
     assertFilePathIsNotDirectory(dest);
-
     const oldChecksum = oldFiles[f.rel];
     if (!oldChecksum) return false;
-
-    // Check if on-disk differs from what we last installed
-    const diskContent = fs.readFileSync(dest, 'utf8');
-    const diskChecksum = computeChecksum(diskContent);
+    const diskChecksum = computeChecksum(fs.readFileSync(dest, 'utf8'));
     if (diskChecksum === oldChecksum) return false;
-
-    // Check if source also differs from on-disk (true conflict)
-    const srcContent = fs.readFileSync(f.abs, 'utf8');
-    const srcChecksum = computeChecksum(srcContent);
-    return srcChecksum !== diskChecksum;
+    return computeChecksum(fs.readFileSync(f.abs, 'utf8')) !== diskChecksum;
   };
 
   const hasUnmanagedFileCollision = (f) => {
@@ -373,15 +401,11 @@ function compareManifests(oldManifest, newFiles) {
     const skillName = getSkillNameFromRel(f.rel);
     if (skillName) {
       skillDirsToCheck.add(skillName);
-      if (mode === 'copy' && hasUnmanagedFileCollision(f)) {
-        addConflict(f.rel, { unmanaged: true });
-      }
+      if (mode === 'copy' && hasUnmanagedFileCollision(f)) addConflict(f.rel, { unmanaged: true });
       continue;
     }
 
-    if (hasUnmanagedFileCollision(f)) {
-      addConflict(f.rel, { unmanaged: true });
-    }
+    if (hasUnmanagedFileCollision(f)) addConflict(f.rel, { unmanaged: true });
   }
 
   if (mode === 'link') {
@@ -408,38 +432,25 @@ function compareManifests(oldManifest, newFiles) {
   }
 
   if (oldManifest && oldManifest.files) {
-    // Orphans: in old manifest but not in new file list
     for (const oldPath of Object.keys(oldFiles)) {
       if (!newSet.has(oldPath)) {
         const full = path.join(targetDir, relToFsPath(oldPath));
-        if (fs.existsSync(full) || isSymlink(full)) {
-          orphans.push(oldPath);
-        }
+        if (fs.existsSync(full) || isSymlink(full)) orphans.push(oldPath);
       }
     }
 
-    // Conflicts in copy mode
     if (mode === 'copy') {
       for (const f of newFiles) {
-        if (hasFileConflict(f)) {
-          addConflict(f.rel);
-        }
+        if (hasFileConflict(f)) addConflict(f.rel);
       }
     }
 
-    // Conflicts when switching copy -> link:
-    // modified local copies would otherwise be silently replaced by symlinks.
     if (mode === 'link' && oldManifest.mode === 'copy') {
       for (const f of newFiles) {
         const skillName = getSkillNameFromRel(f.rel);
-        if (skillName) {
-          continue;
-        }
-        if (hasFileConflict(f)) {
-          addConflict(f.rel);
-        }
+        if (skillName) continue;
+        if (hasFileConflict(f)) addConflict(f.rel);
       }
-
       for (const skillName of skillDirsToCheck) {
         const skillInstallDir = path.join(targetDir, 'skills', skillName);
         const skillSourceDir = path.join(SCRIPT_DIR, 'skills', skillName);
@@ -456,10 +467,6 @@ function compareManifests(oldManifest, newFiles) {
   }
 
   return { orphans, conflicts: Array.from(conflicts), hasUnmanagedConflicts };
-}
-
-function isSymlink(p) {
-  try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; }
 }
 
 // ── Phase 6: Resolve conflicts ──────────────────────────────────────────────
@@ -480,7 +487,7 @@ async function resolveConflicts(conflicts, options = {}) {
   if (!isInteractive()) {
     if (strictNonInteractive) {
       throw new Error(
-        `Local modifications detected in ${conflicts.length} path(s). Re-run interactively to choose overwrite/keep, or re-run with --force to overwrite.`
+        `Local modifications detected in ${conflicts.length} path(s). Re-run interactively or with --force.`
       );
     }
     for (const c of conflicts) overwrite.add(c);
@@ -521,14 +528,9 @@ async function resolveConflicts(conflicts, options = {}) {
 
 // ── Phase 7: Install files ──────────────────────────────────────────────────
 
-/**
- * Determine which skill directories need directory-level symlinks in link mode.
- * Returns a Map of skill dir name -> source path.
- */
 function getSkillDirs() {
   const skillsDir = path.join(SCRIPT_DIR, 'skills');
   if (!fs.existsSync(skillsDir)) return new Map();
-
   const dirs = new Map();
   for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
     if (entry.isDirectory() && !SKIP_PATTERNS.includes(entry.name)) {
@@ -538,48 +540,22 @@ function getSkillDirs() {
   return dirs;
 }
 
-function hasSkillDirLocalChanges(skillSourceDir, skillInstallDir) {
-  const sourceFiles = collectFiles(skillSourceDir, '');
-  const sourceSet = new Set(sourceFiles.map(f => normalizeRelPath(f.rel)));
-
-  for (const f of sourceFiles) {
-    const rel = normalizeRelPath(f.rel);
-    const dest = path.join(skillInstallDir, relToFsPath(rel));
-    if (!fs.existsSync(dest) || isSymlink(dest)) return true;
-    if (fs.statSync(dest).isDirectory()) return true;
-    const srcBuf = fs.readFileSync(f.abs);
-    const destBuf = fs.readFileSync(dest);
-    if (!srcBuf.equals(destBuf)) return true;
-  }
-
-  for (const f of collectFiles(skillInstallDir, '')) {
-    const rel = normalizeRelPath(f.rel);
-    if (!sourceSet.has(rel)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function installFiles(newFiles, keep, oldManifest) {
-  const installed = { agents: 0, commands: 0, skills: 0, references: 0 };
+  const installed = {};
+  for (const dir of INSTALLABLE_DIRS) installed[dir] = 0;
+
   const skillDirs = mode === 'link' ? getSkillDirs() : new Map();
   const keptSkillDirs = getKeptSkillDirs(keep);
   const handledSkillDirs = new Set();
 
-  // In copy mode, replace any skill directory symlinks with real directories first.
-  // Without this, writing files "into" a skill dir symlink would write into the repo.
+  // In copy mode, replace skill directory symlinks with real directories first
   if (mode === 'copy') {
     const skillsInstallDir = path.join(targetDir, 'skills');
     if (fs.existsSync(skillsInstallDir)) {
       for (const entry of fs.readdirSync(skillsInstallDir, { withFileTypes: true })) {
         const full = path.join(skillsInstallDir, entry.name);
-        if (entry.isSymbolicLink()) {
-          if (symlinkPointsIntoScriptDir(full)) {
-            fs.unlinkSync(full);
-            // Real directory will be created by mkdirSync in the copy loop
-          }
+        if (entry.isSymbolicLink() && symlinkPointsIntoScriptDir(full)) {
+          fs.unlinkSync(full);
         }
       }
     }
@@ -593,7 +569,7 @@ function installFiles(newFiles, keep, oldManifest) {
     const dest = path.join(targetDir, relToFsPath(rel));
 
     if (mode === 'link') {
-      // For skills, use directory symlinks (one per skill dir)
+      // Skills: directory-level symlinks (one per skill)
       if (rel.startsWith('skills/')) {
         if (!handledSkillDirs.has(skillName) && skillDirs.has(skillName)) {
           handledSkillDirs.add(skillName);
@@ -603,15 +579,12 @@ function installFiles(newFiles, keep, oldManifest) {
 
           if (isSymlink(linkPath)) {
             const current = fs.readlinkSync(linkPath);
-            if (current === linkTarget || current === linkTarget + '/') {
-              // Already correct — don't count
-            } else {
+            if (current !== linkTarget && current !== linkTarget + '/') {
               fs.unlinkSync(linkPath);
               fs.symlinkSync(linkTarget, linkPath);
               installed.skills++;
             }
           } else if (fs.existsSync(linkPath) && fs.statSync(linkPath).isDirectory()) {
-            // Real directory exists — OK if copy→link switch or --force
             if ((oldManifest && oldManifest.mode === 'copy') || hasForce) {
               fs.rmSync(linkPath, { recursive: true });
               fs.symlinkSync(linkTarget, linkPath);
@@ -625,52 +598,43 @@ function installFiles(newFiles, keep, oldManifest) {
             installed.skills++;
           }
         }
-        continue; // individual skill files handled by dir symlink
+        continue;
       }
 
-      // For agents, commands, and references: individual file symlinks
+      // Everything else: individual file symlinks
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       assertFilePathIsNotDirectory(dest);
       if (isSymlink(dest)) {
         const current = fs.readlinkSync(dest);
-        if (current === f.abs) continue; // already correct
+        if (current === f.abs) continue;
         fs.unlinkSync(dest);
       } else if (fs.existsSync(dest)) {
-        fs.unlinkSync(dest); // remove real file before symlinking
+        fs.unlinkSync(dest);
       }
       fs.symlinkSync(f.abs, dest);
     } else {
       // Copy mode
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       assertFilePathIsNotDirectory(dest);
-      // Remove pre-existing symlink before copying
       if (isSymlink(dest)) {
         fs.unlinkSync(dest);
       } else if (fs.existsSync(dest)) {
-        // Check if content is identical — skip if so
-        const srcBuf = fs.readFileSync(f.abs);
-        const destBuf = fs.readFileSync(dest);
-        if (srcBuf.equals(destBuf)) continue;
+        if (fs.readFileSync(f.abs).equals(fs.readFileSync(dest))) continue;
       }
       fs.copyFileSync(f.abs, dest);
-
-      // chmod for executables
-      if (f.abs.endsWith('.sh') || f.abs.endsWith('.py')) {
-        fs.chmodSync(dest, 0o755);
-      }
+      if (f.abs.endsWith('.sh') || f.abs.endsWith('.py')) fs.chmodSync(dest, 0o755);
     }
 
-    // Count categories (only reached when something actually changed)
-    if (rel.startsWith('agents/')) installed.agents++;
-    else if (rel.startsWith('commands/')) installed.commands++;
-    else if (rel.startsWith('skills/')) {
-      // Count per skill directory, not per file
+    // Count by category
+    const category = rel.split('/')[0];
+    if (category === 'skills') {
       if (!handledSkillDirs.has(skillName)) {
         handledSkillDirs.add(skillName);
         installed.skills++;
       }
+    } else if (installed[category] !== undefined) {
+      installed[category]++;
     }
-    else if (rel.startsWith('references/')) installed.references++;
   }
 
   return installed;
@@ -682,16 +646,12 @@ function removeOrphans(orphans) {
   if (orphans.length === 0) return;
 
   const dirsToCheck = new Set();
-  const protectedDirs = new Set(['agents', 'commands', 'skills', 'references']);
+  const protectedDirs = new Set(INSTALLABLE_DIRS);
 
   for (const rel of orphans) {
     const full = path.join(targetDir, relToFsPath(rel));
     try {
-      if (isSymlink(full)) {
-        fs.unlinkSync(full);
-      } else if (fs.existsSync(full)) {
-        fs.unlinkSync(full);
-      }
+      if (isSymlink(full) || fs.existsSync(full)) fs.unlinkSync(full);
       console.log(`  ${yellow}Removed${reset} ${rel}`);
       dirsToCheck.add(path.dirname(full));
     } catch (e) {
@@ -699,8 +659,6 @@ function removeOrphans(orphans) {
     }
   }
 
-  // Also check if any skill directory symlinks are orphaned
-  // (skill was removed entirely from repo)
   if (mode === 'link') {
     const skillsInstallDir = path.join(targetDir, 'skills');
     if (fs.existsSync(skillsInstallDir)) {
@@ -708,8 +666,7 @@ function removeOrphans(orphans) {
         const full = path.join(skillsInstallDir, entry.name);
         if (entry.isSymbolicLink()) {
           if (!symlinkPointsIntoScriptDir(full)) continue;
-          const resolvedTarget = resolveSymlinkTargetAbsolute(full);
-          if (!fs.existsSync(resolvedTarget)) {
+          if (!fs.existsSync(resolveSymlinkTargetAbsolute(full))) {
             fs.unlinkSync(full);
             console.log(`  ${yellow}Removed${reset} skills/${entry.name} (stale symlink)`);
           }
@@ -718,20 +675,13 @@ function removeOrphans(orphans) {
     }
   }
 
-  // Remove empty parent directories (deepest first), but never the top-level category dirs
   const sorted = Array.from(dirsToCheck).sort((a, b) => b.length - a.length);
   for (const dir of sorted) {
     try {
       const relDir = path.relative(targetDir, dir);
-      if (protectedDirs.has(relDir)) continue;
-      if (dir === targetDir) continue;
-      const entries = fs.readdirSync(dir);
-      if (entries.length === 0) {
-        fs.rmdirSync(dir);
-      }
-    } catch {
-      // ignore
-    }
+      if (protectedDirs.has(relDir) || dir === targetDir) continue;
+      if (fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
+    } catch { /* ignore */ }
   }
 }
 
@@ -746,33 +696,16 @@ function buildAndWriteManifest(newFiles, keep) {
     const skillName = getSkillNameFromRel(rel);
     const isKeptSkill = skillName && keptSkillDirs.has(skillName);
     const dest = path.join(targetDir, relToFsPath(rel));
+
     if (keep.has(rel) || isKeptSkill) {
-      // User kept their version — record its current checksum
-      try {
-        const content = fs.readFileSync(dest, 'utf8');
-        files[rel] = computeChecksum(content);
-      } catch {
-        files[rel] = 'kept';
-      }
+      try { files[rel] = computeChecksum(fs.readFileSync(dest, 'utf8')); }
+      catch { files[rel] = 'kept'; }
     } else if (mode === 'link') {
-      // For symlinks, checksum the source file
-      try {
-        const content = fs.readFileSync(f.abs, 'utf8');
-        files[rel] = computeChecksum(content);
-      } catch {
-        // Binary file — checksum from buffer
-        const buf = fs.readFileSync(f.abs);
-        files[rel] = computeChecksum(buf);
-      }
+      try { files[rel] = computeChecksum(fs.readFileSync(f.abs, 'utf8')); }
+      catch { files[rel] = computeChecksum(fs.readFileSync(f.abs)); }
     } else {
-      // Checksum the installed copy
-      try {
-        const content = fs.readFileSync(dest, 'utf8');
-        files[rel] = computeChecksum(content);
-      } catch {
-        const buf = fs.readFileSync(dest);
-        files[rel] = computeChecksum(buf);
-      }
+      try { files[rel] = computeChecksum(fs.readFileSync(dest, 'utf8')); }
+      catch { files[rel] = computeChecksum(fs.readFileSync(dest)); }
     }
   }
 
@@ -804,15 +737,12 @@ function uninstall() {
   }
 
   const files = normalizeManifestFiles(oldManifest.files);
-  const fileKeys = Object.keys(files);
   const linkedSkillDirs = new Set();
-
   let removed = 0;
   const dirsToCheck = new Set();
-  const protectedDirs = new Set(['agents', 'commands', 'skills', 'references']);
+  const protectedDirs = new Set(INSTALLABLE_DIRS);
 
-  // Remove all tracked files
-  for (const rel of fileKeys) {
+  for (const rel of Object.keys(files)) {
     const skillName = getSkillNameFromRel(rel);
     if (oldManifest.mode === 'link' && skillName) {
       linkedSkillDirs.add(skillName);
@@ -821,14 +751,10 @@ function uninstall() {
 
     const full = path.join(targetDir, relToFsPath(rel));
     try {
-      if (isSymlink(full) || fs.existsSync(full)) {
-        fs.unlinkSync(full);
-        removed++;
-      }
+      if (isSymlink(full) || fs.existsSync(full)) { fs.unlinkSync(full); removed++; }
     } catch (e) {
       console.log(`  ${yellow}Warning:${reset} failed to remove ${rel}: ${e.message}`);
     }
-    // Collect all ancestor directories for cleanup
     let dir = path.dirname(full);
     while (dir !== targetDir && dir.startsWith(targetDir)) {
       dirsToCheck.add(dir);
@@ -836,7 +762,6 @@ function uninstall() {
     }
   }
 
-  // Remove skill directory symlinks pointing into this toolkit
   const skillsInstallDir = path.join(targetDir, 'skills');
   if (fs.existsSync(skillsInstallDir)) {
     for (const skillName of linkedSkillDirs) {
@@ -857,54 +782,37 @@ function uninstall() {
     }
   }
 
-  // Clean up empty directories (deepest first), skip top-level category dirs
   const sorted = Array.from(dirsToCheck).sort((a, b) => b.length - a.length);
   for (const dir of sorted) {
     try {
       const relDir = path.relative(targetDir, dir);
-      if (protectedDirs.has(relDir)) continue;
-      if (dir === targetDir) continue;
-      const entries = fs.readdirSync(dir);
-      if (entries.length === 0) {
-        fs.rmdirSync(dir);
-      }
-    } catch {
-      // ignore
-    }
+      if (protectedDirs.has(relDir) || dir === targetDir) continue;
+      if (fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
+    } catch { /* ignore */ }
   }
 
-  // Remove manifest file, then try removing manifest directory if empty
   try { fs.unlinkSync(manifestPath); } catch { /* ignore */ }
   try {
-    const entries = fs.readdirSync(manifestDir);
-    if (entries.length === 0) {
-      fs.rmdirSync(manifestDir);
-    }
+    if (fs.readdirSync(manifestDir).length === 0) fs.rmdirSync(manifestDir);
   } catch { /* ignore */ }
 
-  // Clean up legacy claude-code-toolkit directory if present
-  const legacyManifestDir = path.join(targetDir, 'claude-code-toolkit');
-  if (fs.existsSync(legacyManifestDir)) {
-    fs.rmSync(legacyManifestDir, { recursive: true });
-    console.log(`  Removed legacy ${legacyManifestDir.replace(os.homedir(), '~')}`);
+  if (LEGACY_MANIFEST_DIR_NAME) {
+    const legacyDir = path.join(targetDir, LEGACY_MANIFEST_DIR_NAME);
+    if (fs.existsSync(legacyDir)) {
+      fs.rmSync(legacyDir, { recursive: true });
+      console.log(`  Removed legacy ${legacyDir.replace(os.homedir(), '~')}`);
+    }
   }
 
-  if (removed > 0) {
-    console.log(`  ${green}Removed${reset} ${removed} file(s)`);
-  } else {
-    console.log('  Nothing to remove (files already cleaned up).');
-  }
-
+  if (removed > 0) console.log(`  ${green}Removed${reset} ${removed} file(s)`);
+  else console.log('  Nothing to remove (files already cleaned up).');
   console.log('');
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  if (hasUninstall) {
-    uninstall();
-    return;
-  }
+  if (hasUninstall) { uninstall(); return; }
 
   const targetLabel = hasGlobal
     ? targetDir.replace(os.homedir(), '~')
@@ -912,57 +820,38 @@ async function main() {
 
   console.log(`\nInstalling to ${targetLabel} (${mode} mode)\n`);
 
-  // Phase 2: Read old manifest
   let oldManifest = readManifest();
+  if (!oldManifest) oldManifest = migrateFromLegacySymlinks();
 
-  // Phase 3: Migrate from install.sh if needed
-  if (!oldManifest) {
-    oldManifest = migrateFromInstallSh();
-  }
-
-  // Phase 4: Build new file list
   const newFiles = buildFileList();
-
-  // Phase 5: Compare manifests
   const { orphans, conflicts, hasUnmanagedConflicts } = compareManifests(oldManifest, newFiles);
 
-  // Phase 6: Resolve conflicts
   const strictConflictHandling =
     hasUnmanagedConflicts || (mode === 'link' && oldManifest && oldManifest.mode === 'copy');
   const { overwrite, keep } = await resolveConflicts(conflicts, { strictNonInteractive: strictConflictHandling });
 
-  // Phase 7: Install files
   const counts = installFiles(newFiles, keep, oldManifest);
-
-  // Phase 8: Remove orphans
   removeOrphans(orphans);
-
-  // Phase 9: Write new manifest
   buildAndWriteManifest(newFiles, keep);
 
-  // Phase 10: Clean up legacy manifest directory
-  const legacyManifestDir = path.join(targetDir, 'claude-code-toolkit');
-  if (fs.existsSync(legacyManifestDir)) {
-    fs.rmSync(legacyManifestDir, { recursive: true });
-    console.log(`  Removed legacy ${legacyManifestDir.replace(os.homedir(), '~')}`);
+  if (LEGACY_MANIFEST_DIR_NAME) {
+    const legacyDir = path.join(targetDir, LEGACY_MANIFEST_DIR_NAME);
+    if (fs.existsSync(legacyDir)) {
+      fs.rmSync(legacyDir, { recursive: true });
+      console.log(`  Removed legacy ${legacyDir.replace(os.homedir(), '~')}`);
+    }
   }
 
-  // Summary
-  const total = counts.agents + counts.commands + counts.skills + counts.references;
+  const total = INSTALLABLE_DIRS.reduce((sum, dir) => sum + (counts[dir] || 0), 0);
   if (total === 0 && orphans.length === 0 && conflicts.length === 0) {
     console.log('Everything is up to date.');
   } else {
     const parts = [];
-    if (counts.agents > 0) parts.push(`${counts.agents} agents`);
-    if (counts.commands > 0) parts.push(`${counts.commands} commands`);
-    if (counts.skills > 0) parts.push(`${counts.skills} skills`);
-    if (counts.references > 0) parts.push(`${counts.references} references`);
-    if (parts.length > 0) {
-      console.log(`  ${green}Installed${reset} ${parts.join(', ')}`);
+    for (const dir of INSTALLABLE_DIRS) {
+      if (counts[dir] > 0) parts.push(`${counts[dir]} ${dir}`);
     }
-    if (orphans.length > 0) {
-      console.log(`  Cleaned up ${orphans.length} orphaned file(s)`);
-    }
+    if (parts.length > 0) console.log(`  ${green}Installed${reset} ${parts.join(', ')}`);
+    if (orphans.length > 0) console.log(`  Cleaned up ${orphans.length} orphaned file(s)`);
   }
 
   console.log('');
@@ -972,3 +861,4 @@ main().catch((err) => {
   console.error(`Error: ${err.message}`);
   process.exit(1);
 });
+```

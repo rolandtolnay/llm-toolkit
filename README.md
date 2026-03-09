@@ -197,16 +197,67 @@ Activates when you mention creating tickets, updating issues, or checking assign
 
 ### Skills
 
-Skills activate automatically based on what you're doing. Claude Code picks the right one for the task.
+Skills activate automatically based on what you're doing — no slash command needed. Claude Code picks the right one for the task.
 
-- **`create-skill`** -- Build new SKILL.md files through collaborative conversation.
-- **`create-slash-command`** -- Generate slash command files with proper YAML frontmatter and structure.
-- **`create-subagent`** -- Configure subagent specs with tool restrictions and orchestration patterns.
-- **`create-hook`** -- Write hook configurations for PreToolUse, PostToolUse, and other events.
-- **`create-prompt`** -- Create standalone prompt files.
-- **`audit-prompt`** -- Check prompts for wasted tokens, poor positioning, and vague instructions.
-- **`readme-best-practices`** -- Apply consistent structure, tone, and formatting to README files.
-- **`clean-conversations`** -- Remove empty Claude Code conversations across all projects.
+#### Authoring
+
+```
+create-skill
+```
+
+Build new SKILL.md files through collaborative conversation. Use when turning a workflow into a reusable skill.
+
+```
+create-slash-command
+```
+
+Generate slash command files with proper YAML frontmatter and structure. Use when building custom `/commands` or adding arguments and dynamic context.
+
+```
+create-subagent
+```
+
+Configure subagent specs with tool restrictions and orchestration patterns. Use when defining agent types or launching specialized agents with the Task tool.
+
+```
+create-hook
+```
+
+Write hook configurations for event-driven automation. Use when adding PreToolUse, PostToolUse, Stop, or other event hooks to validate commands or automate workflows.
+
+```
+create-prompt
+```
+
+Create standalone prompts that another Claude can execute. Use when writing reusable prompts for coding, analysis, or research tasks.
+
+```
+create-toolkit-installer
+```
+
+Generate `install.js` for Claude Code toolkit repos with manifest tracking, symlink/copy modes, and uninstall support. Use when creating a new distributable collection of commands, skills, agents, or references.
+
+#### Quality
+
+```
+audit-prompt
+```
+
+Check prompt files for wasted tokens, poor positioning, and vague instructions. Use when reviewing changes to commands, skills, agents, or any file containing LLM instructions.
+
+```
+readme-best-practices
+```
+
+Apply consistent structure, tone, and formatting to README files. Use when drafting, rewriting, or reviewing a project README to make it scannable and developer-friendly.
+
+#### Maintenance
+
+```
+clean-conversations
+```
+
+Remove empty Claude Code conversations across all projects. Use when cleaning up sessions that were opened then immediately closed.
 
 ### Reference guides
 
