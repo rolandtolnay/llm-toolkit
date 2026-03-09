@@ -122,26 +122,10 @@ skill-name/
 - **references/**: Domain knowledge loaded into context as needed. Lazy-loaded.
 - **assets/**: Templates, fonts, icons used in output generation.
 
-## Structure Decision
-
-**Default to simple** (single SKILL.md file).
-
-Simple criteria:
-- Single workflow or use case
-- Under 200 lines of instructions
-- One primary user intent
-
-Complex criteria (any one triggers):
-- Multiple distinct user intents requiring different workflows
-- Large domain knowledge base (>300 lines would bloat SKILL.md)
-- Reusable scripts that benefit from separate files
-- Expected significant growth in scope
-
-An empty `scripts/` or `references/` folder signals premature abstraction. Only add directories that earn their place.
-
 ## Progressive Disclosure
 
 - Keep SKILL.md under 500 lines
 - Reference files one level deep from SKILL.md
 - For reference files >100 lines, include a table of contents
 - Reference files clearly from SKILL.md with guidance on when to read them
+- An empty `scripts/` or `references/` folder signals premature abstraction — only add directories that earn their place

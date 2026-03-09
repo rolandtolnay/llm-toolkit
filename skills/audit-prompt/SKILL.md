@@ -70,7 +70,7 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
 
    The tool's built-in free text input lets the user specify custom scope (e.g. pick specific issues, disagree with findings).
 
-   Then apply the selected fixes directly to the files.
+   Then apply the selected fixes directly to the files. For any removal spanning more than 3 lines, re-read the target section before deleting and verify every line is either duplicate or accounted for in the fix. If any line carries unique semantics, extract it to the appropriate location — don't silently drop it.
 
 </process>
 

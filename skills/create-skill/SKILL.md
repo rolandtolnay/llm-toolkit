@@ -125,8 +125,6 @@ If complex, describe proposed directory structure with file purposes.
 
 Before writing, read these reference files:
 - `references/prompt-principles.md` — prompt quality principles
-- `references/description-guide.md` — description writing guidance
-- `references/frontmatter-reference.md` — YAML fields and rules
 - `references/skill-patterns.md` — relevant pattern for the category
 - `references/templates/simple-skill.md` or `references/templates/complex-skill.md`
 
@@ -150,6 +148,8 @@ Write the body FIRST. Do not write the description yet.
 6. **For complex skills:** Write supporting files with the same quality standards. References one level deep from SKILL.md.
 
 ### Writing the frontmatter
+
+Read `references/description-guide.md` and `references/frontmatter-reference.md` before proceeding.
 
 After the body is complete, write the frontmatter:
 
@@ -226,7 +226,6 @@ After presenting the skill, provide testing guidance:
 - **Overtriggering:** Add negative triggers ("Do NOT use when..."), be more specific
 - **Instructions not followed:** Check positioning (critical items at start/end), reduce verbosity, add examples
 
-**For rigorous evaluation:** Anthropic provides automated evaluation tools in their create-skill reference. This skill focuses on getting to a working first version — iterate from there.
 
 </process>
 
@@ -234,15 +233,13 @@ After presenting the skill, provide testing guidance:
 
 Adapt depth based on context cues. If the user mentions SKILL.md, frontmatter, or descriptions, they know the basics — skip introductions. If new to skills, briefly explain concepts as they arise (e.g., "frontmatter is the YAML between `---` markers at the top").
 
-Don't build elaborate detection — Claude naturally adapts to user expertise level.
-
 </communication>
 
 <success_criteria>
 - [ ] Description written LAST, after body is complete, following description-guide.md
+- [ ] Validation checklist completed before presenting to user
+- [ ] Testing guidance provided after presenting the skill
 - [ ] Reference files read before drafting (lazy loading applied)
 - [ ] Requirements gathered through collaborative conversation, not interrogation
 - [ ] Structure decision stated and justified (simple by default)
-- [ ] Validation checklist completed before presenting to user
-- [ ] Testing guidance provided
 </success_criteria>
