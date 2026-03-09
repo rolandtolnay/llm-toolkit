@@ -171,12 +171,19 @@ After the body is complete, write the frontmatter:
 
 ### Writing the skill file(s)
 
-Determine the correct location. Skills belong in one of:
-- `~/.claude/skills/<name>/` — personal, all projects
-- `.claude/skills/<name>/` — project-specific
+Determine the correct scope. Skills belong in one of:
+- `~/.claude/skills/<name>/` — user scope, available across all projects
+- `.claude/skills/<name>/` — project scope, specific to this project
 - A plugin's `skills/<name>/` — plugin distribution
 
-Ask the user if the location isn't obvious from context.
+**Infer scope from the skill's nature.** User scope for general-purpose skills useful across projects (code review, git workflows, documentation, formatting). Project scope for skills tied to this project's tooling, APIs, paths, or domain knowledge.
+
+**If the skill could reasonably go either way** (e.g., a framework-specific skill the user might use across projects), use AskUserQuestion:
+- header: "Skill scope"
+- question: "This skill could be useful across projects or kept project-specific. Where should it live?"
+- options:
+  - "User scope (~/.claude/)" — available in all my projects
+  - "Project scope (.claude/)" — specific to this project
 
 Write the SKILL.md file and any supporting files. Ensure all referenced files exist.
 
