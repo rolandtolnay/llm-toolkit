@@ -102,7 +102,22 @@ One line with link.
 
 **Collections** (multiple tools/commands/features):
 - Group by use case, not alphabetically.
-- Format each item as:
+- **Commands and CLI tools** — use the code-block-then-paragraph format. The code block is copy-pasteable; the paragraph describes what happens and when to use it:
+  ~~~
+  ```
+  /command-name
+  ```
+
+  Verb-first description of what it does. Use when trigger scenario.
+  ~~~
+- **Features and capabilities** — use a bold heading followed by 1-2 paragraphs of prose. No bullet lists, no code blocks for the heading — the heading is the visual anchor, the paragraphs explain what it does and why it matters:
+  ```
+  ### Feature name
+
+  First paragraph explains the core mechanic. Second paragraph
+  adds nuance, tradeoffs, or how it connects to the rest of the system.
+  ```
+- **Short-description items** (reference docs, config options, file listings) — use the inline bold format:
   ```
   - **`name`** — Verb-first description of what it does.
     - Use when: short trigger scenario that helps the reader recognize relevance.
