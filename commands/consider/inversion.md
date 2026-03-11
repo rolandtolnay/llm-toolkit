@@ -12,7 +12,7 @@ Instead of asking "How do I succeed?", ask "What would guarantee failure?" then 
 <process>
 1. State the goal or desired outcome
 2. Invert: "What would guarantee I fail at this?"
-3. List all failure modes (be thorough and honest)
+3. List all failure modes
 4. For each failure mode, identify the avoidance strategy
 5. Build success plan by systematically avoiding failure
 </process>
@@ -30,7 +30,7 @@ Instead of asking "How do I succeed?", ask "What would guarantee failure?" then 
 - [Behavior to eliminate]
 
 **Success By Avoidance:**
-By simply not doing [X, Y, Z], success becomes much more likely because...
+By not doing [X, Y, Z], success becomes much more likely because...
 
 **Remaining Risk:**
 [What's left after avoiding obvious failures]
@@ -41,5 +41,4 @@ By simply not doing [X, Y, Z], success becomes much more likely because...
 - Avoidance strategies are actionable
 - Surfaces risks that optimistic planning misses
 - Creates clear "never do" boundaries
-- Shows path to success via negativa
 </success_criteria>
