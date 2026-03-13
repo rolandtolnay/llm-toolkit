@@ -9,7 +9,7 @@ description: >
 ---
 
 <objective>
-Conversational interface to Slack for messaging and search. Execute immediately when intent is clear — no unnecessary questions.
+Conversational interface to Slack for messaging and search. Read-only commands (search, history, channels, users) execute immediately. Outbound messages always require user confirmation before sending.
 
 **Do NOT explore the codebase** unless the user explicitly asks. Work from user's description only.
 </objective>
@@ -68,6 +68,7 @@ Run with: `uv run skills/slack/scripts/slack.py <command> [options]`
 | `schedule message`, `send later`, `send tomorrow` | Schedule | Go to send_flow but use `schedule` with `--at` |
 | `message <name> <text>`, `DM <name>`, `tell <name>` | Send DM | Go to send_flow with person target |
 | `post in #channel <text>` | Send to channel | Go to send_flow with channel target |
+| `post about the PR`, `share the PR`, `announce the PR` | PR announcement | Go to pr_announcement_flow |
 </step>
 
 <step name="direct_commands">
@@ -89,8 +90,11 @@ Parse JSON response and present result:
 <step name="send_flow">
 **For sending and scheduling messages:**
 
+**CRITICAL: Every outbound message MUST be confirmed by the user before sending.**
+
 1. **Resolve target** from user's description — the CLI handles channel/user resolution automatically
-2. **Execute:**
+2. **Draft the message** and present it to the user using `AskUserQuestion` with options to confirm or request changes.
+3. **Only after the user confirms**, execute:
    - **Immediate send:**
      ```bash
      uv run skills/slack/scripts/slack.py send "<target>" "<message>" [--thread <ts>]
@@ -99,9 +103,25 @@ Parse JSON response and present result:
      ```bash
      uv run skills/slack/scripts/slack.py schedule "<target>" "<message>" --at "<time>"
      ```
-3. **Confirm delivery:** Show channel/DM and timestamp from response
+4. **Confirm delivery:** Show channel/DM and timestamp from response
 
-When the user says "message Roland about X" or "tell Ejaz Y", extract the person's name as the target and the rest as the message. Do not ask for confirmation — send immediately.
+When the user says "message Roland about X" or "tell Ejaz Y", extract the person's name as the target and the rest as the message content.
+</step>
+
+<step name="pr_announcement_flow">
+**For PR announcements (e.g. "post about the PR", "share PR in #engineering-pr"):**
+
+Triggered when the user asks to post/share/announce a PR to a channel. Gather the PR details automatically, compose the message using the template below, then follow the normal send_flow (draft → confirm → send).
+
+1. **Gather PR info** — run `gh pr view --json number,title,url,body` to get the current branch's PR. If the user specifies a PR number, use `gh pr view <number>` instead.
+2. **Compose the message** using this format:
+   ```
+   PR #<number>: <title>
+   <url>
+   <one-liner context>
+   ```
+   The `<one-liner context>` is a single sentence explaining *why this matters* — what it enables or unblocks, not just what files changed. Derive from the PR body/summary. Focus on impact for the team (e.g. "Enables end-to-end local testing of payments and subscriptions" rather than "Updates local-seed.sh").
+3. **Present the draft** to the user for confirmation, then follow the normal send_flow to post it.
 </step>
 
 <step name="error_handling">
@@ -120,10 +140,11 @@ Always parse JSON error response and present human-friendly message with suggest
 </process>
 
 <success_criteria>
-- [ ] Commands execute immediately when intent is clear — no unnecessary questions
+- [ ] Outbound messages (send, schedule, DM) are ALWAYS shown to the user and confirmed before posting
+- [ ] Read-only commands (search, history, channels, users, read-thread) execute immediately
+- [ ] Errors handled with helpful setup instructions
 - [ ] Search results include permalink for easy navigation
 - [ ] History output shows user names (not raw IDs) and thread indicators
 - [ ] CLI output parsed and formatted — show user names, text, timestamps, and permalinks
 - [ ] Target resolution handles channels (#name), channel IDs, and person names
-- [ ] Errors handled with helpful setup instructions
 </success_criteria>
