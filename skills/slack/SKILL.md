@@ -87,13 +87,18 @@ Parse JSON response and present result:
 </step>
 
 <step name="send_flow">
-**For sending messages:**
+**For sending and scheduling messages:**
 
 1. **Resolve target** from user's description — the CLI handles channel/user resolution automatically
-2. **Execute send:**
-   ```bash
-   uv run skills/slack/scripts/slack.py send "<target>" "<message>" [--thread <ts>]
-   ```
+2. **Execute:**
+   - **Immediate send:**
+     ```bash
+     uv run skills/slack/scripts/slack.py send "<target>" "<message>" [--thread <ts>]
+     ```
+   - **Scheduled send:**
+     ```bash
+     uv run skills/slack/scripts/slack.py schedule "<target>" "<message>" --at "<time>"
+     ```
 3. **Confirm delivery:** Show channel/DM and timestamp from response
 
 When the user says "message Roland about X" or "tell Ejaz Y", extract the person's name as the target and the rest as the message. Do not ask for confirmation — send immediately.
@@ -102,11 +107,7 @@ When the user says "message Roland about X" or "tell Ejaz Y", extract the person
 <step name="error_handling">
 **Handle errors gracefully:**
 
-- **MISSING_TOKEN:** Guide user through setup:
-  1. Create Slack app at https://api.slack.com/apps → "From scratch"
-  2. Go to OAuth & Permissions → User Token Scopes, add: `chat:write`, `search:read`, `channels:history`, `channels:read`, `users:read`, `users.profile:write`, `groups:history`, `groups:read`, `reactions:write`, `im:history`
-  3. Install to workspace, copy `xoxp-...` token
-  4. Add to `.claude/settings.local.json`: `{"env": {"SLACK_USER_TOKEN": "xoxp-..."}}`
+- **MISSING_TOKEN:** Read `skills/slack/references/setup-guide.md` and guide user through setup
 - **AUTH_FAILED:** Token is invalid or revoked — regenerate from Slack app settings
 - **CHANNEL_NOT_FOUND:** Suggest using `channels --search` to find the right name
 - **USER_NOT_FOUND:** Suggest using `users --search` to find the right person
@@ -119,11 +120,10 @@ Always parse JSON error response and present human-friendly message with suggest
 </process>
 
 <success_criteria>
-- [ ] Messages sent immediately when intent is clear — no unnecessary questions
-- [ ] Target resolution handles channels (#name), channel IDs, and person names
+- [ ] Commands execute immediately when intent is clear — no unnecessary questions
 - [ ] Search results include permalink for easy navigation
 - [ ] History output shows user names (not raw IDs) and thread indicators
+- [ ] CLI output parsed and formatted — show user names, text, timestamps, and permalinks
+- [ ] Target resolution handles channels (#name), channel IDs, and person names
 - [ ] Errors handled with helpful setup instructions
-- [ ] Direct commands execute immediately without questions
-- [ ] CLI output parsed and formatted for readability
 </success_criteria>
