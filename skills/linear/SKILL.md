@@ -39,6 +39,7 @@ Use `-V` only when the user:
 | `relate` | `relate <ID> <type> <target>` | Create relation (blocks, blocked-by, relates-to, duplicates) |
 | `unrelate` | `unrelate <ID> <target>` | Remove relation between two issues |
 | `comment` | `comment <ID> "<body>"` | Post a comment on an issue |
+| `delete-comment` | `delete-comment <comment-uuid>` | Delete a comment by UUID (from `get --comments`) |
 | `attach` | `attach <ID> <file_path> [-t title] [-s subtitle]` | Upload binary file (image, PDF) as download link |
 | `attach-commit` | `attach-commit <ID> [commit-sha]` | Link git commit to issue (defaults to HEAD) |
 | `document` | `document <ID> "<title>" [-c content] [-f file] [--project name]` | Create native markdown document viewable inline |
@@ -49,6 +50,9 @@ Use `-V` only when the user:
 | `create-project` | `create-project "<name>" [-d desc] [--color hex] [--icon id] [--state state] [--start-date date] [--target-date date]` | Create project |
 | `delete-project` | `delete-project "<name>"` | Delete project by name |
 | `update-project` | `update-project "<name>" [--name new] [-d desc] [--color hex] [--icon id] [--state state] [--start-date date] [--target-date date]` | Update project |
+| `milestones` | `milestones "<project-name>" [--team ID]` | List milestones for a project |
+| `create-milestone` | `create-milestone "<name>" --project "<project-name>" [-d desc] [--target-date YYYY-MM-DD]` | Create project milestone |
+| `delete-milestone` | `delete-milestone "<name>" --project "<project-name>"` | Delete project milestone by name |
 | `members` | `members` | List active workspace members |
 | `labels` | `labels [--team ID]` | List labels |
 | `create-label` | `create-label "<name>" [--color hex] [-d desc]` | Create label |
@@ -129,6 +133,9 @@ Filters combine with AND logic.
 | `"create a project"`, `"new project"` | Create project | Execute `create-project` directly |
 | `"delete project"`, `"remove project"` | Delete project | Execute `delete-project` directly |
 | `"update project"`, `"rename project"`, `"change project state"` | Update project | Execute `update-project` directly |
+| `"milestones for <project>"`, `"list milestones"`, `"show milestones"` | List milestones | Execute `milestones "<project>"` |
+| `"create milestone"`, `"new milestone"`, `"add milestone"` | Create milestone | Execute `create-milestone` with project |
+| `"delete milestone"`, `"remove milestone"` | Delete milestone | Execute `delete-milestone` with project |
 | `"move <ID> to project"`, `"set project on <ID>"` | Assign project | Execute `update <ID> --project <name>` |
 | `"remove <ID> from project"`, `"unset project on <ID>"` | Remove project | Execute `update <ID> --no-project` |
 | `labels`, `"list labels"`, `"show labels"` | List labels | Execute `labels` directly |
@@ -144,6 +151,7 @@ Filters combine with AND logic.
 | `relate <ID> blocks/blocked-by/relates-to/duplicates <ID>` | Create relation | Execute `relate` directly |
 | `<ID> blocks/depends on <ID>`, `link <ID> to <ID>` | Create relation | Parse relation type and execute `relate` |
 | `comment on <ID>`, `leave a comment on <ID>`, `add a note to <ID>`, `post comment` | Post comment | Execute `comment` with body text |
+| `"delete comment"`, `"remove comment"` + comment UUID | Delete comment | Execute `delete-comment` with UUID |
 | `attach <ID> <file_path>` | Attach file | Execute `attach` directly |
 | `attach-commit <ID> [sha]`, "add commit reference to <ID>", "link commit to <ID>" | Link git commit | Execute `attach-commit` directly (pass SHA for non-HEAD commits) |
 | `document <ID> "<title>"`, `add document to <ID>`, `create doc on <ID>` | Create document | Execute `document` with title and content |
@@ -195,7 +203,7 @@ When adding a comment or updating a ticket's description that changes the scope 
 </step>
 
 <step name="direct_commands">
-**For direct commands (done, state, get, states, projects, create-project, delete-project, update-project, labels, create-label, delete-label, update-label, update, comment, attach-commit, members):**
+**For direct commands (done, state, get, states, projects, create-project, delete-project, update-project, milestones, create-milestone, delete-milestone, labels, create-label, delete-label, update-label, update, comment, delete-comment, attach-commit, members):**
 
 Execute CLI and format output.
 
