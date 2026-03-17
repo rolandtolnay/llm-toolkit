@@ -36,6 +36,14 @@ def format_llm(input_path, max_thinking=-1, show_results=True):
     out.append(f"jsonl_lines: {len(lines)}")
     out.append("")
 
+    prompt = _extract_initial_prompt(lines)
+    if prompt:
+        out.append("PROMPT")
+        out.append(prompt)
+        out.append("")
+
+    final_response = _extract_final_response(lines)
+
     step = 0
     tool_id_to_name = {}
 
@@ -63,6 +71,9 @@ def format_llm(input_path, max_thinking=-1, show_results=True):
                 if btype == "text" and max_thinking != 0:
                     text = block.get("text", "").strip()
                     if text:
+                        # Skip if this is the final response (emitted separately)
+                        if text == final_response:
+                            continue
                         step += 1
                         out.append(f"[{step}] THINKING")
                         if 0 < max_thinking < len(text):
@@ -101,6 +112,11 @@ def format_llm(input_path, max_thinking=-1, show_results=True):
                     out.append(tag)
                     out.append(result_text if result_text else "(empty)")
                     out.append("")
+
+    if final_response:
+        out.append("RESPONSE")
+        out.append(final_response)
+        out.append("")
 
     return "\n".join(out)
 
@@ -169,6 +185,17 @@ def format_human(input_path, max_result=1000, max_thinking=600, show_results=Tru
     out.append(f"**Lines in source:** {len(lines)}")
     out.append("")
 
+    prompt = _extract_initial_prompt(lines)
+    if prompt:
+        out.append("## Prompt")
+        out.append("")
+        out.append(prompt)
+        out.append("")
+        out.append("---")
+        out.append("")
+
+    final_response = _extract_final_response(lines)
+
     step = 0
     tool_id_to_name = {}
 
@@ -196,6 +223,8 @@ def format_human(input_path, max_result=1000, max_thinking=600, show_results=Tru
                 if btype == "text" and max_thinking != 0:
                     text = block.get("text", "").strip()
                     if text:
+                        if text == final_response:
+                            continue
                         step += 1
                         out.append(f"## [{step}] Assistant")
                         out.append("")
@@ -246,6 +275,14 @@ def format_human(input_path, max_result=1000, max_thinking=600, show_results=Tru
                     else:
                         out.append("*(empty)*")
                     out.append("")
+
+    # Mark the final response distinctly
+    final = _extract_final_response(lines)
+    if final:
+        out.append("## Response")
+        out.append("")
+        out.append(final)
+        out.append("")
 
     return "\n".join(out)
 
@@ -357,6 +394,13 @@ def format_minified(input_path, show_results=True):
     out = []
     out.append(f"# Minified Transcript — {input_path}")
 
+    prompt = _extract_initial_prompt(lines)
+    if prompt:
+        out.append("")
+        out.append("PROMPT")
+        out.append(prompt)
+        out.append("")
+
     # Tool usage summary
     tool_summary = ", ".join(f"{n} x{c}" for n, c in tool_counts.items())
     out.append(f"# Tools: {tool_summary}")
@@ -437,6 +481,15 @@ def format_minified(input_path, show_results=True):
         out.append("")
 
     out.append(f"# Total steps: {step}")
+
+    # Include the final response in full
+    final = _extract_final_response(lines)
+    if final:
+        out.append("")
+        out.append("RESPONSE")
+        out.append(final)
+        out.append("")
+
     return "\n".join(out)
 
 
@@ -497,6 +550,49 @@ def _parse(line):
         return json.loads(line)
     except Exception:
         return None
+
+
+def _extract_initial_prompt(lines):
+    """Extract the first user text message, which is the prompt sent to the subagent."""
+    for line in lines:
+        obj = _parse(line)
+        if not obj:
+            continue
+        msg = obj.get("message", {})
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role == "user":
+            if isinstance(content, list):
+                texts = []
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        texts.append(block.get("text", ""))
+                if texts:
+                    return "\n".join(texts)
+            elif isinstance(content, str) and content.strip():
+                return content.strip()
+            # First user message found but empty — stop looking
+            return None
+    return None
+
+
+def _extract_final_response(lines):
+    """Extract the last assistant text block, which is the agent's final response/output."""
+    last_text = None
+    for line in lines:
+        obj = _parse(line)
+        if not obj:
+            continue
+        msg = obj.get("message", {})
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role == "assistant" and isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text = block.get("text", "").strip()
+                    if text:
+                        last_text = text
+    return last_text
 
 
 def _extract_result_text(result_content):

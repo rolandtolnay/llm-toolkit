@@ -49,7 +49,7 @@ for line in open(sys.argv[1]):
         if not isinstance(block, dict): continue
         if msg.get('role') == 'assistant' and block.get('type') == 'tool_use' and block.get('name') == 'Agent':
             inp = block.get('input', {})
-            agent_calls[block.get('id', '')] = {'description': inp.get('description', ''), 'type': inp.get('subagent_type', ''), 'prompt': inp.get('prompt', '')[:500]}
+            agent_calls[block.get('id', '')] = {'description': inp.get('description', ''), 'type': inp.get('subagent_type', '')}
         if msg.get('role') == 'user' and block.get('type') == 'tool_result':
             rc = block.get('content', '')
             text = ' '.join(b.get('text','') for b in rc if isinstance(b,dict)) if isinstance(rc, list) else str(rc)
@@ -122,13 +122,10 @@ Write `$OUTPUT_DIR/{NN}-{description-slug}.md`:
 # Agent: {description}
 **Type:** {type} | **ID:** {agentId} | **Format:** {format_name}
 
-## Prompt
-{prompt, first 500 chars}
-
----
-
 {transcript output}
 ```
+
+Note: The transcript script includes the full verbatim prompt extracted from the subagent JSONL. Do NOT add a separate prompt section in the header — the script handles it.
 
 Sanitize description for filename: lowercase, spaces and special chars to hyphens, max 40 chars.
 
