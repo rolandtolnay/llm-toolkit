@@ -28,7 +28,12 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
 
 2. **For each file, read full content.** For uncommitted files, also run `git diff HEAD -- <file>` to isolate what changed. Focus audit on changed sections but flag pre-existing issues only if they cause incorrect behavior (wrong tool invoked, skipped steps, misrouted logic) or major budget waste (>10 lines of pure fluff).
 
-3. **Evaluate against the quality guide.** Apply The Reliability Test to each instruction. Check against the Common Waste and Common Value tables. **XML boundary verification:** When an XML structural issue appears at the first or last line of Read output, verify the tag exists in the file with Grep before reporting — the Read tool's `</output>` framing is easily confused with file content in XML-heavy files. Map findings to these categories:
+3. **Determine the target model class.** Before evaluating, identify what model will execute the prompt being audited. Check (in order): explicit model context from the user's `$ARGUMENTS`, model references in the file itself (model names, API endpoints, Ollama configs), or the surrounding codebase (e.g., a Python script calling a specific model). Classify as:
+   - **Frontier** (Claude Opus/Sonnet, GPT-4o, Gemini Pro): Apply the guide's default principles — minimize, remove waste, start sparse.
+   - **Small/local** (sub-10B: Qwen 4B, Phi-3 mini, Gemma 2B, Llama 3.2 3B, quantized variants): Apply the **Small and Local Models** section of the guide — do NOT flag role-setting as waste, do NOT recommend reducing examples below 2-3, weight examples as the primary instruction mechanism over abstract directives, and note when sampling parameters should be reviewed alongside the prompt.
+   - **Unknown**: Default to frontier principles but flag the assumption — recommend the user verify with their target model.
+
+4. **Evaluate against the quality guide.** Apply The Reliability Test to each instruction (using the small-model variant from the guide when applicable). Check against the Common Waste and Common Value tables. **XML boundary verification:** When an XML structural issue appears at the first or last line of Read output, verify the tag exists in the file with Grep before reporting — the Read tool's `</output>` framing is easily confused with file content in XML-heavy files. Map findings to these categories:
    - `Budget waste` → Common Waste table (fluff, filler, verbose restatements, unlikely negations)
    - `Positioning` → Positional Attention Bias (critical constraints buried in middle, success criteria ordering)
    - `Context efficiency` → Context Is a Shared, Depletable Resource + Progressive Disclosure (eager vs lazy loading)
@@ -41,7 +46,7 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
 
    **Success criteria require skip-risk verification before recommending removal.** The 5-7 guideline is a dilution heuristic, not a hard cap — 9 genuinely skip-prone items beats 6 where one was load-bearing. Multi-step behaviors (ask user → act on answer), optional/conditional steps, and post-completion actions (commits, state updates) are inherently skip-prone. Prefer merging over removing.
 
-4. **Report per file:**
+5. **Report per file:**
 
    ```
    ### path/to/file.md
@@ -58,12 +63,12 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
 
    Clean files: `**path/to/file.md** — Clean`
 
-5. **Summary:**
+6. **Summary:**
    - Files audited: N
    - Findings by category (counts)
    - Top 3 highest-impact fixes
 
-6. **Next steps:** After presenting the summary, use the `AskUserQuestion` tool to ask the user how to proceed. Offer these options:
+7. **Next steps:** After presenting the summary, use the `AskUserQuestion` tool to ask the user how to proceed. Offer these options:
    - **Fix top 3**: Apply only the top 3 highest-impact fixes. Minimal changes, lowest regression risk.
    - **Fix all issues**: Address every finding from the audit. More comprehensive but still generally safe.
    - **Report only**: No fixes needed — the user just wanted the audit.

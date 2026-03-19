@@ -49,7 +49,7 @@ Actual thresholds depend on task complexity, semantic similarity between query a
 
 LLMs have strong defaults, but those defaults become unreliable as context grows. An LLM in a 500-token conversation reliably uses its tools. The same LLM in a 50,000-token context with a large system prompt may forget specific tools exist.
 
-Smaller models are more sensitive to prompt bloat — a larger model tolerates more competing content before defaults break, while expanding the context window doesn't help. When writing prompts for constrained models (e.g., subagents on haiku), tighter instructions matter more than on frontier models.
+Smaller models are more sensitive to prompt content — but "sensitive" cuts both ways. They degrade faster with irrelevant content, yet they also need more anchoring to stay on task. A frontier model can infer intent from a sparse prompt; a small model given the same sparse prompt may drift into planning loops, reasoning spirals, or generic output. See **Small and Local Models** below for how the optimization direction changes.
 
 This makes the value test more nuanced than "does the LLM know this?" The real question is: **"Does the LLM reliably do this given everything else competing for its attention?"**
 
@@ -69,6 +69,20 @@ Modern reasoning models (Claude with extended thinking, OpenAI o3/o4-mini, Gemin
 - **CoT instructions are redundant or harmful.** "Think step by step" adds latency with negligible or negative accuracy impact — the model is already reasoning internally.
 - **Over-specification backfire.** Instructions duplicating default behavior (e.g., "be thorough", "use tools aggressively") can over-amplify, causing worse results than no instruction at all.
 - **Start minimal, add for failures.** Begin with the fewest possible instructions on the best available model. Add instructions only when you observe a specific failure mode.
+
+### Small and Local Models Need Different Optimization
+
+Small models (sub-10B parameters — Qwen 4B, Phi-3 mini, Gemma 2B, Llama 3.2 3B, quantized variants) follow a different optimization curve than frontier models. The "start minimal, add for failures" principle **inverts** — small models fail with sparse prompts and succeed with well-anchored ones. The goal is not fewer tokens but the **right** tokens.
+
+Key differences from frontier model prompting:
+
+- **Role-setting is load-bearing, not waste.** "You are a slug generator" prevents a small model from entering conversational or planning mode. On a frontier model this is unnecessary; on a 4B model it's the difference between a clean output and a 50-token reasoning spiral. Do not flag role-setting as budget waste when the target is a small model.
+- **Examples are the primary instruction mechanism.** Small models pattern-match from examples far more reliably than they follow abstract directives. "Structure: action-target-detail" is noise to a 4B model; three concrete examples showing that structure are the actual instruction. Prefer 2-3 brief, high-quality examples over structural descriptions.
+- **Abstract directives have lower ROI.** Instructions like "capture WHAT is being done and WHERE" require reasoning to interpret. Small models may ignore them entirely or interpret them unpredictably. Convert abstract directives to concrete examples or remove them.
+- **Completion prompts anchor output format.** Ending the user message with an incomplete pattern (e.g., "Output only the slug:") forces the model to complete the pattern rather than explain it. This is more reliable than instructing "output only X" for small models.
+- **Sampling parameters are half the equation.** For constrained generation tasks (short outputs, specific formats), prompt instructions alone are insufficient. Temperature, presence_penalty, repeat_penalty, and num_predict must be tuned together with the prompt. An audit of a small-model prompt that ignores sampling parameters is incomplete.
+
+**The reliability test for small models:** Instead of "does removing this degrade output?", ask "does this instruction produce a behavioral change that the examples alone don't cover?" If the examples already demonstrate the pattern, the abstract instruction is redundant for this model class. If the instruction adds a behavioral dimension not shown in examples (like the KEEP escape hatch), it earns its place.
 
 ---
 
