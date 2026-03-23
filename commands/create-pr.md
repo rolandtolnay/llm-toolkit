@@ -121,14 +121,10 @@ Once confirmed:
 
 **Step 7 — Post to Slack**
 
-Check if the Slack CLI is configured by running:
-```bash
-uv run skills/slack/scripts/slack.py channels --search "engineering-pr"
-```
+Load the `slack` skill using the `Skill` tool, then follow its `pr_announcement_flow` to compose and send the PR announcement to `#engineering-pr`.
 
 - **If MISSING_TOKEN or AUTH_FAILED:** Skip this step silently — Slack is not configured.
 - **If CHANNEL_NOT_FOUND:** Use `AskUserQuestion` to ask the user which channel to post in.
-- **If the channel is found:** Load the `slack` skill using the `Skill` tool, then follow its `pr_announcement_flow` to compose and send the PR announcement to `#engineering-pr`.
 
 </process>
 

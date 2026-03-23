@@ -33,18 +33,22 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
    - **Small/local** (sub-10B: Qwen 4B, Phi-3 mini, Gemma 2B, Llama 3.2 3B, quantized variants): Apply the **Small and Local Models** section of the guide — do NOT flag role-setting as waste, do NOT recommend reducing examples below 2-3, weight examples as the primary instruction mechanism over abstract directives, and note when sampling parameters should be reviewed alongside the prompt.
    - **Unknown**: Default to frontier principles but flag the assumption — recommend the user verify with their target model.
 
+   Also determine the **task type**. If the prompt performs text transformation or filtering (cleaning transcripts, reformatting documents, removing patterns while preserving content), apply the **Text Transformation and Filtering Tasks** section of the guide. Key checks:
+   - Flag few-shot examples that contain the pattern being removed (priming risk)
+   - Flag abstract filter categories ("remove filler words") — recommend explicit pattern lists with contrastive keep/remove pairs
+
 4. **Evaluate against the quality guide.** Apply The Reliability Test to each instruction (using the small-model variant from the guide when applicable). Check against the Common Waste and Common Value tables. **XML boundary verification:** When an XML structural issue appears at the first or last line of Read output, verify the tag exists in the file with Grep before reporting — the Read tool's `</output>` framing is easily confused with file content in XML-heavy files. Map findings to these categories:
    - `Budget waste` → Common Waste table (fluff, filler, verbose restatements, unlikely negations)
    - `Positioning` → Positional Attention Bias (critical constraints buried in middle, success criteria ordering)
    - `Context efficiency` → Context Is a Shared, Depletable Resource + Progressive Disclosure (eager vs lazy loading)
-   - `Specificity` → Specificity Over Abstraction + Patterns and Anti-Patterns (vague instructions, missing contrastive examples)
+   - `Specificity` → Specificity Over Abstraction + Patterns and Anti-Patterns (vague instructions, missing contrastive examples, abstract filter categories, few-shot priming risk in removal tasks)
    - `Structure` → project conventions (semantic XML tags, plan format, output format specs)
 
-   **Section-level removal requires per-instruction verification.** When flagging a multi-instruction block (a principles section, a numbered list, a guidelines block) as redundant, verify each instruction individually. A section can be 80% redundant while one instruction carries unique semantics — decision gates, priority orderings, conditional skip logic — not captured elsewhere. Recommend surgical extraction (promote the unique content, remove the rest), not wholesale removal.
+   **Classify content type before flagging for removal.** Before flagging content as "Budget waste" or "Context efficiency", classify it: reference data (tables, lookup lists, schemas), structural markers, behavioral instructions, or corrective rationale. Reference data has low interference per the guide — only flag if genuinely irrelevant to the execution context. When flagging a multi-instruction block, verify each item individually — a section can be 80% redundant while one instruction carries unique semantics. Extract the unique content, remove the rest.
 
-   **Merging instructions requires trigger-pattern and rationale verification.** Two instructions can be semantically identical but activate on different input patterns ("saves you hours" vs "improves your productivity" both mean "show, don't claim" but catch different phrasings). When recommending a merge, verify the merged version preserves all trigger examples. Also verify no corrective rationale is lost — a rule ("banned words: simply, just") and its rationale ("implies the step is trivial") serve different functions; the rule is a filter, the rationale enables generalization to equivalent phrases not in the list.
+   **Compression must preserve contrastive structure.** When recommending that enumerated lists be replaced with a shorter form, check whether the lists form contrastive pairs (positive vs negative examples). Preserve at least inline contrastive anchors in the compressed version — the contrast is the mechanism, not the volume.
 
-   **Success criteria require skip-risk verification before recommending removal.** The 5-7 guideline is a dilution heuristic, not a hard cap — 9 genuinely skip-prone items beats 6 where one was load-bearing. Multi-step behaviors (ask user → act on answer), optional/conditional steps, and post-completion actions (commits, state updates) are inherently skip-prone. Prefer merging over removing.
+   **Success criteria: prefer merging over removing.** Multi-step behaviors (ask user → act on answer), optional/conditional steps, and post-completion actions are inherently skip-prone. Don't remove them solely to hit a count target.
 
 5. **Report per file:**
 

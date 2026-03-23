@@ -70,6 +70,17 @@ Modern reasoning models (Claude with extended thinking, OpenAI o3/o4-mini, Gemin
 - **Over-specification backfire.** Instructions duplicating default behavior (e.g., "be thorough", "use tools aggressively") can over-amplify, causing worse results than no instruction at all.
 - **Start minimal, add for failures.** Begin with the fewest possible instructions on the best available model. Add instructions only when you observe a specific failure mode.
 
+### Text Transformation and Filtering Tasks
+
+Prompts that ask models to transform text (clean transcripts, reformat documents, remove patterns while preserving content) have two key differences from generative prompts:
+
+**Few-shot examples can prime the forbidden pattern.** For removal tasks ("remove filler words"), showing before/after examples that contain the forbidden pattern (e.g. "right?", "you know") can _increase_ its occurrence in the output. The model sees the pattern in the example and reproduces it. This contradicts the general "always use few-shot" advice. For filtering tasks, explicit pattern lists outperform few-shot examples.
+
+**Structured explicit patterns outperform abstract categories.** "Remove filler words" is abstract — the model must reason about what qualifies. "Remove `, right?` as verbal tics → replace with `.`" is explicit and checkable. For text transformation, enumerate the exact patterns to match/remove rather than describing categories. Pair each removal pattern with its meaningful counterpart to prevent over-removal:
+- Remove: `, right?` (verbal tic) → Keep: `know what right looks like` (adjective)
+- Remove: `you know,` (hedge) → Keep: `do you know what X looks like?` (genuine question)
+- Remove: sentence-initial `So,` (discourse marker) → Keep: `so you can maximize` (consequence)
+
 ### Small and Local Models Need Different Optimization
 
 Small models (sub-10B parameters — Qwen 4B, Phi-3 mini, Gemma 2B, Llama 3.2 3B, quantized variants) follow a different optimization curve than frontier models. The "start minimal, add for failures" principle **inverts** — small models fail with sparse prompts and succeed with well-anchored ones. The goal is not fewer tokens but the **right** tokens.
@@ -159,6 +170,9 @@ Success criteria at the end of a prompt serve as peripheral reinforcement — a 
 | Low-risk success criteria      | "File was read successfully"                | LLM never skips this; reinforce what it _does_ skip                    |
 | Filler and sycophancy          | "Simply", "I'd love to help"                | Zero information content                                               |
 | Verbose restatement            | "IMPORTANT: You must always ensure that..." | Same instruction at 3x the token cost                                  |
+| Few-shot of forbidden patterns | Before/after showing "right?" removal       | Primes the model to produce the pattern being removed (filtering tasks)|
+| Abstract filter categories     | "Remove filler words"                        | Model must reason about what qualifies; explicit patterns are cheaper  |
+| "Keep when meaningful" escape  | "Remove X — keep when meaningful"            | Gives model a loophole to retain everything; invert the default        |
 
 ### Common Value
 
@@ -172,3 +186,4 @@ Success criteria at the end of a prompt serve as peripheral reinforcement — a 
 | Contrastive examples         | Right pattern paired with wrong pattern            | Anchors rules through contrast                                         |
 | Output format specifications | Exact structure with example                       | LLM needs the format, not "be concise"                                 |
 | Corrective rationale         | "Format as plain text — output feeds a TTS engine" | Encodes a causal chain enabling generalization beyond the literal rule |
+| Explicit pattern lists        | "Remove `, right?` → replace with `.`"             | Concrete, checkable patterns outperform abstract categories           |

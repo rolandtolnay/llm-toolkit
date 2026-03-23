@@ -15,9 +15,11 @@ Conversational interface to Slack for messaging and search. Read-only commands (
 </objective>
 
 <cli_reference>
-**CLI script:** `skills/slack/scripts/slack.py`
+**CLI script:** `scripts/slack.py` (relative to this skill's install directory)
 
-Run with: `uv run skills/slack/scripts/slack.py <command> [options]`
+Resolve the script path before first use: check `~/.claude/skills/slack/scripts/slack.py`, then `.claude/skills/slack/scripts/slack.py`. Cache the result for the session.
+
+Run with: `uv run <resolved-path>/scripts/slack.py <command> [options]`
 
 **Commands:**
 | Command | Usage | Purpose |
@@ -77,7 +79,7 @@ Run with: `uv run skills/slack/scripts/slack.py <command> [options]`
 Execute CLI and format output.
 
 ```bash
-uv run skills/slack/scripts/slack.py [command] [args]
+uv run <slack.py> [command] [args]
 ```
 
 Parse JSON response and present result:
@@ -97,11 +99,11 @@ Parse JSON response and present result:
 3. **Only after the user confirms**, execute:
    - **Immediate send:**
      ```bash
-     uv run skills/slack/scripts/slack.py send "<target>" "<message>" [--thread <ts>]
+     uv run <slack.py> send "<target>" "<message>" [--thread <ts>]
      ```
    - **Scheduled send:**
      ```bash
-     uv run skills/slack/scripts/slack.py schedule "<target>" "<message>" --at "<time>"
+     uv run <slack.py> schedule "<target>" "<message>" --at "<time>"
      ```
 4. **Confirm delivery:** Show channel/DM and timestamp from response
 
@@ -127,7 +129,7 @@ Triggered when the user asks to post/share/announce a PR to a channel. Gather th
 <step name="error_handling">
 **Handle errors gracefully:**
 
-- **MISSING_TOKEN:** Read `skills/slack/references/setup-guide.md` and guide user through setup
+- **MISSING_TOKEN:** Read the `references/setup-guide.md` file next to this skill and guide user through setup
 - **AUTH_FAILED:** Token is invalid or revoked — regenerate from Slack app settings
 - **CHANNEL_NOT_FOUND:** Suggest using `channels --search` to find the right name
 - **USER_NOT_FOUND:** Suggest using `users --search` to find the right person
