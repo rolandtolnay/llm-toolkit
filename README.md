@@ -25,7 +25,7 @@ Slash commands, auto-activating skills, and reference guides for Claude Code. Wo
 
 ### Commands
 
-Slash commands you invoke directly in Claude Code (e.g., `/verify-work`).
+Slash commands you invoke directly in Claude Code (e.g., `/verify`).
 
 #### Workflow
 
@@ -42,16 +42,10 @@ Fetch a Linear ticket, explore context, plan, implement, and commit. Use when st
 Commit changes, post a summary comment, attach the commit, and mark a Linear ticket as done. Use when wrapping up a completed ticket.
 
 ```
-/verify-work
+/verify
 ```
 
-Check that changes satisfy the requirement using goal-backward analysis. Catches gaps that tests alone miss. Use after finishing a feature or fix.
-
-```
-/verify-refactor
-```
-
-Confirm a refactor preserves behavior and covers edge cases. Use when you've restructured code and want to verify correctness before committing.
+Second-opinion verification of completed work. Analyzes correctness, behavioral preservation, and completeness (blast-radius sweep for stale references) autonomously, then interrogates interactively before declaring issues. Use after finishing any feature, fix, or refactor.
 
 ```
 /handoff
@@ -306,19 +300,19 @@ cd your-project
 
 Symlinks are the default — a `git pull` in the toolkit repo updates all installations automatically. Use `--copy` when you need to commit the files into your project. Not supported on Windows (use `--copy`).
 
-After installation, open Claude Code and use any command (e.g., `/verify-work`) or start working on a task that matches a skill.
+After installation, open Claude Code and use any command (e.g., `/verify`) or start working on a task that matches a skill.
 
 ---
 
 ## Usage examples
 
-**Verify that your changes actually work:**
+**Verify completed work:**
 
 ```
-/verify-work
+/verify
 ```
 
-Reads your recent changes, traces them back to the original requirement, and reports whether the implementation actually does what was asked.
+Analyzes your changes across correctness, preservation, and completeness, then walks through findings interactively before declaring issues.
 
 **Pick the right mental framework for a decision:**
 
