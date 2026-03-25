@@ -60,30 +60,15 @@ For **"New branch with uncommitted changes only"** mode:
 
 **Step 3 — Gather context for PR summary**
 
-Before researching past conversations, assess whether the current conversation already contains sufficient context to write a meaningful PR summary. Consider:
+The goal is to understand *why* these changes were made, *what problem* they solve, and *what alternatives* were considered — enough for a reviewer to understand the reasoning.
 
-- **The scope of the changes:** How many commits are in the PR? Do they span a single focused task or multiple distinct efforts?
-- **Conversation coverage:** Was the work discussed, planned, and executed within this conversation? Did the user explain the motivation, trade-offs, and decisions here?
-- **Completeness signals:** Can you answer *why* the changes were made, *what problem* they solve, and *what alternatives* were considered — all from the current conversation?
+**Primary sources, in order:**
 
-**Decision logic:**
+1. **Current conversation.** If the work was discussed, planned, and executed here, this is often sufficient on its own.
 
-1. **Current conversation is sufficient** (single-session work where the motivation, decisions, and implementation all happened here): Skip the subagent — use the current conversation as context. Proceed directly to Step 4.
+2. **Past conversations.** When the current conversation lacks context (e.g., multi-session work, or you were invoked fresh with just "create a PR"), search past conversations via an Explore subagent. Conversations are JSONL files at `~/.claude/projects/[encoded-path]/` where the encoded path is the working directory with `/` replaced by `-`, prefixed with `-`. The subagent should grep for keywords from the diff and extract motivation, decisions, and trade-offs.
 
-2. **Past conversations are clearly needed** (multi-session work, large PRs with many commits over time, or the current conversation lacks context on *why* changes were made): Spawn the Explore subagent as described below.
-
-3. **Uncertain** (the current conversation has partial context, or it's unclear whether earlier sessions contributed important reasoning): Use `AskUserQuestion` to ask the user whether the current conversation has all the context needed, or whether past conversations should also be searched.
-
-**When spawning the Explore subagent**, it should:
-1. Determine the conversation directory path by encoding the current working directory:
-   - Take the full working directory path, replace every `/` with `-`, prefix with `-`
-   - Conversations are stored as JSONL files at `~/.claude/projects/[encoded-path]/`
-2. List JSONL files by modification time (`ls -lt`)
-3. Examine the git diff (`git diff main...HEAD`) to understand what changed
-4. Grep conversation files for keywords derived from the changed files and topics
-5. Read matching conversations and extract: **why** these changes were made, what problems they solve, what was discussed, and any decisions or trade-offs
-
-The subagent should return a concise summary of the reasoning and motivation behind the changes — suitable for a PR description that helps reviewers understand context.
+3. **Linear tickets.** If a ticket ID appears anywhere in the context (commit messages, branch name, conversation, `$ARGUMENTS`), invoke the `/linear` skill to fetch the ticket. Also fetch related tickets (parent, blocking/blocked-by) if they exist — these often contain the broader motivation. Always do this when a ticket is referenced; don't skip it even if the conversation seems to have enough context, since the ticket may have details that weren't discussed.
 
 **Step 4 — Compose PR summary**
 
@@ -131,7 +116,8 @@ Load the `slack` skill using the `Skill` tool, then follow its `pr_announcement_
 <success_criteria>
 - [ ] No git operations (mode selection, branch creation, commit, push) executed without user confirmation
 - [ ] Branch name confirmed via AskUserQuestion when creating a new branch
-- [ ] PR context sourced appropriately — from current conversation when sufficient, from past conversations via Explore subagent when needed, or confirmed with user when uncertain
+- [ ] PR context sourced from current conversation, past conversations, and/or Linear tickets as appropriate
+- [ ] Linear ticket fetched via `/linear` skill whenever a ticket ID appears in context — including related tickets
 - [ ] PR summary presented as regular chat message for user review before creation
 - [ ] PR created with descriptive summary combining diff analysis and conversation reasoning
 - [ ] PR URL returned to user

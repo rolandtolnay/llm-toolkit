@@ -16,7 +16,7 @@ Systematically triage all review comments on the current branch's pull request. 
 
 2. **Actual usage over theoretical possibility.** P(bug) is determined by how code is actually used — parent components, lifecycle, real data volumes — not by what could theoretically happen in isolation.
 
-3. **Context preservation.** Delegate file reads and codebase exploration to parallel Explore subagents. The orchestrator reasons over summaries and applies the framework — never reads large files directly.
+3. **Context preservation.** For broad exploration (tracing call sites across many files, understanding component lifecycles), parallel Explore subagents are valuable — they keep the main context focused on reasoning and triage. For simpler lookups (reading a single file, checking one function signature), reading directly is fine. Use judgment based on the volume and complexity of what needs exploring.
 
 4. **Fix cost includes complexity.** A fix's cost is the code change PLUS the complexity it adds PLUS the risk of introducing new bugs. A one-line fix with zero risk is always worth doing. A multi-file behavioral change needs justification.
 
@@ -53,14 +53,15 @@ Note any duplicates (e.g., bot echoing a human's comment).
 
 ## Step 2: Explore code context
 
-Identify all unique files referenced by comments. For each file (or group of related files), spawn a parallel **Explore** subagent (subagent_type: "Explore") to:
+Identify all unique files referenced by comments. Build enough context to triage each comment — this means understanding the referenced code, how it's used, and relevant patterns.
 
-1. Read the referenced file and surrounding code
-2. Find how the component/function is used by its parents (trace call sites)
-3. Identify lifecycle behavior — is the component destroyed/recreated? Are props stable during its lifetime?
-4. Note established patterns that inform the comment (e.g., pagination already used in a sibling page)
+What to look for per comment:
+1. The referenced code and its surroundings
+2. How the component/function is used by its parents (trace call sites)
+3. Lifecycle behavior — is the component destroyed/recreated? Are props stable during its lifetime?
+4. Established patterns that inform the comment (e.g., pagination already used in a sibling page)
 
-Run agents in parallel to minimize wall time. Each agent returns a concise summary.
+For a handful of comments touching a few files, reading directly may be fastest. When comments span many files or require tracing complex call chains, use parallel Explore subagents to gather context without bloating the main conversation.
 
 Also check project-level context:
 - Are any commented files (e.g., proto files) synced from another repo? Check `git log --oneline -20` for "sync" commits.
@@ -213,7 +214,7 @@ Supporting files in `references/`:
 
 <success_criteria>
 - [ ] Every comment has a "What this means" paragraph, traced reasoning chain, and decision — not just a label
-- [ ] Codebase exploration delegated to parallel Explore agents — orchestrator never reads large files directly
+- [ ] Sufficient codebase context gathered for every comment — via direct reads, Explore agents, or both, depending on scope
 - [ ] Comments requiring investigation are either verified via agent-browser or escalated to user — never silently assumed
 - [ ] All MEDIUM/LOW confidence decisions presented to user for confirmation before acting
 - [ ] Ignored comments replied to on GitHub with reasoning and threads resolved
