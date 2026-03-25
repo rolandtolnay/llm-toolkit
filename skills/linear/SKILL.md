@@ -20,13 +20,16 @@ Conversational interface to Linear for fast issue management. Primary use case: 
 
 Run with: `uv run ~/.claude/skills/linear/scripts/linear.py <command> [options]`
 
-**Verbose flag (`-V`):** Available on `get` and `list` subcommands. **Always use concise (no `-V`) unless the user explicitly needs data only verbose provides.** Verbose adds URL, internal UUIDs, relations, and commit SHAs — data that inflates context without helping most operations.
+**Verbose flag (`-V`):** Available on `get` and `list` subcommands. **Always use concise (no `-V`) unless the user explicitly needs data only verbose provides.** Verbose adds URL, internal UUIDs, relations, commit SHAs, and linked documents — data that inflates context without helping most operations.
 
 Use `-V` only when the user:
 - Asks for the URL or link to the issue
 - Needs internal IDs (team, state, project UUIDs) for API calls
 - Asks about relations (blocks, blocked-by) or linked commits
+- Wants to see linked documents (titles and URLs)
 - Explicitly says "verbose", "full details", or "all fields"
+
+**Document awareness:** Both concise and verbose modes include `documentCount`. When `documentCount > 0`, use `-V` to see document titles and URLs. Documents are native Linear markdown docs attached to issues via the `document` command.
 
 **Commands:**
 | Command | Usage | Purpose |

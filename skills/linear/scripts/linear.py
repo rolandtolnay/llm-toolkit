@@ -379,6 +379,14 @@ query Issue($id: String!) {
         title
       }
     }
+    documents {
+      nodes {
+        id
+        title
+        url
+        slugId
+      }
+    }
     comments {
       nodes {
         id
@@ -466,6 +474,14 @@ query Issue($id: String!) {
       nodes {
         url
         title
+      }
+    }
+    documents {
+      nodes {
+        id
+        title
+        url
+        slugId
       }
     }
     comments(first: 50) {
@@ -2941,6 +2957,18 @@ def get(
                     commits.append(url.removeprefix("commit://"))
             if commits:
                 result["commits"] = commits
+
+            # Extract linked documents
+            documents = issue.get("documents", {}).get("nodes", [])
+            if documents:
+                result["documents"] = [
+                    {"title": doc.get("title"), "url": doc.get("url")}
+                    for doc in documents
+                ]
+
+        # Add document count (always visible so agents know documents exist)
+        doc_nodes = issue.get("documents", {}).get("nodes", [])
+        result["documentCount"] = len(doc_nodes)
 
         # Add comment data
         comments_nodes = issue.get("comments", {}).get("nodes", [])

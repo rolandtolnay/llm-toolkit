@@ -155,13 +155,22 @@ For each IGNORE comment on the PR:
 ### DEFER comments
 
 For each DEFER comment:
-1. Invoke the `/linear` skill to create a ticket. Pass these as context for the skill to structure per its own format:
+
+1. **Check for existing tickets first.** Before creating anything, invoke the `/linear` skill to search for outstanding tickets that already cover the same issue. Search by relevant keywords from the comment (e.g., "keyboard navigation table rows", "pre-tax amounts"). Check tickets in Backlog, Todo, and In Progress states. If a matching ticket exists:
+   - Skip ticket creation
+   - Reply on the PR comment: "Valid issue — already tracked as [TICKET-ID]. [Brief note on why it's deferred]."
+   - Resolve the thread
+   - Move on to the next DEFER comment
+
+2. **Create a ticket only if no match found.** Invoke the `/linear` skill to create a ticket. Pass these as context for the skill to structure per its own format:
    - The **"What this means"** paragraph from the triage analysis (this is the core of the ticket description)
    - Why it was deferred (e.g., "requires cross-page consistency", "not a regression, needs dedicated effort")
    - The specific files and patterns affected
    - The PR number where this was identified
-2. Reply on the PR comment: "Valid issue — logged as [TICKET-ID] for future work." Include a brief note on why it's deferred (e.g., "needs a cross-page effort to maintain consistency").
-3. Resolve the thread
+
+3. Reply on the PR comment: "Valid issue — logged as [TICKET-ID] for future work." Include a brief note on why it's deferred (e.g., "needs a cross-page effort to maintain consistency").
+
+4. Resolve the thread
 
 Read `references/github-api-reference.md` for reply and resolve commands.
 
@@ -208,7 +217,7 @@ Supporting files in `references/`:
 - [ ] Comments requiring investigation are either verified via agent-browser or escalated to user — never silently assumed
 - [ ] All MEDIUM/LOW confidence decisions presented to user for confirmation before acting
 - [ ] Ignored comments replied to on GitHub with reasoning and threads resolved
-- [ ] Deferred comments logged as Linear tickets (via /linear skill) and resolved on GitHub with ticket reference
+- [ ] Deferred comments checked against existing Linear tickets before creating new ones — duplicates reference the existing ticket instead
 - [ ] Full analysis optionally saved to etc/personal/ for future reference
 - [ ] Implementation plan created in plan mode before any code changes
 - [ ] Plan includes comment resolution table with IDs, changes, and instructions to reply/resolve after implementation
