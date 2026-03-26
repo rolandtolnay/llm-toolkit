@@ -16,9 +16,11 @@ Systematically triage all review comments on the current branch's pull request. 
 
 2. **Actual usage over theoretical possibility.** P(bug) is determined by how code is actually used — parent components, lifecycle, real data volumes — not by what could theoretically happen in isolation.
 
-3. **Context preservation.** For broad exploration (tracing call sites across many files, understanding component lifecycles), parallel Explore subagents are valuable — they keep the main context focused on reasoning and triage. For simpler lookups (reading a single file, checking one function signature), reading directly is fine. Use judgment based on the volume and complexity of what needs exploring.
+3. **Code review serves maintainability, not just correctness.** A comment does not need to identify a bug to be worth acting on. Architecture, pattern enforcement, and test coverage are legitimate review concerns. When a reviewer says "we're moving away from X pattern," evaluate against the team's intended direction — not the current codebase state. "Other code does it too" is not a valid justification for writing new code in an old pattern.
 
-4. **Fix cost includes complexity.** A fix's cost is the code change PLUS the complexity it adds PLUS the risk of introducing new bugs. A one-line fix with zero risk is always worth doing. A multi-file behavioral change needs justification.
+4. **Context preservation.** For broad exploration (tracing call sites across many files, understanding component lifecycles), parallel Explore subagents are valuable — they keep the main context focused on reasoning and triage. For simpler lookups (reading a single file, checking one function signature), reading directly is fine. Use judgment based on the volume and complexity of what needs exploring.
+
+5. **Fix cost includes complexity.** A fix's cost is the code change PLUS the complexity it adds PLUS the risk of introducing new bugs. A one-line fix with zero risk is always worth doing. A multi-file behavioral change needs justification.
 
 </essential_principles>
 
@@ -67,6 +69,8 @@ Also check project-level context:
 - Are any commented files (e.g., proto files) synced from another repo? Check `git log --oneline -20` for "sync" commits.
 - Does CLAUDE.md contain relevant ownership or build notes?
 
+**Fetch Linear ticket context** when a ticket ID appears anywhere — branch name, PR title/description, or commit messages. Invoke the `/linear` skill to fetch the ticket including its comments. Also fetch related tickets (parent epic, blocking/blocked-by) since they often contain the broader motivation and acceptance criteria that inform whether a reviewer's suggestion is in scope. This context helps distinguish "valid concern but out of scope for this ticket" from "this contradicts what the ticket requires."
+
 ## Step 3: Triage each comment
 
 Read `references/triage-framework.md` for the 4-question model and decision matrix.
@@ -80,10 +84,7 @@ Apply the framework to each comment using context from Step 2. Walk through Scop
 - **IGNORE** — not a real issue (P(bug) = 0, wrong analysis, permanently out of scope)
 - **INVESTIGATE** — P(bug) is uncertain, need more information
 
-Present the full analysis to the user using the per-comment format from `references/comment-analysis-format.md`. Key requirements:
-- **"What this means"** paragraph after the quote: 2-3 sentences translating the low-level code comment into plain-English user impact. The user is a senior engineer with strong judgment but may not know framework-specific details or this codebase's implementation. Describe what would actually happen if unfixed, how likely it is, and the key determining fact. This paragraph is what lets them decide whether to trust the analysis, probe deeper, or question the reasoning.
-- **Likelihood** and **Fix assessment** sections can be multi-paragraph when the analysis warrants it. Never compress analytical depth for formatting reasons.
-- When the reviewer's proposed fix is suboptimal, propose a better alternative in **Fix assessment**.
+Present the full analysis to the user using the per-comment format from `references/comment-analysis-format.md`. When the reviewer's proposed fix is suboptimal, propose a better alternative.
 
 ## Step 4: Handle investigations
 
@@ -111,13 +112,7 @@ For comments with **MEDIUM or LOW** confidence, consolidate questions and presen
 - 2-3 options with descriptions
 - A recommended option based on best judgment
 
-Maximum 4 questions per AskUserQuestion call. Batch if more exist.
-
-Common questions that arise:
-- File ownership ("Are these files synced from another repo?")
-- Scope ("Should this fix go in this PR or a follow-up?")
-- UX tradeoffs ("Full reload vs. targeted refresh?")
-- Data volume assumptions ("Can this list realistically exceed N items?")
+Batch related questions into a single AskUserQuestion call when possible.
 
 ## Step 6: Present final summary
 
@@ -131,19 +126,9 @@ After all questions are answered and investigations complete, present:
 
 ## Step 7: Confirm and save
 
-Use **AskUserQuestion** to ask:
+Offer to save the full analysis to `etc/personal/pr-{number}-comment-triage.md`. If saving, use the saved analysis format from `references/comment-analysis-format.md` and include a Key Insights section with project-specific learnings.
 
-1. **Save analysis?**
-   - "Would you like to save the full comment analysis to `etc/personal/` for future reference?"
-   - Options: "Yes, save to etc/personal/" / "No, skip saving"
-
-2. **Confirm the plan?**
-   - "Does the ACT/IGNORE/DEFER list look correct?"
-   - Options: "Looks good, proceed" / "I want to adjust some decisions"
-
-If saving: write the full analysis to `etc/personal/pr-{number}-comment-triage.md` using the saved analysis format from `references/comment-analysis-format.md`. Include a Key Insights section with project-specific learnings from this triage session.
-
-If adjustments needed: incorporate feedback and re-present the summary.
+Confirm the ACT/IGNORE/DEFER decisions with the user before proceeding. Incorporate any adjustments.
 
 ## Step 8: Handle IGNORE and DEFER comments
 
@@ -213,13 +198,10 @@ Supporting files in `references/`:
 </reference_index>
 
 <success_criteria>
-- [ ] Every comment has a "What this means" paragraph, traced reasoning chain, and decision — not just a label
-- [ ] Sufficient codebase context gathered for every comment — via direct reads, Explore agents, or both, depending on scope
 - [ ] Comments requiring investigation are either verified via agent-browser or escalated to user — never silently assumed
 - [ ] All MEDIUM/LOW confidence decisions presented to user for confirmation before acting
 - [ ] Ignored comments replied to on GitHub with reasoning and threads resolved
 - [ ] Deferred comments checked against existing Linear tickets before creating new ones — duplicates reference the existing ticket instead
-- [ ] Full analysis optionally saved to etc/personal/ for future reference
 - [ ] Implementation plan created in plan mode before any code changes
 - [ ] Plan includes comment resolution table with IDs, changes, and instructions to reply/resolve after implementation
 - [ ] Plan includes instruction to reload triage context (skill or saved analysis) in case of context clear

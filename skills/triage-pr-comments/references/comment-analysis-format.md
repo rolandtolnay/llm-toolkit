@@ -69,20 +69,6 @@ After individual analysis, present three summary tables.
 | 7 | `proto.file:line` | Proto synced from backend, not our ownership |
 ```
 
-## Decision Taxonomy
-
-- **ACT** — fix in this PR, approach is clear
-- **JUST FIX IT** — trivial fix, cheaper to do than to discuss
-- **DEFER** — valid issue, wrong venue. Will be logged as a Linear ticket for future work. Use when the issue is real but: out of PR scope, requires a cross-cutting effort, or is a UX/accessibility improvement that shouldn't be addressed in isolation.
-- **IGNORE** — not a real issue (P(bug) = 0, wrong analysis, permanently out of scope)
-- **INVESTIGATE** — P(bug) is uncertain, need more information before deciding
-
-## Confidence Ratings
-
-- **HIGH:** Outcome determined from static analysis alone. No user input needed.
-- **MEDIUM:** Analysis is sound but relies on assumptions the user should confirm (e.g., file ownership, data volumes, acceptable UX tradeoffs).
-- **LOW:** Cannot determine P(bug) or correct approach without investigation or domain knowledge.
-
 ## Saved Analysis Document
 
 When saving the full analysis to a file, include:

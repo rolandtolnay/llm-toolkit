@@ -10,6 +10,8 @@ A systematic framework for deciding which PR review comments to act on, ignore, 
 - **Impact:** What breaks and who's affected if it does occur
 - **Cost:** Code change + complexity added + risk of introducing new bugs
 
+This equation applies to **correctness comments** — "this will break when X." But code review also covers **code health comments** — architecture, pattern enforcement, test coverage — where P(bug) is the wrong lens entirely. For these, the question is: "Does this make the codebase harder to maintain or diverge from the team's intended direction?" See the decision matrix for how to handle each type.
+
 ## The Triage Questions
 
 For each comment, ask in order. Stop as soon as you reach a decision.
@@ -21,8 +23,9 @@ Does the comment target a file/system within this PR's scope and ownership?
 **IGNORE if:**
 - File is outside the PR's diff and not flagged by the PR author for inclusion
 - File is owned by another team (e.g., proto files synced from backend, shared configs managed elsewhere)
-- Comment is pure documentation/style with no functional impact
 - Comment targets a skill, CI config, or tool unrelated to the PR's feature
+
+**Do NOT ignore** comments about architecture, patterns, or test coverage just because they aren't bugs. These are legitimate code review concerns — proceed to fix assessment.
 
 ### Likelihood: Can I determine P(bug) from static analysis?
 
@@ -57,6 +60,20 @@ Even when P(bug) > 0, evaluate the proposed fix:
 **If the fix makes the code worse → IGNORE or propose a simpler alternative.**
 **If the issue is valid but belongs in a different effort → DEFER** (log as a ticket for future work).
 
+### Code health: Architecture, patterns, and test coverage
+
+These comments don't fit the P(bug) model — evaluate them on their own terms:
+
+**Architecture / pattern comments** (e.g., "use the service layer instead of direct DB queries"):
+- Check whether the reviewer is describing a team direction or just a preference. Signals: "we're moving away from X," "the pattern is Y," or the codebase already has a service/abstraction that does the same thing.
+- If a team direction exists, new code should follow it — even if old code hasn't migrated. "Other code does it the old way" is not a justification. The old code is tech debt; new code shouldn't add more.
+- If the fix is small and aligns with team direction → **ACT**. If the reviewer also points out existing old-pattern code, consider fixing that too — eliminating the last instance of an old pattern prevents future copy-paste.
+- If the architectural change is large and orthogonal to the PR's purpose → **DEFER** with a ticket.
+
+**Test coverage comments** (e.g., "need tests"):
+- Tests ship with the code they cover. This is **always ACT, never DEFER**. Untested code is not shippable.
+- Look at existing test patterns in the project to determine the right scope and style for new tests.
+
 ## Decision Matrix
 
 | Signal | Action |
@@ -72,6 +89,9 @@ Even when P(bug) > 0, evaluate the proposed fix:
 | Valid issue but requires cross-cutting effort beyond this PR | Defer — log as ticket |
 | Valid issue but fixing only here creates inconsistency with other pages | Defer — log as ticket for consistent fix |
 | UX/accessibility improvement that is real but not a regression | Defer — log as ticket |
+| Reviewer identifies a pattern direction and new code violates it | Act — follow team direction, not legacy code |
+| Reviewer identifies a pattern direction and old code also violates it | Act on new code; consider fixing old code too if the change is small |
+| Test coverage request for code changed in this PR | Act — tests ship with the code they cover, never defer |
 
 ## When to Investigate
 
