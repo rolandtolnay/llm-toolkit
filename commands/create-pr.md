@@ -82,7 +82,13 @@ Draft the PR using this structure:
 ```
 ## Summary
 
-[1-3 paragraphs: what changed and WHY — lead with the motivation/problem, then describe the solution. Use the conversation research to explain the reasoning that led to these changes.]
+[1-3 paragraphs: what changed and WHY — lead with the motivation/problem, then describe the solution. Use the conversation research to explain the reasoning that led to these changes.
+
+Weave Linear ticket links naturally into the summary text where they provide context — e.g., "This resolves [ENG-123](linear-url) by..." or "As discussed in [ENG-456](linear-url), the approach...". Include links for all relevant tickets (the primary ticket, parent epics, related/blocking issues). Don't dump them in a separate list — they should read as part of the narrative.]
+
+### Ticket
+
+[If the PR addresses a single primary ticket, include a standalone link here — e.g., "Resolves [ENG-123](linear-url)". Omit this section if there is no clear primary ticket.]
 
 ### Changes
 
