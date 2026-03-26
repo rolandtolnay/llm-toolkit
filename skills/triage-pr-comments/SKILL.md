@@ -12,15 +12,9 @@ Systematically triage all review comments on the current branch's pull request. 
 
 <essential_principles>
 
-1. **Content over source.** Evaluate what a comment says, not who posted it. Bot comments can catch real bugs; human comments can be wrong. The framework applies equally to all.
+1. **Actual usage over theoretical possibility.** P(bug) is determined by how code is actually used — parent components, lifecycle, real data volumes — not by what could theoretically happen in isolation.
 
-2. **Actual usage over theoretical possibility.** P(bug) is determined by how code is actually used — parent components, lifecycle, real data volumes — not by what could theoretically happen in isolation.
-
-3. **Code review serves maintainability, not just correctness.** A comment does not need to identify a bug to be worth acting on. Architecture, pattern enforcement, and test coverage are legitimate review concerns. When a reviewer says "we're moving away from X pattern," evaluate against the team's intended direction — not the current codebase state. "Other code does it too" is not a valid justification for writing new code in an old pattern.
-
-4. **Context preservation.** For broad exploration (tracing call sites across many files, understanding component lifecycles), parallel Explore subagents are valuable — they keep the main context focused on reasoning and triage. For simpler lookups (reading a single file, checking one function signature), reading directly is fine. Use judgment based on the volume and complexity of what needs exploring.
-
-5. **Fix cost includes complexity.** A fix's cost is the code change PLUS the complexity it adds PLUS the risk of introducing new bugs. A one-line fix with zero risk is always worth doing. A multi-file behavioral change needs justification.
+2. **Code review serves maintainability, not just correctness.** A comment does not need to identify a bug to be worth acting on. Architecture, pattern enforcement, and test coverage are legitimate review concerns. When a reviewer says "we're moving away from X pattern," evaluate against the team's intended direction — not the current codebase state. "Other code does it too" is not a valid justification for writing new code in an old pattern.
 
 </essential_principles>
 
@@ -31,11 +25,13 @@ Systematically triage all review comments on the current branch's pull request. 
 Find the PR for the current branch and get repo identity:
 
 ```bash
-gh pr list --head $(git branch --show-current) --json number,title,url,baseRefName --limit 1
+gh pr list --head $(git branch --show-current) --json number,title,url,baseRefName,body --limit 1
 gh repo view --json nameWithOwner -q .nameWithOwner
 ```
 
 If no PR found, inform the user and stop.
+
+**Read the PR `body`** — it often contains links to tickets, issues, or context that inform the triage. Note any ticket or issue references for Step 2.
 
 Read `references/github-api-reference.md` for fetch commands.
 
@@ -57,19 +53,13 @@ Note any duplicates (e.g., bot echoing a human's comment).
 
 Identify all unique files referenced by comments. Build enough context to triage each comment — this means understanding the referenced code, how it's used, and relevant patterns.
 
-What to look for per comment:
-1. The referenced code and its surroundings
-2. How the component/function is used by its parents (trace call sites)
-3. Lifecycle behavior — is the component destroyed/recreated? Are props stable during its lifetime?
-4. Established patterns that inform the comment (e.g., pagination already used in a sibling page)
-
 For a handful of comments touching a few files, reading directly may be fastest. When comments span many files or require tracing complex call chains, use parallel Explore subagents to gather context without bloating the main conversation.
 
 Also check project-level context:
 - Are any commented files (e.g., proto files) synced from another repo? Check `git log --oneline -20` for "sync" commits.
 - Does CLAUDE.md contain relevant ownership or build notes?
 
-**Fetch Linear ticket context** when a ticket ID appears anywhere — branch name, PR title/description, or commit messages. Invoke the `/linear` skill to fetch the ticket including its comments. Also fetch related tickets (parent epic, blocking/blocked-by) since they often contain the broader motivation and acceptance criteria that inform whether a reviewer's suggestion is in scope. This context helps distinguish "valid concern but out of scope for this ticket" from "this contradicts what the ticket requires."
+**Fetch Linear ticket context** if the PR description, branch name, or commit messages reference any tickets or issues. Don't just scan for ID patterns — read the PR body from Step 1 and follow any links to tickets, epics, or issues. Invoke the `/linear` skill to fetch each referenced ticket including its comments. Also fetch related tickets (parent epic, blocking/blocked-by) since they often contain the broader motivation and acceptance criteria that inform whether a reviewer's suggestion is in scope. This context helps distinguish "valid concern but out of scope for this ticket" from "this contradicts what the ticket requires."
 
 ## Step 3: Triage each comment
 
@@ -88,22 +78,7 @@ Present the full analysis to the user using the per-comment format from `referen
 
 ## Step 4: Handle investigations
 
-For comments marked INVESTIGATE:
-
-**Check if agent-browser is available** (run `which agent-browser` or check if the skill is listed):
-
-If available, spawn a **general-purpose Agent** with a prompt that:
-1. Invokes the `agent-browser` skill to load browser automation instructions
-2. Navigates to the relevant page/flow in the running app
-3. Performs the specific action described in the comment
-4. Reports whether the issue reproduces, with screenshot evidence
-
-If not available, present the investigation need to the user via AskUserQuestion:
-- Describe what specific behavior needs verification
-- Ask the user to check manually and report back
-- Include concrete steps: "Open page X, click Y, observe whether Z happens"
-
-After investigation results are in, update the comment's triage decision to ACT or IGNORE.
+For comments marked INVESTIGATE, read `references/investigation-guide.md` for how to verify them (via agent-browser or manual user verification). After results are in, update the triage decision to ACT or IGNORE.
 
 ## Step 5: Present open questions
 
@@ -195,6 +170,7 @@ Supporting files in `references/`:
 - `triage-framework.md` — The 4-question triage model, decision matrix, and when-to-investigate guide. Read in Step 3.
 - `comment-analysis-format.md` — Output template for per-comment analysis and summary tables. Read in Step 3.
 - `github-api-reference.md` — gh CLI commands for fetching, replying to, and resolving PR comments. Read in Steps 1, 8, and 9.
+- `investigation-guide.md` — How to verify INVESTIGATE comments via agent-browser or manual user verification. Read in Step 4.
 </reference_index>
 
 <success_criteria>
