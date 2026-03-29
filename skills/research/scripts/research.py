@@ -309,6 +309,17 @@ def _check_perplexity_key() -> None:
         )
 
 
+_VALID_RECENCY = {"hour", "day", "week", "month", "year"}
+
+
+def _validate_recency(recency: str | None) -> None:
+    if recency and recency not in _VALID_RECENCY:
+        raise ResearchError(
+            ErrorCode.API_ERROR,
+            f"Invalid --recency value: '{recency}'. Must be one of: {', '.join(sorted(_VALID_RECENCY))}",
+        )
+
+
 def _perplexity_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {PERPLEXITY_API_KEY}", "Content-Type": "application/json"}
 
@@ -324,6 +335,7 @@ def perplexity_ask(
 ) -> dict:
     """Perplexity sonar-pro chat completion."""
     _check_perplexity_key()
+    _validate_recency(recency)
 
     payload: dict[str, Any] = {
         "model": "sonar-pro",
@@ -371,6 +383,7 @@ def perplexity_search(
 ) -> dict:
     """Perplexity Search API — raw search results."""
     _check_perplexity_key()
+    _validate_recency(recency)
 
     payload: dict[str, Any] = {"query": query}
     if domains:
@@ -412,6 +425,7 @@ def perplexity_reason(
 ) -> dict:
     """Perplexity sonar-reasoning-pro chat completion."""
     _check_perplexity_key()
+    _validate_recency(recency)
 
     payload: dict[str, Any] = {
         "model": "sonar-reasoning-pro",

@@ -150,17 +150,18 @@ No flags. Returns remaining credits and plan info.
 <cli_cheatsheet>
 Quick reference for subagent prompts — all commands on one line each.
 
+Script path: `~/.claude/skills/research/scripts/research.py`
+
 ```
-SCRIPT=~/.claude/skills/research/scripts/research.py
+uv run <script> ask "<query>"       [--domain D] [--recency R] [--context C] [--after D] [--before D] [--no-cache]
+uv run <script> search "<query>"    [--domain D] [--recency R] [--limit N] [--no-cache]
+uv run <script> reason "<query>"    [--domain D] [--recency R] [--context C] [--effort E] [--no-cache]
+uv run <script> docs <lib> "<query>" [--max-tokens N] [--no-cache]
+uv run <script> map <url>           [--search KW] [--limit N] [--no-cache]
+uv run <script> scrape <url>        [--no-cache]
+uv run <script> credits
 
-uv run $SCRIPT ask "<query>"       [--domain D] [--recency R] [--context C] [--after D] [--before D] [--no-cache]
-uv run $SCRIPT search "<query>"    [--domain D] [--recency R] [--limit N] [--no-cache]
-uv run $SCRIPT reason "<query>"    [--domain D] [--recency R] [--context C] [--effort E] [--no-cache]
-uv run $SCRIPT docs <lib> "<query>" [--max-tokens N] [--no-cache]
-uv run $SCRIPT map <url>           [--search KW] [--limit N] [--no-cache]
-uv run $SCRIPT scrape <url>        [--no-cache]
-uv run $SCRIPT credits
-
+--recency values: day | week | month | year (no other formats accepted)
 Cost: search ~$0.005 | ask/reason ~$0.02 | docs free | map/scrape 1 FC credit each
 
 Also available: WebSearch (free, broad), WebFetch (free, page summary)
