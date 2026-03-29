@@ -11,11 +11,7 @@ Keep asking "why" until you hit the root cause, not just symptoms.
 
 <process>
 1. State the problem clearly
-2. Ask "Why does this happen?" - Answer 1
-3. Ask "Why?" about Answer 1 - Answer 2
-4. Ask "Why?" about Answer 2 - Answer 3
-5. Continue until you hit a root cause (usually 5 iterations, sometimes fewer)
-6. Identify actionable intervention at the root
+2. Ask "Why?" iteratively until hitting an actionable root cause — usually 5 levels, sometimes fewer
 </process>
 
 <output_format>
@@ -37,5 +33,5 @@ Keep asking "why" until you hit the root cause, not just symptoms.
 - Each "why" digs genuinely deeper
 - Stops when hitting actionable root (not infinite regress)
 - Intervention addresses root, not surface
-- Prevents same problem from recurring
+- Intervention is specific and actionable, not a vague recommendation
 </success_criteria>

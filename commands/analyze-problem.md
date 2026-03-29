@@ -80,16 +80,7 @@ Analyze $ARGUMENTS (or deduce the problem from conversation context) and recomme
 </available_frameworks>
 
 <available_research>
-Research subagents gather external information in a fresh context window. Recommend one when the framework would benefit from data the user doesn't have.
-
-- `research-technical` — Implementation approaches, libraries, tradeoffs
-- `research-open-source` — Find existing libraries, tools, projects
-- `research-feasibility` — Reality check on constraints
-- `research-options` — Compare specific choices side-by-side
-- `research-competitive` — Who else does this, strengths/weaknesses
-- `research-landscape` — Map the domain, players, trends
-- `research-history` — Past attempts, lessons learned
-- `research-deep-dive` — Comprehensive topic investigation
+The `/research` skill gathers external information using multiple web sources in parallel. Recommend it when the framework would benefit from data the user doesn't have — it auto-scales from quick lookups to deep multi-source investigations.
 </available_research>
 
 <process>
@@ -109,7 +100,7 @@ Research subagents gather external information in a fresh context window. Recomm
 
 **Alternative:** `/consider:[name]` — [1 sentence: when this would be better]
 
-**Research:** [Either "Not needed — [reason]" OR "`research-[type]` — [what gap it fills]. Run before/after the framework."]
+**Research:** [Either "Not needed — [reason]" OR "`/research` — [what gap it fills]. Run before/after the framework."]
 
 <!-- Use AskUserQuestion with header "Next step" -->
 </output_format>
