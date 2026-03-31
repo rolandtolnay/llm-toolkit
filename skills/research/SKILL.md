@@ -28,8 +28,8 @@ Perplexity sonar-pro. Returns a synthesized answer with inline citations.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `--domain` / `-d` | none | Filter to specific domains (repeatable) |
-| `--recency` / `-r` | none | Recency filter: `day`, `week`, `month`, `year` |
+| `--site` / `-s` | none | Filter to specific websites, e.g. `stripe.com` (repeatable) |
+| `--recency` / `-r` | none | Preset window: `hour`, `day`, `week`, `month`, `year` |
 | `--context` / `-c` | `high` | Search context size: `low`, `medium`, `high` |
 | `--after` | none | Only results after date (YYYY-MM-DD) |
 | `--before` | none | Only results before date (YYYY-MM-DD) |
@@ -50,8 +50,8 @@ Perplexity Search API. Returns URLs + titles + snippets. Best for broad discover
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `--domain` / `-d` | none | Filter to specific domains (repeatable) |
-| `--recency` / `-r` | none | Recency filter: `day`, `week`, `month`, `year` |
+| `--site` / `-s` | none | Filter to specific websites, e.g. `stripe.com` (repeatable) |
+| `--recency` / `-r` | none | Preset window: `hour`, `day`, `week`, `month`, `year` |
 | `--limit` / `-l` | 10 | Max results |
 | `--no-cache` | false | Bypass cache |
 
@@ -70,8 +70,8 @@ Perplexity sonar-reasoning-pro. Chain-of-thought reasoning with web search. Use 
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `--domain` / `-d` | none | Filter to specific domains (repeatable) |
-| `--recency` / `-r` | none | Recency filter: `day`, `week`, `month`, `year` |
+| `--site` / `-s` | none | Filter to specific websites, e.g. `stripe.com` (repeatable) |
+| `--recency` / `-r` | none | Preset window: `hour`, `day`, `week`, `month`, `year` |
 | `--context` / `-c` | `high` | Search context size: `low`, `medium`, `high` |
 | `--effort` / `-e` | `high` | Reasoning effort: `low`, `medium`, `high` |
 | `--no-cache` | false | Bypass cache |
@@ -109,7 +109,7 @@ Firecrawl map. Discover all pages on a site, optionally filtered by keyword. Use
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `--search` / `-s` | none | Filter URLs by keyword |
+| `--search` / `-k` | none | Filter URLs by keyword |
 | `--limit` / `-l` | 100 | Max URLs to return |
 | `--no-cache` | false | Bypass cache |
 
@@ -161,16 +161,17 @@ Quick reference for subagent prompts — all commands on one line each.
 Script path: `~/.claude/skills/research/scripts/research.py`
 
 ```
-uv run <script> ask "<query>"       [--domain D] [--recency R] [--context C] [--after D] [--before D] [--no-cache]
-uv run <script> search "<query>"    [--domain D] [--recency R] [--limit N] [--no-cache]
-uv run <script> reason "<query>"    [--domain D] [--recency R] [--context C] [--effort E] [--no-cache]
+uv run <script> ask "<query>"       [--site S] [--recency R] [--context C] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--no-cache]
+uv run <script> search "<query>"    [--site S] [--recency R] [--limit N] [--no-cache]
+uv run <script> reason "<query>"    [--site S] [--recency R] [--context C] [--effort E] [--no-cache]
 uv run <script> docs <lib> "<query>" [--max-tokens N] [--no-cache]
 uv run <script> map <url>           [--search KW] [--limit N] [--no-cache]
 uv run <script> scrape <url>        [--no-cache]
 uv run <script> credits
 uv run <script> config
 
---recency values: day | week | month | year (no other formats accepted)
+--site: a real domain name like stripe.com or pay.uk (NOT topics/phrases). Repeatable.
+--recency: preset window — hour | day | week | month | year. For custom ranges use --after/--before with YYYY-MM-DD dates.
 Cost: search ~$0.005 | ask/reason ~$0.02 | docs free | map/scrape 1 FC credit each
 
 Also available: WebSearch (free, broad), WebFetch (free, page summary)

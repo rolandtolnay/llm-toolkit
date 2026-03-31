@@ -59,9 +59,12 @@ def _load_env_files() -> list[Path]:
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
-                key, _, value = line.partition("=")
-                if key and value is not None:
-                    os.environ[key.strip()] = value.strip()
+                key, sep, value = line.partition("=")
+                if key and sep:
+                    value = value.strip()
+                    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                        value = value[1:-1]
+                    os.environ[key.strip()] = value
             loaded.append(p)
     return loaded
 
@@ -344,7 +347,9 @@ def _validate_recency(recency: str | None) -> None:
     if recency and recency not in _VALID_RECENCY:
         raise ResearchError(
             ErrorCode.API_ERROR,
-            f"Invalid --recency value: '{recency}'. Must be one of: {', '.join(sorted(_VALID_RECENCY))}",
+            f"Invalid --recency value: '{recency}'. Must be one of: {', '.join(sorted(_VALID_RECENCY))}. "
+            "These are preset windows (e.g., 'month' = last 30 days). "
+            "For custom date ranges use --after YYYY-MM-DD and/or --before YYYY-MM-DD instead.",
         )
 
 
@@ -695,18 +700,25 @@ app = typer.Typer(
 )
 
 
-def _parse_domains(domain: list[str] | None) -> list[str] | None:
-    """Parse domain filter list."""
-    if not domain:
+def _validate_sites(sites: list[str] | None) -> list[str] | None:
+    """Validate site filter values are actual domain names."""
+    if not sites:
         return None
-    return domain
+    for s in sites:
+        if " " in s or "." not in s:
+            raise ResearchError(
+                ErrorCode.API_ERROR,
+                f"Invalid --site value: '{s}'. Expected a domain name (e.g., stripe.com, pay.uk). "
+                "This flag filters results to specific websites, not topics.",
+            )
+    return sites
 
 
 @app.command()
 def ask(
     query: str = typer.Argument(..., help="Question to answer"),
-    domain: Optional[list[str]] = typer.Option(None, "--domain", "-d", help="Filter to specific domains"),
-    recency: Optional[str] = typer.Option(None, "--recency", "-r", help="Recency filter: day, week, month, year"),
+    site: Optional[list[str]] = typer.Option(None, "--site", "-s", help="Filter to specific sites (e.g., stripe.com)"),
+    recency: Optional[str] = typer.Option(None, "--recency", "-r", help="Preset window: hour, day, week, month, year"),
     context: str = typer.Option("high", "--context", "-c", help="Search context size: low, medium, high"),
     after: Optional[str] = typer.Option(None, "--after", help="Only results after date (YYYY-MM-DD)"),
     before: Optional[str] = typer.Option(None, "--before", help="Only results before date (YYYY-MM-DD)"),
@@ -714,7 +726,7 @@ def ask(
 ) -> None:
     """Synthesized answer via Perplexity sonar-pro (~$0.02/query)."""
     cmd = "ask"
-    cache_parts = [query, str(domain), str(recency), context, str(after), str(before)]
+    cache_parts = [query, str(site), str(recency), context, str(after), str(before)]
 
     if not no_cache:
         cached = cache_get(cmd, *cache_parts)
@@ -724,7 +736,7 @@ def ask(
             return
 
     try:
-        result = perplexity_ask(query, domains=_parse_domains(domain), recency=recency, context=context, after=after, before=before)
+        result = perplexity_ask(query, domains=_validate_sites(site), recency=recency, context=context, after=after, before=before)
         response = output_success(
             cmd,
             query,
@@ -743,14 +755,14 @@ def ask(
 @app.command()
 def search(
     query: str = typer.Argument(..., help="Search query"),
-    domain: Optional[list[str]] = typer.Option(None, "--domain", "-d", help="Filter to specific domains"),
-    recency: Optional[str] = typer.Option(None, "--recency", "-r", help="Recency filter: day, week, month, year"),
+    site: Optional[list[str]] = typer.Option(None, "--site", "-s", help="Filter to specific sites (e.g., stripe.com)"),
+    recency: Optional[str] = typer.Option(None, "--recency", "-r", help="Preset window: hour, day, week, month, year"),
     limit: int = typer.Option(10, "--limit", "-l", help="Max results"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Bypass cache"),
 ) -> None:
     """Raw web search results via Perplexity Search API (~$0.005/query)."""
     cmd = "search"
-    cache_parts = [query, str(domain), str(recency), str(limit)]
+    cache_parts = [query, str(site), str(recency), str(limit)]
 
     if not no_cache:
         cached = cache_get(cmd, *cache_parts)
@@ -760,7 +772,7 @@ def search(
             return
 
     try:
-        result = perplexity_search(query, domains=_parse_domains(domain), recency=recency, limit=limit)
+        result = perplexity_search(query, domains=_validate_sites(site), recency=recency, limit=limit)
         response = output_success(
             cmd,
             query,
@@ -778,15 +790,15 @@ def search(
 @app.command()
 def reason(
     query: str = typer.Argument(..., help="Complex question requiring reasoning"),
-    domain: Optional[list[str]] = typer.Option(None, "--domain", "-d", help="Filter to specific domains"),
-    recency: Optional[str] = typer.Option(None, "--recency", "-r", help="Recency filter: day, week, month, year"),
+    site: Optional[list[str]] = typer.Option(None, "--site", "-s", help="Filter to specific sites (e.g., stripe.com)"),
+    recency: Optional[str] = typer.Option(None, "--recency", "-r", help="Preset window: hour, day, week, month, year"),
     context: str = typer.Option("high", "--context", "-c", help="Search context size: low, medium, high"),
     effort: str = typer.Option("high", "--effort", "-e", help="Reasoning effort: low, medium, high"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Bypass cache"),
 ) -> None:
     """Deep reasoning via Perplexity sonar-reasoning-pro (~$0.02/query)."""
     cmd = "reason"
-    cache_parts = [query, str(domain), str(recency), context, effort]
+    cache_parts = [query, str(site), str(recency), context, effort]
 
     if not no_cache:
         cached = cache_get(cmd, *cache_parts)
@@ -796,7 +808,7 @@ def reason(
             return
 
     try:
-        result = perplexity_reason(query, domains=_parse_domains(domain), recency=recency, context=context, effort=effort)
+        result = perplexity_reason(query, domains=_validate_sites(site), recency=recency, context=context, effort=effort)
         response = output_success(
             cmd,
             query,
@@ -858,7 +870,7 @@ def docs(
 @app.command(name="map")
 def map_cmd(
     url: str = typer.Argument(..., help="URL to map"),
-    search_kw: Optional[str] = typer.Option(None, "--search", "-s", help="Filter discovered URLs by keyword"),
+    search_kw: Optional[str] = typer.Option(None, "--search", "-k", help="Filter discovered URLs by keyword"),
     limit: int = typer.Option(100, "--limit", "-l", help="Max URLs to return"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Bypass cache"),
 ) -> None:
