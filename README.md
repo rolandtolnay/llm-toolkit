@@ -190,7 +190,7 @@ Web research that scales from quick lookups to deep multi-source investigations.
 - **Cost-conscious escalation** -- starts with free tools (WebSearch, WebFetch, Context7 docs), escalates to Perplexity and Firecrawl only when needed
 - **Parallel subagents** -- decomposes complex questions into sub-questions and investigates them simultaneously with source diversity requirements
 - **Source verification** -- cross-references findings, flags contradictions, and signals confidence levels (verified, likely, unverified)
-- **Persistence** -- standard and deep research runs are saved to `~/.claude/research/` with a scannable index
+- **Persistence** -- standard and deep research runs are saved to `~/Documents/Research/` with a scannable index
 
 Activates on "search for", "look up", "find out", "what's the latest", or "research".
 

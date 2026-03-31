@@ -5,6 +5,13 @@ description: >
   Use when the user needs facts, tools, best practices, or community opinions
   that may not be in training data. Triggers on: "search for", "look up",
   "find out", "what's the latest", "research".
+hooks:
+  PostToolUse:
+    - matcher: "WebSearch|WebFetch"
+      hooks:
+        - type: command
+          command: "uv run ~/.claude/skills/research/scripts/log-hook.py"
+          timeout: 5
 ---
 
 <objective>
@@ -27,12 +34,14 @@ uv run <script> map <url>           [--search KW] [--limit N] [--no-cache]
 uv run <script> scrape <url>        [--no-cache]
 uv run <script> credits
 uv run <script> config
+uv run <script> audit              [--days N] [--session S] [--detail]
 
 --site: a real domain name like stripe.com or pay.uk (NOT topics/phrases). Repeatable.
 --recency: preset window — hour | day | week | month | year. For custom ranges use --after/--before with YYYY-MM-DD dates.
 Cost: search ~$0.005 | ask/reason ~$0.02 | docs free | map/scrape 1 FC credit each
 
 Also available: WebSearch (free, broad), WebFetch (free, page summary)
+All CLI calls and WebSearch/WebFetch usage are logged to ~/.cache/research/logs/YYYY-MM-DD.jsonl
 ```
 </cli_cheatsheet>
 
@@ -89,7 +98,7 @@ Analyze the question and generate 2-4 specific sub-questions. For each, assign a
 
 ## STEP 2: SPAWN SUBAGENTS
 
-One **general-purpose subagent** per sub-question, launched in **parallel**.
+One **research-subagent** per sub-question, launched in **parallel** (use `subagent_type: "research-subagent"`). This agent type has PostToolUse hooks that log WebSearch/WebFetch calls for audit.
 
 Each subagent prompt must include:
 
@@ -145,11 +154,11 @@ After all subagents return:
 
 After synthesis, persist the research to disk. **First run `research config`** — if `persistence` is `false`, skip this step. Read `~/.claude/skills/research/references/persistence-format.md` for full format details.
 
-1. **Write the research file** to `~/.claude/research/YYYY-MM-DD-<slug>.md` containing:
+1. **Write the research file** to `~/Documents/Research/YYYY-MM-DD-<slug>.md` containing:
    - Header with topic, date, and original query
    - One section per sub-question with its findings as-is from the sub-agent return
    - Final synthesis section with the orchestrator's combined answer
-2. **Prepend an entry to `~/.claude/research/INDEX.md`** with one line per sub-question linking to the file with anchor
+2. **Prepend an entry to `~/Documents/Research/INDEX.md`** with one line per sub-question linking to the file with anchor
 
 If the write fails, still return the research results to the user — persistence is best-effort, never blocking.
 </research_mode>
@@ -187,7 +196,7 @@ Run `research config` to see resolved configuration (which keys are set, persist
 - [ ] Findings cite their sources
 - [ ] Official tooling claims are verified against primary sources
 - [ ] Every research run includes at least one WebSearch call (broad discovery)
-- [ ] Standard/deep runs are persisted to `~/.claude/research/` with INDEX.md updated
+- [ ] Standard/deep runs are persisted to `~/Documents/Research/` with INDEX.md updated
 - [ ] Quick lookups resolve without subagents when answer is clear
 - [ ] Graceful degradation when API keys are missing
 </success_criteria>

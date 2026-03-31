@@ -33,6 +33,8 @@ import json
 import os
 import re
 import sys
+import time
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -105,6 +107,93 @@ TIMEOUTS = {
 }
 
 DEFAULT_MAX_TOKENS = 5000
+
+LOG_DIR = Path.home() / ".cache" / "research" / "logs"
+
+# Approximate per-call cost in USD (0 = free or credit-based)
+COST_USD = {
+    "ask": 0.02,
+    "search": 0.005,
+    "reason": 0.02,
+    "docs": 0.0,
+    "map": 0.0,
+    "scrape": 0.0,
+}
+
+# Firecrawl credits consumed per call
+CREDIT_COST = {
+    "map": 1,
+    "scrape": 1,
+}
+
+
+# ---------------------------------------------------------------------------
+# Call logging
+# ---------------------------------------------------------------------------
+
+LOG_RETENTION_DAYS = 30
+
+
+def _cleanup_old_logs() -> None:
+    """Delete log files older than LOG_RETENTION_DAYS. Silent on failure."""
+    try:
+        today = datetime.now(timezone.utc).date()
+        for f in LOG_DIR.iterdir():
+            if not f.name.endswith(".jsonl"):
+                continue
+            try:
+                file_date = datetime.strptime(f.stem, "%Y-%m-%d").date()
+                if (today - file_date).days > LOG_RETENTION_DAYS:
+                    f.unlink()
+            except ValueError:
+                continue
+    except Exception:
+        pass
+
+
+def _log_call(
+    command: str,
+    query: str,
+    *,
+    backend: str,
+    model: str | None = None,
+    cache_hit: bool = False,
+    success: bool = True,
+    duration_ms: int | None = None,
+    usage: dict | None = None,
+    error: str | None = None,
+) -> None:
+    """Append a call record to the daily JSONL log. Never raises."""
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_file = LOG_DIR / f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.jsonl"
+        if not log_file.exists():
+            _cleanup_old_logs()
+        entry: dict[str, Any] = {
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "session_id": os.environ.get("CLAUDE_SESSION_ID", ""),
+            "type": "cli",
+            "tool": command,
+            "query": query,
+            "backend": backend,
+        }
+        if model:
+            entry["model"] = model
+        entry["cache_hit"] = cache_hit
+        entry["success"] = success
+        if duration_ms is not None:
+            entry["duration_ms"] = duration_ms
+        if usage:
+            entry["usage"] = usage
+        entry["cost_usd"] = COST_USD.get(command, 0.0) if not cache_hit else 0.0
+        entry["credits"] = CREDIT_COST.get(command, 0) if not cache_hit else 0
+        if error:
+            entry["error"] = error
+        with open(log_file, "a") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass  # Logging must never break the main flow
+
 
 # ---------------------------------------------------------------------------
 # System prompts
@@ -732,22 +821,27 @@ def ask(
         cached = cache_get(cmd, *cache_parts)
         if cached is not None:
             cached["metadata"]["cache_hit"] = True
+            _log_call(cmd, query, backend="perplexity", model="sonar-pro", cache_hit=True)
             emit(cached)
             return
 
     try:
+        t0 = time.monotonic()
         result = perplexity_ask(query, domains=_validate_sites(site), recency=recency, context=context, after=after, before=before)
+        duration_ms = int((time.monotonic() - t0) * 1000)
         response = output_success(
             cmd,
             query,
-            metadata={"backend": "perplexity", "model": result["model"], "cache_hit": False},
+            metadata={"backend": "perplexity", "model": result["model"], "cache_hit": False, "usage": result.get("usage")},
             answer=result["answer"],
             citations=result["citations"],
         )
         if not no_cache:
             cache_set(cmd, *cache_parts, value=response)
+        _log_call(cmd, query, backend="perplexity", model=result["model"], duration_ms=duration_ms, usage=result.get("usage"))
         emit(response)
     except ResearchError as e:
+        _log_call(cmd, query, backend="perplexity", success=False, error=str(e))
         emit(output_error(cmd, e))
         raise typer.Exit(code=1)
 
@@ -768,11 +862,14 @@ def search(
         cached = cache_get(cmd, *cache_parts)
         if cached is not None:
             cached["metadata"]["cache_hit"] = True
+            _log_call(cmd, query, backend="perplexity", model="search", cache_hit=True)
             emit(cached)
             return
 
     try:
+        t0 = time.monotonic()
         result = perplexity_search(query, domains=_validate_sites(site), recency=recency, limit=limit)
+        duration_ms = int((time.monotonic() - t0) * 1000)
         response = output_success(
             cmd,
             query,
@@ -781,8 +878,10 @@ def search(
         )
         if not no_cache:
             cache_set(cmd, *cache_parts, value=response)
+        _log_call(cmd, query, backend="perplexity", model="search", duration_ms=duration_ms)
         emit(response)
     except ResearchError as e:
+        _log_call(cmd, query, backend="perplexity", success=False, error=str(e))
         emit(output_error(cmd, e))
         raise typer.Exit(code=1)
 
@@ -804,22 +903,27 @@ def reason(
         cached = cache_get(cmd, *cache_parts)
         if cached is not None:
             cached["metadata"]["cache_hit"] = True
+            _log_call(cmd, query, backend="perplexity", model="sonar-reasoning-pro", cache_hit=True)
             emit(cached)
             return
 
     try:
+        t0 = time.monotonic()
         result = perplexity_reason(query, domains=_validate_sites(site), recency=recency, context=context, effort=effort)
+        duration_ms = int((time.monotonic() - t0) * 1000)
         response = output_success(
             cmd,
             query,
-            metadata={"backend": "perplexity", "model": result["model"], "cache_hit": False},
+            metadata={"backend": "perplexity", "model": result["model"], "cache_hit": False, "usage": result.get("usage")},
             answer=result["answer"],
             citations=result["citations"],
         )
         if not no_cache:
             cache_set(cmd, *cache_parts, value=response)
+        _log_call(cmd, query, backend="perplexity", model=result["model"], duration_ms=duration_ms, usage=result.get("usage"))
         emit(response)
     except ResearchError as e:
+        _log_call(cmd, query, backend="perplexity", success=False, error=str(e))
         emit(output_error(cmd, e))
         raise typer.Exit(code=1)
 
@@ -839,11 +943,14 @@ def docs(
         cached = cache_get(cmd, *cache_parts)
         if cached is not None:
             cached["metadata"]["cache_hit"] = True
+            _log_call(cmd, query, backend="context7", cache_hit=True)
             emit(cached)
             return
 
     try:
+        t0 = time.monotonic()
         result = context7_docs(library, query, max_tokens=max_tokens)
+        duration_ms = int((time.monotonic() - t0) * 1000)
         response = output_success(
             cmd,
             query,
@@ -861,8 +968,10 @@ def docs(
         )
         if not no_cache:
             cache_set(cmd, *cache_parts, value=response)
+        _log_call(cmd, query, backend="context7", duration_ms=duration_ms)
         emit(response)
     except ResearchError as e:
+        _log_call(cmd, query, backend="context7", success=False, error=str(e))
         emit(output_error(cmd, e))
         raise typer.Exit(code=1)
 
@@ -882,11 +991,14 @@ def map_cmd(
         cached = cache_get(cmd, *cache_parts)
         if cached is not None:
             cached["metadata"]["cache_hit"] = True
+            _log_call(cmd, url, backend="firecrawl", cache_hit=True)
             emit(cached)
             return
 
     try:
+        t0 = time.monotonic()
         result = firecrawl_map(url, search=search_kw, limit=limit)
+        duration_ms = int((time.monotonic() - t0) * 1000)
         response = output_success(
             cmd,
             url,
@@ -895,8 +1007,10 @@ def map_cmd(
         )
         if not no_cache:
             cache_set(cmd, *cache_parts, value=response)
+        _log_call(cmd, url, backend="firecrawl", duration_ms=duration_ms)
         emit(response)
     except ResearchError as e:
+        _log_call(cmd, url, backend="firecrawl", success=False, error=str(e))
         emit(output_error(cmd, e))
         raise typer.Exit(code=1)
 
@@ -914,11 +1028,14 @@ def scrape(
         cached = cache_get(cmd, *cache_parts)
         if cached is not None:
             cached["metadata"]["cache_hit"] = True
+            _log_call(cmd, url, backend="firecrawl", cache_hit=True)
             emit(cached)
             return
 
     try:
+        t0 = time.monotonic()
         result = firecrawl_scrape(url)
+        duration_ms = int((time.monotonic() - t0) * 1000)
         response = output_success(
             cmd,
             url,
@@ -929,8 +1046,10 @@ def scrape(
         )
         if not no_cache:
             cache_set(cmd, *cache_parts, value=response)
+        _log_call(cmd, url, backend="firecrawl", duration_ms=duration_ms)
         emit(response)
     except ResearchError as e:
+        _log_call(cmd, url, backend="firecrawl", success=False, error=str(e))
         emit(output_error(cmd, e))
         raise typer.Exit(code=1)
 
@@ -972,6 +1091,155 @@ def config() -> None:
         },
         "env_files": env_files,
     })
+
+
+# ---------------------------------------------------------------------------
+# Audit command
+# ---------------------------------------------------------------------------
+
+
+def _load_log_entries(days: int) -> list[dict]:
+    """Read JSONL log entries for the last N days."""
+    entries = []
+    if not LOG_DIR.is_dir():
+        return entries
+    today = datetime.now(timezone.utc).date()
+    for i in range(days):
+        from datetime import timedelta
+
+        d = today - timedelta(days=i)
+        log_file = LOG_DIR / f"{d.isoformat()}.jsonl"
+        if log_file.is_file():
+            for line in log_file.read_text().splitlines():
+                line = line.strip()
+                if line:
+                    try:
+                        entries.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+    return entries
+
+
+@app.command()
+def audit(
+    days: int = typer.Option(7, "--days", "-d", help="Number of days to analyze"),
+    session: Optional[str] = typer.Option(None, "--session", "-s", help="Filter by session ID"),
+    detail: bool = typer.Option(False, "--detail", help="Include individual call records"),
+) -> None:
+    """Analyze research API usage and costs from logs.
+
+    Full reference: ~/.claude/skills/research/references/audit-reference.md
+    """
+    entries = _load_log_entries(days)
+    if session:
+        entries = [e for e in entries if e.get("session_id") == session]
+
+    if not entries:
+        emit({
+            "success": True,
+            "command": "audit",
+            "message": f"No log entries found for the last {days} day(s).",
+            "log_dir": str(LOG_DIR),
+        })
+        return
+
+    # Compute period bounds from actual data
+    timestamps = [e.get("timestamp", "") for e in entries]
+    date_from = min(timestamps)[:10] if timestamps else ""
+    date_to = max(timestamps)[:10] if timestamps else ""
+
+    total = len(entries)
+    sessions = set(e.get("session_id", "") for e in entries if e.get("session_id"))
+    cache_hits = sum(1 for e in entries if e.get("cache_hit"))
+    failures = sum(1 for e in entries if not e.get("success", True))
+    total_cost = sum(e.get("cost_usd", 0.0) for e in entries)
+    total_credits = sum(e.get("credits", 0) for e in entries)
+    total_duration = sum(e.get("duration_ms", 0) for e in entries)
+
+    # Breakdown by tool
+    by_tool: dict[str, dict[str, Any]] = {}
+    for e in entries:
+        tool = e.get("tool", "unknown")
+        if tool not in by_tool:
+            by_tool[tool] = {"count": 0, "cost_usd": 0.0, "credits": 0, "cache_hits": 0, "failures": 0, "duration_ms": 0}
+        by_tool[tool]["count"] += 1
+        by_tool[tool]["cost_usd"] += e.get("cost_usd", 0.0)
+        by_tool[tool]["credits"] += e.get("credits", 0)
+        if e.get("cache_hit"):
+            by_tool[tool]["cache_hits"] += 1
+        if not e.get("success", True):
+            by_tool[tool]["failures"] += 1
+        by_tool[tool]["duration_ms"] += e.get("duration_ms", 0)
+
+    for tool, stats in by_tool.items():
+        stats["pct"] = round(stats["count"] / total * 100, 1)
+
+    # Breakdown by backend
+    by_backend: dict[str, dict[str, Any]] = {}
+    for e in entries:
+        backend = e.get("backend", "unknown")
+        if backend not in by_backend:
+            by_backend[backend] = {"count": 0, "cost_usd": 0.0, "credits": 0}
+        by_backend[backend]["count"] += 1
+        by_backend[backend]["cost_usd"] += e.get("cost_usd", 0.0)
+        by_backend[backend]["credits"] += e.get("credits", 0)
+
+    for backend, stats in by_backend.items():
+        stats["pct"] = round(stats["count"] / total * 100, 1)
+
+    # Breakdown by type (builtin vs cli)
+    by_type: dict[str, int] = {}
+    for e in entries:
+        t = e.get("type", "unknown")
+        by_type[t] = by_type.get(t, 0) + 1
+
+    # Per-session summary
+    per_session: dict[str, dict[str, Any]] = {}
+    for e in entries:
+        sid = e.get("session_id", "(no session)")
+        if sid not in per_session:
+            per_session[sid] = {"calls": 0, "cost_usd": 0.0, "credits": 0, "tools_used": set()}
+        per_session[sid]["calls"] += 1
+        per_session[sid]["cost_usd"] += e.get("cost_usd", 0.0)
+        per_session[sid]["credits"] += e.get("credits", 0)
+        per_session[sid]["tools_used"].add(e.get("tool", ""))
+
+    # Convert sets to lists for JSON serialization
+    sessions_summary = []
+    for sid, stats in per_session.items():
+        sessions_summary.append({
+            "session_id": sid,
+            "calls": stats["calls"],
+            "cost_usd": round(stats["cost_usd"], 4),
+            "credits": stats["credits"],
+            "tools_used": sorted(stats["tools_used"]),
+        })
+    sessions_summary.sort(key=lambda s: s["calls"], reverse=True)
+
+    result: dict[str, Any] = {
+        "success": True,
+        "command": "audit",
+        "period": {"from": date_from, "to": date_to, "days": days},
+        "summary": {
+            "total_calls": total,
+            "unique_sessions": len(sessions),
+            "cache_hits": cache_hits,
+            "cache_hit_rate": round(cache_hits / total, 3) if total else 0,
+            "failures": failures,
+            "total_cost_usd": round(total_cost, 4),
+            "total_credits": total_credits,
+            "total_duration_ms": total_duration,
+        },
+        "by_tool": dict(sorted(by_tool.items(), key=lambda x: x[1]["count"], reverse=True)),
+        "by_backend": dict(sorted(by_backend.items(), key=lambda x: x[1]["count"], reverse=True)),
+        "by_type": by_type,
+        "sessions": sessions_summary,
+    }
+
+    if detail:
+        result["calls"] = entries
+
+    emit(result)
 
 
 if __name__ == "__main__":

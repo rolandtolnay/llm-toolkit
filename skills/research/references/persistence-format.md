@@ -1,13 +1,13 @@
 # Research Persistence Format
 
-STANDARD and DEEP research runs are persisted to `~/.claude/research/` so paid API results are never lost. QUICK lookups are NOT persisted.
+STANDARD and DEEP research runs are persisted to `~/Documents/Research/` so paid API results are never lost. QUICK lookups are NOT persisted.
 
 **Opt-out:** Set `RESEARCH_NO_PERSIST=1` in an env file (see `<configuration>` in SKILL.md) or shell to disable persistence.
 
 ## File structure
 
 ```
-~/.claude/research/
+~/Documents/Research/
   INDEX.md                              # Scannable topic index
   2026-03-30-bank-account-verification.md
   2026-03-31-nextjs-auth-patterns.md
@@ -63,4 +63,4 @@ Each research run gets a heading with its sub-questions listed individually. Thi
 
 **Anchor format:** GitHub-style — lowercase, spaces→hyphens, strip special chars except hyphens. E.g., heading `## Compliance Requirements & Regulations` → anchor `#compliance-requirements--regulations`.
 
-Prepend new entries at the top of INDEX.md (most recent first). Create `~/.claude/research/` and `INDEX.md` if they don't exist.
+Prepend new entries at the top of INDEX.md (most recent first). Create `~/Documents/Research/` and `INDEX.md` if they don't exist.
