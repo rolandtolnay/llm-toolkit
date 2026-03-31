@@ -68,13 +68,3 @@ After individual analysis, present three summary tables.
 |---|------|--------|
 | 7 | `proto.file:line` | Proto synced from backend, not our ownership |
 ```
-
-## Saved Analysis Document
-
-When saving the full analysis to a file, include:
-
-1. **Header:** PR number, title, branch, date, comment sources
-2. **Framework reference:** Brief note that the triage framework was applied
-3. **All per-comment analyses** in the template format above
-4. **Summary tables** for ACT, DEFER, and IGNORE
-5. **Key insights** — project-specific learnings that emerged during triage (e.g., "proto files are synced from X", "component Y is always destroyed/recreated", "pagination is inconsistent across pages"). These help future triage sessions and skill creation.

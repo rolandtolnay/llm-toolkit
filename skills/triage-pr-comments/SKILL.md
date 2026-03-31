@@ -90,7 +90,7 @@ For comments with **MEDIUM or LOW** confidence, consolidate questions and presen
 
 Batch related questions into a single AskUserQuestion call when possible.
 
-## Step 6: Present final summary
+## Step 6: Present final summary and confirm
 
 After all questions are answered and investigations complete, present:
 
@@ -100,13 +100,9 @@ After all questions are answered and investigations complete, present:
 4. **Summary table: comments to ignore** — with brief rationale per comment
 5. **Assumptions** — list all assumptions that informed decisions
 
-## Step 7: Confirm and save
+**Always ask the user to confirm the ACT/IGNORE/DEFER decisions before proceeding.** Do not skip confirmation regardless of confidence level. Incorporate any adjustments before moving on.
 
-Offer to save the full analysis to `etc/personal/pr-{number}-comment-triage.md`. If saving, use the saved analysis format from `references/comment-analysis-format.md` and include a Key Insights section with project-specific learnings.
-
-Confirm the ACT/IGNORE/DEFER decisions with the user before proceeding. Incorporate any adjustments.
-
-## Step 8: Handle IGNORE and DEFER comments
+## Step 7: Handle IGNORE and DEFER comments
 
 ### IGNORE comments
 
@@ -140,7 +136,7 @@ Run replies in parallel. Then fetch thread IDs and resolve threads in parallel.
 
 Do NOT reply to or resolve comments that are being ACT'd on — those will be addressed by the implementation.
 
-## Step 9: Plan and implement
+## Step 8: Plan and implement
 
 Enter plan mode. Create an implementation plan for all ACT comments:
 - Group related changes by file
@@ -148,11 +144,7 @@ Enter plan mode. Create an implementation plan for all ACT comments:
 - Include specific code changes with file paths and line references
 - Note dependencies between changes
 
-**The plan MUST include these two final steps** (the user may clear context after approving the plan, so these instructions must be self-contained in the plan document):
-
-1. **Reload context step:** "Invoke the `/triage-pr-comments` skill or read `etc/personal/pr-{number}-comment-triage.md` to reload the comment triage context (PR number, repo, comment IDs, and what was addressed)."
-
-2. **Reply and resolve step:** "For each ACT comment that was implemented, reply on the PR with a brief description of what was done (e.g., 'Fixed — added pagination loop matching the pattern in DetailPage.vue') and resolve the thread. Use `references/github-api-reference.md` for the API commands. Include the comment IDs and their corresponding changes in a table within the plan so the executor has everything needed without the original conversation context."
+**The plan MUST include a final reply-and-resolve step:** "For each ACT comment that was implemented, reply on the PR with a brief description of what was done (e.g., 'Fixed — added pagination loop matching the pattern in DetailPage.vue') and resolve the thread. Use `references/github-api-reference.md` for the API commands."
 
 The plan must embed a **comment resolution table** listing every ACT comment with:
 
@@ -170,16 +162,15 @@ After the user approves the plan, execute the implementation.
 Supporting files in `references/`:
 - `triage-framework.md` — The 4-question triage model, decision matrix, and when-to-investigate guide. Read in Step 3.
 - `comment-analysis-format.md` — Output template for per-comment analysis and summary tables. Read in Step 3.
-- `github-api-reference.md` — gh CLI commands for fetching, replying to, and resolving PR comments. Read in Steps 1, 8, and 9.
+- `github-api-reference.md` — gh CLI commands for fetching, replying to, and resolving PR comments. Read in Steps 1, 7, and 8.
 - `investigation-guide.md` — How to verify INVESTIGATE comments via agent-browser or manual user verification. Read in Step 4.
 </reference_index>
 
 <success_criteria>
 - [ ] Comments requiring investigation are either verified via agent-browser or escalated to user — never silently assumed
-- [ ] All MEDIUM/LOW confidence decisions presented to user for confirmation before acting
+- [ ] All triage decisions confirmed by user before proceeding — never skip confirmation regardless of confidence
 - [ ] Ignored comments replied to on GitHub with reasoning and threads resolved
 - [ ] Deferred comments checked against existing Linear tickets before creating new ones — duplicates reference the existing ticket instead
 - [ ] Implementation plan created in plan mode before any code changes
 - [ ] Plan includes comment resolution table with IDs, changes, and instructions to reply/resolve after implementation
-- [ ] Plan includes instruction to reload triage context (skill or saved analysis) in case of context clear
 </success_criteria>
