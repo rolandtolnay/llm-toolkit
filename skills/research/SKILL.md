@@ -145,6 +145,14 @@ No flags. Returns remaining credits and plan info.
 
 **Output fields:** `remaining`, `plan`
 
+---
+
+### `config` — Show resolved configuration
+
+No flags. Returns resolved API key status, persistence setting, and which env files were loaded.
+
+**Output fields:** `persistence` (bool), `keys` (object with bool per service), `env_files` (list of paths with status)
+
 </cli_reference>
 
 <cli_cheatsheet>
@@ -160,6 +168,7 @@ uv run <script> docs <lib> "<query>" [--max-tokens N] [--no-cache]
 uv run <script> map <url>           [--search KW] [--limit N] [--no-cache]
 uv run <script> scrape <url>        [--no-cache]
 uv run <script> credits
+uv run <script> config
 
 --recency values: day | week | month | year (no other formats accepted)
 Cost: search ~$0.005 | ask/reason ~$0.02 | docs free | map/scrape 1 FC credit each
@@ -167,6 +176,34 @@ Cost: search ~$0.005 | ask/reason ~$0.02 | docs free | map/scrape 1 FC credit ea
 Also available: WebSearch (free, broad), WebFetch (free, page summary)
 ```
 </cli_cheatsheet>
+
+<configuration>
+## Env file configuration
+
+The CLI loads skill-specific env files before reading API keys. This lets users set dedicated keys for the research skill without polluting their shell environment.
+
+**File locations** (loaded in order — later files override earlier ones, and all override shell env):
+
+| Priority | Path | Scope |
+|----------|------|-------|
+| 1 (lowest) | Shell environment | Global |
+| 2 | `~/.claude/research/.env` | Skill-global |
+| 3 (highest) | `.claude/research.env` (in project root) | Project-specific |
+
+**Supported variables:**
+
+```bash
+# API Keys
+PERPLEXITY_API_KEY=pplx-...
+CONTEXT7_API_KEY=...
+FIRECRAWL_API_KEY=fc-...
+
+# Settings
+RESEARCH_NO_PERSIST=0    # Set to 1 to disable research output persistence
+```
+
+Run `research config` to see resolved configuration (which keys are set, persistence status, which env files loaded).
+</configuration>
 
 <complexity_assessment>
 Before executing, assess query complexity:
@@ -272,7 +309,88 @@ After all subagents return:
    - Tool/library discovery → structured list with links
 
 4. **Cite sources** throughout the response. Every non-obvious claim should have a source.
+
+## STEP 4: PERSIST
+
+After synthesis, persist the research to disk. **First run `research config`** — if `persistence` is `false`, skip this step. See `<persistence>` for full format details:
+
+1. **Write the research file** to `~/.claude/research/YYYY-MM-DD-<slug>.md` containing:
+   - Header with topic, date, and original query
+   - One section per sub-question with its findings as-is from the sub-agent return
+   - Final synthesis section with the orchestrator's combined answer
+2. **Prepend an entry to `~/.claude/research/INDEX.md`** with one line per sub-question linking to the file with anchor
+
+If the write fails, still return the research results to the user — persistence is best-effort, never blocking.
 </research_mode>
+
+<persistence>
+## Output persistence
+
+STANDARD and DEEP research runs are persisted to `~/.claude/research/` so paid API results are never lost. QUICK lookups are NOT persisted.
+
+**Opt-out:** Set `RESEARCH_NO_PERSIST=1` in an env file (see `<configuration>`) or shell to disable persistence.
+
+### File structure
+
+```
+~/.claude/research/
+  INDEX.md                              # Scannable topic index
+  2026-03-30-bank-account-verification.md
+  2026-03-31-nextjs-auth-patterns.md
+```
+
+**File naming:** `YYYY-MM-DD-<slug>.md` — slug is a short kebab-case summary of the query (3-5 words max).
+
+### Research file format
+
+```markdown
+# <Research Topic>
+**Date:** YYYY-MM-DD
+**Query:** <original user question>
+
+---
+
+## <Sub-question 1 heading>
+**Source strategy:** <commands used>
+**Confidence:** <verified | likely | unverified>
+
+<sub-agent findings with citations — written as-is from the sub-agent return>
+
+---
+
+## <Sub-question 2 heading>
+...
+
+---
+
+## Synthesis
+
+<orchestrator's final synthesized answer with citations>
+```
+
+Sub-question headings should be descriptive topic labels (e.g., "Compliance Requirements & Regulations"), not generic names like "Sub-agent 1". These headings become anchor targets for the index.
+
+### INDEX.md format
+
+Each research run gets a heading with its sub-questions listed individually. This makes the index a topic discovery tool — readers can scan all angles covered across all past research.
+
+```markdown
+# Research Index
+
+### Bank Account Verification Best Practices — 2026-03-30
+- [Compliance requirements & regulations](2026-03-30-bank-account-verification.md#compliance-requirements--regulations)
+- [Backend architecture & implementation patterns](2026-03-30-bank-account-verification.md#backend-architecture--implementation-patterns)
+- [Competitor approaches to verification](2026-03-30-bank-account-verification.md#competitor-approaches-to-verification)
+
+### Next.js Auth Patterns — 2026-03-28
+- [Official Next.js auth support](2026-03-28-nextjs-auth-patterns.md#official-nextjs-auth-support)
+- [Community patterns & libraries](2026-03-28-nextjs-auth-patterns.md#community-patterns--libraries)
+```
+
+**Anchor format:** GitHub-style — lowercase, spaces→hyphens, strip special chars except hyphens. E.g., heading `## Compliance Requirements & Regulations` → anchor `#compliance-requirements--regulations`.
+
+Prepend new entries at the top of INDEX.md (most recent first). Create `~/.claude/research/` and `INDEX.md` if they don't exist.
+</persistence>
 
 <success_criteria>
 - [ ] Quick lookups resolve without subagents when answer is clear
@@ -282,4 +400,6 @@ After all subagents return:
 - [ ] Contradictions between sources are flagged, not silently resolved
 - [ ] Findings cite their sources
 - [ ] Graceful degradation when API keys are missing
+- [ ] Standard/deep runs are persisted to `~/.claude/research/` with INDEX.md updated
+- [ ] Quick lookups are NOT persisted
 </success_criteria>

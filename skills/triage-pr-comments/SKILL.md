@@ -38,8 +38,9 @@ Read `references/github-api-reference.md` for fetch commands.
 Fetch both review comments (inline on code) and issue-level comments (top-level). Use `--paginate` to get all pages. Filter out:
 - Reply comments (`in_reply_to_id != null`) — keep only thread starters
 - Bot summary/walkthrough comments (CodeRabbit poems, checkboxes, automated summaries) — keep only actionable review findings
+- **Resolved threads** — query thread resolution status via the GraphQL `reviewThreads` query (see `references/github-api-reference.md`). Match each review comment's `id` to the GraphQL `databaseId`. Exclude comments whose threads are already resolved — these have been addressed and don't need triage.
 
-Present a numbered inventory of all comments to the user, grouped by source:
+Present a numbered inventory of **unresolved** comments to the user, grouped by source. Note the count of excluded resolved threads above the table.
 
 ```
 | # | Source | File | Summary |

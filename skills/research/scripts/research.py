@@ -41,6 +41,34 @@ import httpx
 import typer
 
 # ---------------------------------------------------------------------------
+# Env file loading
+# ---------------------------------------------------------------------------
+
+_ENV_FILE_PATHS = [
+    Path.home() / ".claude" / "research" / ".env",  # global skill config
+    Path.cwd() / ".claude" / "research.env",         # project-level override
+]
+
+
+def _load_env_files() -> list[Path]:
+    """Load skill-specific env files into os.environ. Later files take priority."""
+    loaded: list[Path] = []
+    for p in _ENV_FILE_PATHS:
+        if p.is_file():
+            for line in p.read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                key, _, value = line.partition("=")
+                if key and value is not None:
+                    os.environ[key.strip()] = value.strip()
+            loaded.append(p)
+    return loaded
+
+
+_LOADED_ENV_FILES = _load_env_files()
+
+# ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
@@ -911,6 +939,27 @@ def credits() -> None:
     except ResearchError as e:
         emit(output_error(cmd, e))
         raise typer.Exit(code=1)
+
+
+@app.command()
+def config() -> None:
+    """Show resolved configuration (env files, API keys, settings)."""
+    no_persist = os.environ.get("RESEARCH_NO_PERSIST", "0")
+    env_files = []
+    for p in _ENV_FILE_PATHS:
+        status = "loaded" if p in _LOADED_ENV_FILES else "not found"
+        env_files.append(f"{p} ({status})")
+    emit({
+        "success": True,
+        "command": "config",
+        "persistence": no_persist not in ("1", "true", "yes"),
+        "keys": {
+            "perplexity": bool(PERPLEXITY_API_KEY),
+            "context7": bool(CONTEXT7_API_KEY),
+            "firecrawl": bool(FIRECRAWL_API_KEY),
+        },
+        "env_files": env_files,
+    })
 
 
 if __name__ == "__main__":
