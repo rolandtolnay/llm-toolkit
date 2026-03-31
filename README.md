@@ -183,6 +183,40 @@ A conversational interface to Linear, built as a Claude Code skill. Describe wha
 
 Activates when you mention creating tickets, updating issues, or checking assignments. Configure with a `.linear.json` in your project root and a `LINEAR_API_KEY` in `.claude/settings.local.json`.
 
+### Research
+
+Web research that scales from quick lookups to deep multi-source investigations. Searches the web, synthesizes answers, scrapes pages, and queries library docs -- then persists results so paid API calls are never wasted.
+
+- **Cost-conscious escalation** -- starts with free tools (WebSearch, WebFetch, Context7 docs), escalates to Perplexity and Firecrawl only when needed
+- **Parallel subagents** -- decomposes complex questions into sub-questions and investigates them simultaneously with source diversity requirements
+- **Source verification** -- cross-references findings, flags contradictions, and signals confidence levels (verified, likely, unverified)
+- **Persistence** -- standard and deep research runs are saved to `~/.claude/research/` with a scannable index
+
+Activates on "search for", "look up", "find out", "what's the latest", or "research".
+
+<details>
+<summary>API key setup</summary>
+
+The research skill uses three external services. Only Perplexity is required -- the others unlock additional capabilities.
+
+| Key | Service | Powers | Required | Get one at |
+|-----|---------|--------|----------|------------|
+| `PERPLEXITY_API_KEY` | [Perplexity](https://docs.perplexity.ai/) | `ask` (synthesized answers), `search` (URL discovery), `reason` (complex analysis) | Yes | [docs.perplexity.ai](https://docs.perplexity.ai/) |
+| `CONTEXT7_API_KEY` | [Context7](https://context7.com/) | `docs` (version-aware library documentation) | No | [context7.com/dashboard](https://context7.com/dashboard) |
+| `FIRECRAWL_API_KEY` | [Firecrawl](https://firecrawl.dev/) | `map` (site URL discovery), `scrape` (page content extraction) | No | [firecrawl.dev](https://firecrawl.dev/) |
+
+Set keys in `~/.claude/research/.env` (global) or `.claude/research.env` (project-specific):
+
+```bash
+PERPLEXITY_API_KEY=pplx-...
+CONTEXT7_API_KEY=...
+FIRECRAWL_API_KEY=fc-...
+```
+
+Run `research config` to verify which keys are set and which env files loaded.
+
+</details>
+
 ### Skills
 
 Skills activate automatically based on what you're doing — no slash command needed. Claude Code picks the right one for the task.
