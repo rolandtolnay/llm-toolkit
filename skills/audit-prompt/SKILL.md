@@ -30,7 +30,7 @@ Audit changed prompt-related files against @references/prompt-quality-guide.md. 
 
 3. **Determine the target model class.** Before evaluating, identify what model will execute the prompt being audited. Check (in order): explicit model context from the user's `$ARGUMENTS`, model references in the file itself (model names, API endpoints, Ollama configs), or the surrounding codebase (e.g., a Python script calling a specific model). Classify as:
    - **Frontier** (Claude Opus/Sonnet, GPT-4o, Gemini Pro): Apply the guide's default principles — minimize, remove waste, start sparse.
-   - **Small/local** (sub-10B: Qwen 4B, Phi-3 mini, Gemma 2B, Llama 3.2 3B, quantized variants): Apply the **Small and Local Models** section of the guide — do NOT flag role-setting as waste, do NOT recommend reducing examples below 2-3, weight examples as the primary instruction mechanism over abstract directives, and note when sampling parameters should be reviewed alongside the prompt.
+   - **Small/local** (sub-10B: Qwen 4B, Phi-3 mini, Gemma 2B, Llama 3.2 3B, quantized variants): Read `references/small-model-guide.md` and apply its principles and audit behavior overrides instead of the main guide's frontier-oriented defaults.
    - **Unknown**: Default to frontier principles but flag the assumption — recommend the user verify with their target model.
 
    Also determine the **task type**. If the prompt performs text transformation or filtering (cleaning transcripts, reformatting documents, removing patterns while preserving content), apply the **Text Transformation and Filtering Tasks** section of the guide. Key checks:
