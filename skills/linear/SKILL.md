@@ -34,8 +34,8 @@ Use `-V` only when the user:
 **Commands:**
 | Command | Usage | Purpose |
 |---------|-------|---------|
-| `create` | `create "<title>" [-d desc] [-p priority] [-e estimate] [--parent ID] [--project name] [--no-project] [--label name] [--assignee <name-or-email>]` | Create issue |
-| `update` | `update <ID> [-t title] [-d desc] [-p priority] [-e estimate] [--parent ID] [--label name] [--no-labels] [--assignee <name-or-email>] [--no-assignee] [--project name] [--no-project]` | Update fields |
+| `create` | `create "<title>" [-d desc] [-p priority] [-e estimate] [--parent ID] [--project name] [--no-project] [--label name] [--assignee <name-or-email>] [--cycle <number-or-"active">]` | Create issue |
+| `update` | `update <ID> [-t title] [-d desc] [-p priority] [-e estimate] [--parent ID] [--label name] [--no-labels] [--assignee <name-or-email>] [--no-assignee] [--project name] [--no-project] [--cycle <number-or-"active">] [--no-cycle]` | Update fields |
 | `done` | `done <ID>` | Mark completed |
 | `state` | `state <ID> "<name>"` | Change state |
 | `break` | `break <ID> --issues '[{...}]' [--project name] [--no-project] [--label name] [--no-labels]` | Create sub-issues |
@@ -47,7 +47,7 @@ Use `-V` only when the user:
 | `attach-commit` | `attach-commit <ID> [commit-sha]` | Link git commit to issue (defaults to HEAD) |
 | `document` | `document <ID> "<title>" [-c content] [-f file] [--project name]` | Create native markdown document viewable inline |
 | `get` | `get <ID> [-c/--comments]` | Fetch details (add -c for comments) |
-| `list` | `list [--mine] [--assignee X] [--creator X] [--priority X] [--project X] [--state X] [--estimate X] [--label name] [--limit N]` | List/filter issues |
+| `list` | `list [--mine] [--assignee X] [--creator X] [--priority X] [--project X] [--state X] [--estimate X] [--label name] [--cycle <number-or-"active">] [--limit N]` | List/filter issues |
 | `states` | `states` | List workflow states |
 | `projects` | `projects` | List available projects |
 | `create-project` | `create-project "<name>" [-d desc] [--color hex] [--icon id] [--state state] [--start-date date] [--target-date date]` | Create project |
@@ -56,11 +56,18 @@ Use `-V` only when the user:
 | `milestones` | `milestones "<project-name>" [--team ID]` | List milestones for a project |
 | `create-milestone` | `create-milestone "<name>" --project "<project-name>" [-d desc] [--target-date YYYY-MM-DD]` | Create project milestone |
 | `delete-milestone` | `delete-milestone "<name>" --project "<project-name>"` | Delete project milestone by name |
+| `cycles` | `cycles [--active] [--past] [--future] [--all]` | List cycles (default: active + next) |
+| `cycle` | `cycle [number]` | Cycle details + issues (default: active) |
+| `create-cycle` | `create-cycle --starts YYYY-MM-DD --ends YYYY-MM-DD [--name "..."] [-d "..."]` | Create cycle |
+| `update-cycle` | `update-cycle <number> [--name "..."] [--ends YYYY-MM-DD] [-d "..."]` | Update cycle (start date is immutable) |
 | `members` | `members` | List active workspace members |
 | `labels` | `labels [--team ID]` | List labels |
 | `create-label` | `create-label "<name>" [--color hex] [-d desc]` | Create label |
 | `delete-label` | `delete-label "<name>"` | Delete label by name |
 | `update-label` | `update-label "<name>" [--name new] [--color hex] [-d desc]` | Update label (preserves issue associations) |
+| `views` | `views [--team ID] [-V]` | List custom views (-V adds filterData, icon, color, timestamps) |
+| `create-view` | `create-view "<name>" [--filter-json '{...}'] [--shared] [--team ID] [--color hex] [--icon name] [-d desc]` | Create custom view |
+| `delete-view` | `delete-view "<name-or-id>"` | Delete custom view by name or UUID |
 
 **Priority values:** 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 
@@ -73,6 +80,7 @@ Use `-V` only when the user:
 - `--state` / `-s`: By state name or type (backlog/todo/started/done/canceled)
 - `--estimate` / `-e`: By estimate (number or 'none' for unestimated)
 - `--label`: By label name (repeatable for AND logic)
+- `--cycle`: By cycle number or "active" for current cycle
 - `--limit` / `-l`: Max results (default 25)
 
 Filters combine with AND logic.
@@ -139,12 +147,21 @@ Filters combine with AND logic.
 | `"milestones for <project>"`, `"list milestones"`, `"show milestones"` | List milestones | Execute `milestones "<project>"` |
 | `"create milestone"`, `"new milestone"`, `"add milestone"` | Create milestone | Execute `create-milestone` with project |
 | `"delete milestone"`, `"remove milestone"` | Delete milestone | Execute `delete-milestone` with project |
+| `cycles`, `"list cycles"`, `"show sprints"`, `"current sprint"` | List cycles | Execute `cycles` (default: active + next) |
+| `cycle`, `"cycle details"`, `"what's in the current cycle"`, `"sprint N"` | Cycle details | Execute `cycle` (default: active, or by number) |
+| `"create cycle"`, `"new sprint"`, `"start a cycle"` | Create cycle | Execute `create-cycle` with dates |
+| `"update cycle"`, `"extend sprint"`, `"rename cycle"` | Update cycle | Execute `update-cycle` with number |
+| `"add <ID> to cycle"`, `"move <ID> to sprint"` | Assign to cycle | Execute `update <ID> --cycle <ref>` |
+| `"remove <ID> from cycle"`, `"unassign from sprint"` | Remove from cycle | Execute `update <ID> --no-cycle` |
 | `"move <ID> to project"`, `"set project on <ID>"` | Assign project | Execute `update <ID> --project <name>` |
 | `"remove <ID> from project"`, `"unset project on <ID>"` | Remove project | Execute `update <ID> --no-project` |
 | `labels`, `"list labels"`, `"show labels"` | List labels | Execute `labels` directly |
 | `"create a label"`, `"new label"` | Create label | Execute `create-label` directly |
 | `"delete label"`, `"remove label"` | Delete label | Execute `delete-label` directly |
 | `"update label"`, `"rename label"`, `"change label color"` | Update label | Execute `update-label` directly |
+| `views`, `"list views"`, `"show views"`, `"my views"`, `"custom views"` | List views | Execute `views` directly |
+| `"create a view"`, `"new view"`, `"set up views"`, `"help me organize my Linear"`, `"I want to see [X] issues"`, `"surface [X]"`, `"help me stay on top of"`, `"I need visibility into"` | Create view | Read `references/views.md`, then follow the view creation process |
+| `"delete view"`, `"remove view"` | Delete view | Execute `delete-view` directly |
 | `list [filters]`, `my issues`, `show issues` | List/filter issues | Execute `list` with filters |
 | `assign <ID> to <name>`, `reassign <ID> to <name>` | Assign/reassign | Execute `update <ID> --assignee <name>` |
 | `unassign <ID>`, `remove assignee from <ID>` | Remove assignee | Execute `update <ID> --no-assignee` |
@@ -206,7 +223,7 @@ When adding a comment or updating a ticket's description that changes the scope 
 </step>
 
 <step name="direct_commands">
-**For direct commands (done, state, get, states, projects, create-project, delete-project, update-project, milestones, create-milestone, delete-milestone, labels, create-label, delete-label, update-label, update, comment, delete-comment, attach-commit, members):**
+**For direct commands (done, state, get, states, projects, create-project, delete-project, update-project, milestones, create-milestone, delete-milestone, cycles, cycle, create-cycle, update-cycle, labels, create-label, delete-label, update-label, views, create-view, delete-view, update, comment, delete-comment, attach-commit, members):**
 
 Execute CLI and format output.
 
@@ -339,7 +356,8 @@ Parse JSON response and present result:
    ```bash
    uv run ~/.claude/skills/linear/scripts/linear.py create "[title]" \
      -d "[structured description]" -p [priority] -e [estimate] \
-     [--parent ID] [--project "Name"] [--label "name"] [--no-project]
+     [--parent ID] [--project "Name"] [--label "name"] [--no-project] \
+     [--cycle <number-or-"active">]
    ```
 
 7. **Format result:**
@@ -383,6 +401,8 @@ User provides the sub-issues in conversation. Do NOT propose or generate sub-iss
 - **STATE_NOT_FOUND:** List available states from `states` command
 - **PROJECT_NOT_FOUND:** List available projects from `projects` command
 - **LABEL_NOT_FOUND:** List available labels from `labels` command
+- **CYCLE_NOT_FOUND:** Suggest using `cycles` to see available cycles
+- **VIEW_NOT_FOUND:** List available views from `views` command
 - **FILE_NOT_FOUND:** Suggest checking the file path
 - **UPLOAD_FAILED:** Suggest retrying or checking connectivity
 

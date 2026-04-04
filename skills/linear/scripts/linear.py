@@ -36,9 +36,16 @@ Commands:
     milestones      List milestones for a project
     create-milestone  Create a project milestone
     delete-milestone  Delete a project milestone
+    cycles          List cycles
+    cycle           Cycle details with issues
+    create-cycle    Create a new cycle
+    update-cycle    Update an existing cycle
     labels          List labels
     create-label    Create a new label
     delete-label    Delete a label by name
+    views           List custom views
+    create-view     Create a custom view
+    delete-view     Delete a custom view
 """
 
 from __future__ import annotations
@@ -80,6 +87,8 @@ class ErrorCode(str, Enum):
     FILE_NOT_FOUND = "FILE_NOT_FOUND"
     UPLOAD_FAILED = "UPLOAD_FAILED"
     MILESTONE_NOT_FOUND = "MILESTONE_NOT_FOUND"
+    CYCLE_NOT_FOUND = "CYCLE_NOT_FOUND"
+    VIEW_NOT_FOUND = "VIEW_NOT_FOUND"
 
 
 class LinearError(Exception):
@@ -132,6 +141,11 @@ def format_error(command: str, error: LinearError) -> dict[str, Any]:
 def output_json(data: dict[str, Any]) -> str:
     """Convert data to JSON string (always pretty-printed)."""
     return json.dumps(data, indent=2, ensure_ascii=False)
+
+
+def has_next_page(connection: dict[str, Any]) -> bool:
+    """Check if a Relay connection has more pages."""
+    return connection.get("pageInfo", {}).get("hasNextPage", False)
 
 
 # =============================================================================
@@ -324,6 +338,7 @@ query Issue($id: String!) {
       title
     }
     children {
+      pageInfo { hasNextPage }
       nodes {
         identifier
         title
@@ -342,6 +357,11 @@ query Issue($id: String!) {
       id
       name
     }
+    cycle {
+      id
+      number
+      name
+    }
     labels {
       nodes {
         id
@@ -354,6 +374,7 @@ query Issue($id: String!) {
       name
     }
     relations {
+      pageInfo { hasNextPage }
       nodes {
         id
         type
@@ -364,6 +385,7 @@ query Issue($id: String!) {
       }
     }
     inverseRelations {
+      pageInfo { hasNextPage }
       nodes {
         id
         type
@@ -374,12 +396,14 @@ query Issue($id: String!) {
       }
     }
     attachments {
+      pageInfo { hasNextPage }
       nodes {
         url
         title
       }
     }
     documents {
+      pageInfo { hasNextPage }
       nodes {
         id
         title
@@ -388,6 +412,7 @@ query Issue($id: String!) {
       }
     }
     comments {
+      pageInfo { hasNextPage }
       nodes {
         id
       }
@@ -421,6 +446,7 @@ query Issue($id: String!) {
       title
     }
     children {
+      pageInfo { hasNextPage }
       nodes {
         identifier
         title
@@ -439,6 +465,11 @@ query Issue($id: String!) {
       id
       name
     }
+    cycle {
+      id
+      number
+      name
+    }
     labels {
       nodes {
         id
@@ -451,6 +482,7 @@ query Issue($id: String!) {
       name
     }
     relations {
+      pageInfo { hasNextPage }
       nodes {
         id
         type
@@ -461,6 +493,7 @@ query Issue($id: String!) {
       }
     }
     inverseRelations {
+      pageInfo { hasNextPage }
       nodes {
         id
         type
@@ -471,12 +504,14 @@ query Issue($id: String!) {
       }
     }
     attachments {
+      pageInfo { hasNextPage }
       nodes {
         url
         title
       }
     }
     documents {
+      pageInfo { hasNextPage }
       nodes {
         id
         title
@@ -485,6 +520,7 @@ query Issue($id: String!) {
       }
     }
     comments(first: 50) {
+      pageInfo { hasNextPage }
       nodes {
         id
         body
@@ -501,6 +537,7 @@ query Issue($id: String!) {
 QUERY_WORKFLOW_STATES = """
 query {
   workflowStates {
+    pageInfo { hasNextPage }
     nodes {
       id
       name
@@ -523,6 +560,7 @@ query TeamWorkflowStates($teamId: String!) {
     name
     key
     states {
+      pageInfo { hasNextPage }
       nodes {
         id
         name
@@ -537,6 +575,7 @@ query TeamWorkflowStates($teamId: String!) {
 QUERY_PROJECTS = """
 query {
   projects {
+    pageInfo { hasNextPage }
     nodes {
       id
       name
@@ -560,6 +599,7 @@ query TeamProjects($teamId: String!) {
     name
     key
     projects {
+      pageInfo { hasNextPage }
       nodes {
         id
         name
@@ -594,6 +634,7 @@ query Issues($filter: IssueFilter, $first: Int) {
       creator { id name email }
       project { id name }
       projectMilestone { id name }
+      cycle { id number name }
       labels { nodes { id name } }
       team { id key name }
     }
@@ -604,6 +645,7 @@ query Issues($filter: IssueFilter, $first: Int) {
 QUERY_USERS = """
 query {
   users {
+    pageInfo { hasNextPage }
     nodes {
       id
       name
@@ -659,6 +701,11 @@ mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
         id
         name
       }
+      cycle {
+        id
+        number
+        name
+      }
     }
   }
 }
@@ -682,6 +729,7 @@ query IssueRelations($id: String!) {
     id
     identifier
     relations {
+      pageInfo { hasNextPage }
       nodes {
         id
         type
@@ -692,6 +740,7 @@ query IssueRelations($id: String!) {
       }
     }
     inverseRelations {
+      pageInfo { hasNextPage }
       nodes {
         id
         type
@@ -845,6 +894,7 @@ mutation ProjectUpdate($id: String!, $input: ProjectUpdateInput!) {
 QUERY_LABELS = """
 query {
   issueLabels {
+    pageInfo { hasNextPage }
     nodes {
       id
       name
@@ -865,6 +915,7 @@ query TeamLabels($teamId: String!) {
     name
     key
     labels {
+      pageInfo { hasNextPage }
       nodes {
         id
         name
@@ -920,6 +971,7 @@ QUERY_PROJECT_MILESTONES = """
 query ProjectMilestones($projectId: String!) {
   project(id: $projectId) {
     projectMilestones {
+      pageInfo { hasNextPage }
       nodes {
         id
         name
@@ -957,6 +1009,182 @@ mutation ProjectMilestoneDelete($id: String!) {
 }
 """
 
+QUERY_CYCLES = """
+query Cycles($teamId: String!, $filter: CycleFilter, $first: Int) {
+  team(id: $teamId) {
+    cycles(filter: $filter, first: $first, orderBy: startsAt) {
+      nodes {
+        id
+        number
+        name
+        startsAt
+        endsAt
+        completedAt
+        progress
+        isActive
+        isNext
+        isPast
+        isFuture
+        issues {
+          pageInfo { hasNextPage }
+          nodes {
+            id
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+QUERY_CYCLE = """
+query Cycle($id: String!) {
+  cycle(id: $id) {
+    id
+    number
+    name
+    description
+    startsAt
+    endsAt
+    completedAt
+    progress
+    isActive
+    isNext
+    isPast
+    isFuture
+    team {
+      id
+      key
+      name
+    }
+    issues {
+      pageInfo { hasNextPage }
+      nodes {
+        id
+        identifier
+        title
+        priority
+        estimate
+        state {
+          id
+          name
+          type
+        }
+        assignee {
+          id
+          name
+        }
+        labels {
+          nodes {
+            name
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+MUTATION_CREATE_CYCLE = """
+mutation CycleCreate($input: CycleCreateInput!) {
+  cycleCreate(input: $input) {
+    success
+    cycle {
+      id
+      number
+      name
+      startsAt
+      endsAt
+      team {
+        id
+        key
+        name
+      }
+    }
+  }
+}
+"""
+
+MUTATION_UPDATE_CYCLE = """
+mutation CycleUpdate($id: String!, $input: CycleUpdateInput!) {
+  cycleUpdate(id: $id, input: $input) {
+    success
+    cycle {
+      id
+      number
+      name
+      description
+      startsAt
+      endsAt
+      completedAt
+    }
+  }
+}
+"""
+
+QUERY_CUSTOM_VIEWS = """
+query {
+  customViews {
+    nodes {
+      id
+      name
+      description
+      icon
+      color
+      shared
+      filterData
+      owner {
+        id
+        name
+        email
+      }
+      team {
+        id
+        key
+        name
+      }
+      createdAt
+      updatedAt
+    }
+  }
+}
+"""
+
+MUTATION_CREATE_CUSTOM_VIEW = """
+mutation CustomViewCreate($input: CustomViewCreateInput!) {
+  customViewCreate(input: $input) {
+    success
+    customView {
+      id
+      name
+      description
+      icon
+      color
+      shared
+      filterData
+      owner {
+        id
+        name
+        email
+      }
+      team {
+        id
+        key
+        name
+      }
+    }
+  }
+}
+"""
+
+MUTATION_DELETE_CUSTOM_VIEW = """
+mutation CustomViewDelete($id: String!) {
+  customViewDelete(id: $id) {
+    success
+  }
+}
+"""
+
 
 # =============================================================================
 # Linear API Client
@@ -969,6 +1197,16 @@ class LinearClient:
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or get_api_key()
         self.client = httpx.Client(timeout=30.0)
+        self._truncated: set[str] = set()
+
+    def _mark_truncation(self, name: str, connection: dict[str, Any]) -> None:
+        """Track whether a connection's results were truncated."""
+        if has_next_page(connection):
+            self._truncated.add(name)
+
+    def is_truncated(self, name: str) -> bool:
+        """Check if a named connection's last fetch was truncated."""
+        return name in self._truncated
 
     def _request(self, query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
         """Make a GraphQL request to Linear."""
@@ -1060,26 +1298,34 @@ class LinearClient:
         if team_id:
             data = self._request(QUERY_TEAM_STATES, {"teamId": team_id})
             team = data.get("team", {})
-            states = team.get("states", {}).get("nodes", [])
+            conn = team.get("states", {})
+            states = conn.get("nodes", [])
             # Add team info to each state
             team_info = {"id": team.get("id"), "key": team.get("key"), "name": team.get("name")}
-            return [{"team": team_info, **state} for state in states]
+            result = [{"team": team_info, **state} for state in states]
         else:
             data = self._request(QUERY_WORKFLOW_STATES)
-            return data.get("workflowStates", {}).get("nodes", [])
+            conn = data.get("workflowStates", {})
+            result = conn.get("nodes", [])
+        self._mark_truncation("states", conn)
+        return result
 
     def get_projects(self, team_id: str | None = None) -> list[dict[str, Any]]:
         """Get projects, optionally filtered by team."""
         if team_id:
             data = self._request(QUERY_TEAM_PROJECTS, {"teamId": team_id})
             team = data.get("team", {})
-            projects = team.get("projects", {}).get("nodes", [])
+            conn = team.get("projects", {})
+            projects = conn.get("nodes", [])
             # Add team info to each project
             team_info = {"id": team.get("id"), "key": team.get("key"), "name": team.get("name")}
+            self._mark_truncation("projects", conn)
             return [{"team": team_info, **project} for project in projects]
         else:
             data = self._request(QUERY_PROJECTS)
-            projects = data.get("projects", {}).get("nodes", [])
+            conn = data.get("projects", {})
+            projects = conn.get("nodes", [])
+            self._mark_truncation("projects", conn)
             # Normalize: flatten first team from teams.nodes into "team" key
             # to match the shape returned by the team-filtered path
             result = []
@@ -1105,16 +1351,21 @@ class LinearClient:
                 return project
 
         available = ", ".join(sorted(set(p["name"] for p in projects)))
+        suggestions = [f"Available projects: {available}"]
+        if self.is_truncated("projects"):
+            suggestions.append("Note: project list was truncated — more projects may exist")
         raise LinearError(
             code=ErrorCode.PROJECT_NOT_FOUND,
             message=f"Project '{project_name}' not found",
-            suggestions=[f"Available projects: {available}"],
+            suggestions=suggestions,
         )
 
     def get_milestones(self, project_id: str) -> list[dict[str, Any]]:
         """Get milestones for a project."""
         data = self._request(QUERY_PROJECT_MILESTONES, {"projectId": project_id})
-        return data.get("project", {}).get("projectMilestones", {}).get("nodes", [])
+        conn = data.get("project", {}).get("projectMilestones", {})
+        self._mark_truncation("milestones", conn)
+        return conn.get("nodes", [])
 
     def find_milestone_by_name(self, milestone_name: str, project_id: str) -> dict[str, Any]:
         """Find a milestone by name within a project."""
@@ -1132,10 +1383,13 @@ class LinearClient:
                 return milestone
 
         available = ", ".join(sorted(set(m["name"] for m in milestones)))
+        suggestions = [f"Available milestones: {available}"] if available else ["No milestones exist for this project"]
+        if self.is_truncated("milestones"):
+            suggestions.append("Note: milestone list was truncated — more milestones may exist")
         raise LinearError(
             code=ErrorCode.MILESTONE_NOT_FOUND,
             message=f"Milestone '{milestone_name}' not found",
-            suggestions=[f"Available milestones: {available}"] if available else ["No milestones exist for this project"],
+            suggestions=suggestions,
         )
 
     def create_milestone(
@@ -1180,17 +1434,253 @@ class LinearClient:
 
         return True
 
+    # --- Cycles ---
+
+    def get_cycles(
+        self,
+        team_id: str,
+        active: bool = False,
+        past: bool = False,
+        future: bool = False,
+        all_cycles: bool = False,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """List cycles for a team with optional filtering."""
+        cycle_filter: dict[str, Any] = {}
+
+        if all_cycles:
+            pass  # No filter
+        elif active:
+            cycle_filter = {"isActive": {"eq": True}}
+        elif past:
+            cycle_filter = {"isPast": {"eq": True}}
+        elif future:
+            cycle_filter = {"isFuture": {"eq": True}}
+        else:
+            # Default: active + next
+            cycle_filter = {
+                "or": [
+                    {"isActive": {"eq": True}},
+                    {"isNext": {"eq": True}},
+                ],
+            }
+
+        variables: dict[str, Any] = {"teamId": team_id, "first": limit}
+        if cycle_filter:
+            variables["filter"] = cycle_filter
+
+        data = self._request(QUERY_CYCLES, variables)
+        conn = data.get("team", {}).get("cycles", {})
+        self._mark_truncation("cycles", conn)
+        return conn.get("nodes", [])
+
+    def get_cycle(self, cycle_id: str) -> dict[str, Any]:
+        """Fetch full cycle details including issues."""
+        data = self._request(QUERY_CYCLE, {"id": cycle_id})
+        cycle = data.get("cycle")
+        if not cycle:
+            raise LinearError(
+                code=ErrorCode.CYCLE_NOT_FOUND,
+                message=f"Cycle '{cycle_id}' not found",
+                suggestions=["Use `cycles` to see available cycles"],
+            )
+        return cycle
+
+    def resolve_cycle(self, ref: str, team_id: str) -> dict[str, Any]:
+        """Resolve a cycle reference ('active' or a number) to a cycle dict."""
+        if ref.lower() == "active":
+            cycles = self.get_cycles(team_id, active=True)
+            if not cycles:
+                raise LinearError(
+                    code=ErrorCode.CYCLE_NOT_FOUND,
+                    message="No active cycle found",
+                    suggestions=["Use `cycles --all` to see available cycles"],
+                )
+            return cycles[0]
+
+        if ref.isdigit():
+            cycle_filter = {
+                "number": {"eq": int(ref)},
+            }
+            variables: dict[str, Any] = {"teamId": team_id, "first": 1, "filter": cycle_filter}
+            data = self._request(QUERY_CYCLES, variables)
+            nodes = data.get("team", {}).get("cycles", {}).get("nodes", [])
+            if not nodes:
+                raise LinearError(
+                    code=ErrorCode.CYCLE_NOT_FOUND,
+                    message=f"Cycle #{ref} not found",
+                    suggestions=["Use `cycles --all` to see available cycles"],
+                )
+            return nodes[0]
+
+        raise LinearError(
+            code=ErrorCode.INVALID_INPUT,
+            message=f"Invalid cycle reference: '{ref}'",
+            suggestions=["Use 'active' for the current cycle or a cycle number (e.g., 42)"],
+        )
+
+    def create_cycle(
+        self,
+        team_id: str,
+        starts_at: str,
+        ends_at: str,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a new cycle."""
+        input_data: dict[str, Any] = {
+            "teamId": team_id,
+            "startsAt": starts_at,
+            "endsAt": ends_at,
+        }
+        if name:
+            input_data["name"] = name
+        if description:
+            input_data["description"] = description
+
+        data = self._request(MUTATION_CREATE_CYCLE, {"input": input_data})
+        result = data.get("cycleCreate", {})
+
+        if not result.get("success"):
+            raise LinearError(
+                code=ErrorCode.API_ERROR,
+                message="Failed to create cycle",
+            )
+
+        return result.get("cycle", {})
+
+    def update_cycle(
+        self,
+        cycle_id: str,
+        name: str | None = None,
+        description: str | None = None,
+        ends_at: str | None = None,
+        completed_at: str | None = None,
+    ) -> dict[str, Any]:
+        """Update an existing cycle. Note: startsAt is immutable after creation."""
+        input_data: dict[str, Any] = {}
+
+        if name is not None:
+            input_data["name"] = name
+        if description is not None:
+            input_data["description"] = description
+        if ends_at is not None:
+            input_data["endsAt"] = ends_at
+        if completed_at is not None:
+            input_data["completedAt"] = completed_at
+
+        if not input_data:
+            raise LinearError(
+                code=ErrorCode.INVALID_INPUT,
+                message="No fields to update",
+                suggestions=["Provide --name, --description, or --ends"],
+            )
+
+        data = self._request(MUTATION_UPDATE_CYCLE, {"id": cycle_id, "input": input_data})
+        result = data.get("cycleUpdate", {})
+
+        if not result.get("success"):
+            raise LinearError(
+                code=ErrorCode.API_ERROR,
+                message="Failed to update cycle",
+            )
+
+        return result.get("cycle", {})
+
+    # --- Custom Views ---
+
+    def get_custom_views(self) -> list[dict[str, Any]]:
+        """Get all custom views in the workspace."""
+        data = self._request(QUERY_CUSTOM_VIEWS)
+        return data.get("customViews", {}).get("nodes", [])
+
+    def find_view_by_name(self, view_name: str) -> dict[str, Any]:
+        """Find a custom view by name (exact match first, then partial)."""
+        views = self.get_custom_views()
+        view_name_lower = view_name.lower()
+
+        # Exact match first
+        for view in views:
+            if view["name"].lower() == view_name_lower:
+                return view
+
+        # Partial match
+        for view in views:
+            if view_name_lower in view["name"].lower():
+                return view
+
+        available = ", ".join(sorted(set(v["name"] for v in views)))
+        raise LinearError(
+            code=ErrorCode.VIEW_NOT_FOUND,
+            message=f"View '{view_name}' not found",
+            suggestions=[f"Available views: {available}"] if available else ["No custom views exist yet"],
+        )
+
+    def create_custom_view(
+        self,
+        name: str,
+        filter_data: dict[str, Any] | None = None,
+        shared: bool | None = None,
+        team_id: str | None = None,
+        color: str | None = None,
+        icon: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a custom view."""
+        input_data: dict[str, Any] = {"name": name}
+
+        if filter_data is not None:
+            input_data["filterData"] = filter_data
+        if shared is not None:
+            input_data["shared"] = shared
+        if team_id:
+            input_data["teamId"] = team_id
+        if color:
+            input_data["color"] = color
+        if icon:
+            input_data["icon"] = icon
+        if description:
+            input_data["description"] = description
+
+        data = self._request(MUTATION_CREATE_CUSTOM_VIEW, {"input": input_data})
+        result = data.get("customViewCreate", {})
+
+        if not result.get("success"):
+            raise LinearError(
+                code=ErrorCode.API_ERROR,
+                message="Failed to create custom view",
+            )
+
+        return result.get("customView", {})
+
+    def delete_custom_view(self, view_id: str) -> bool:
+        """Delete a custom view by its ID."""
+        data = self._request(MUTATION_DELETE_CUSTOM_VIEW, {"id": view_id})
+        result = data.get("customViewDelete", {})
+
+        if not result.get("success"):
+            raise LinearError(
+                code=ErrorCode.API_ERROR,
+                message="Failed to delete custom view",
+            )
+
+        return True
+
     def get_labels(self, team_id: str | None = None) -> list[dict[str, Any]]:
         """Get labels, optionally filtered by team."""
         if team_id:
             data = self._request(QUERY_TEAM_LABELS, {"teamId": team_id})
             team = data.get("team", {})
-            labels = team.get("labels", {}).get("nodes", [])
+            conn = team.get("labels", {})
+            labels = conn.get("nodes", [])
             team_info = {"id": team.get("id"), "key": team.get("key"), "name": team.get("name")}
+            self._mark_truncation("labels", conn)
             return [{"team": team_info, **label} for label in labels]
         else:
             data = self._request(QUERY_LABELS)
-            return data.get("issueLabels", {}).get("nodes", [])
+            conn = data.get("issueLabels", {})
+            self._mark_truncation("labels", conn)
+            return conn.get("nodes", [])
 
     def find_label_by_name(self, label_name: str, team_id: str | None = None) -> dict[str, Any]:
         """Find a label by name, optionally within a specific team."""
@@ -1208,10 +1698,13 @@ class LinearClient:
                 return label
 
         available = ", ".join(sorted(set(l["name"] for l in labels)))
+        suggestions = [f"Available labels: {available}"]
+        if self.is_truncated("labels"):
+            suggestions.append("Note: label list was truncated — more labels may exist")
         raise LinearError(
             code=ErrorCode.LABEL_NOT_FOUND,
             message=f"Label '{label_name}' not found",
-            suggestions=[f"Available labels: {available}"],
+            suggestions=suggestions,
         )
 
     def resolve_label_names(self, label_names: list[str], team_id: str | None = None) -> list[str]:
@@ -1454,7 +1947,9 @@ class LinearClient:
     def get_users(self) -> list[dict[str, Any]]:
         """Get all users in workspace."""
         data = self._request(QUERY_USERS)
-        return data.get("users", {}).get("nodes", [])
+        conn = data.get("users", {})
+        self._mark_truncation("users", conn)
+        return conn.get("nodes", [])
 
     def find_user(self, identifier: str) -> dict[str, Any] | None:
         """Find active user by email (exact), name (partial), or displayName (partial).
@@ -1498,6 +1993,7 @@ class LinearClient:
         no_estimate: bool = False,
         label_ids: list[str] | None = None,
         milestone_name: str | None = None,
+        cycle_id: str | None = None,
         limit: int = 25,
     ) -> list[dict[str, Any]]:
         """List issues with optional filters.
@@ -1516,6 +2012,7 @@ class LinearClient:
             no_estimate: Filter for issues with null estimate
             label_ids: Filter by label IDs (AND logic for multiple)
             milestone_name: Filter by milestone name (exact match)
+            cycle_id: Filter by cycle ID
             limit: Maximum number of results (default 25)
 
         Returns:
@@ -1555,6 +2052,8 @@ class LinearClient:
 
         if milestone_name:
             filter_obj["projectMilestone"] = {"name": {"eq": milestone_name}}
+        if cycle_id:
+            filter_obj["cycle"] = {"id": {"eq": cycle_id}}
 
         variables: dict[str, Any] = {"first": limit}
         if filter_obj:
@@ -1647,6 +2146,7 @@ class LinearClient:
         assignee_id: str | None = None,
         project_id: str | None = None,
         milestone_id: str | None = None,
+        cycle_id: str | None = None,
     ) -> dict[str, Any]:
         """Update an existing issue."""
         input_data: dict[str, Any] = {}
@@ -1673,6 +2173,8 @@ class LinearClient:
             input_data["projectId"] = project_id or None
         if milestone_id is not None:
             input_data["projectMilestoneId"] = milestone_id or None
+        if cycle_id is not None:
+            input_data["cycleId"] = cycle_id or None
 
         if not input_data:
             raise LinearError(
@@ -1726,10 +2228,13 @@ class LinearClient:
                     return state
 
         available = ", ".join(sorted(set(s["name"] for s in states)))
+        suggestions = [f"Available states: {available}"]
+        if self.is_truncated("states"):
+            suggestions.append("Note: state list was truncated — more states may exist")
         raise LinearError(
             code=ErrorCode.STATE_NOT_FOUND,
             message=f"State '{state_name}' not found",
-            suggestions=[f"Available states: {available}"],
+            suggestions=suggestions,
         )
 
     def mark_done(self, issue_id: str) -> dict[str, Any]:
@@ -2206,6 +2711,11 @@ def create(
         "--assignee",
         help="Assignee name or email (resolved to user ID)",
     ),
+    cycle: Optional[str] = typer.Option(
+        None,
+        "--cycle",
+        help='Cycle number or "active" (assigns after creation)',
+    ),
 ) -> None:
     """Create a new issue.
 
@@ -2217,6 +2727,7 @@ def create(
         linear.py create "Backlog item" --no-project
         linear.py create "Mobile bug" --label mobile
         linear.py create "Fix login" --assignee "Roland"
+        linear.py create "Sprint task" --cycle active
     """
     command = "create"
 
@@ -2270,6 +2781,17 @@ def create(
         elif config.project_id and not no_project:
             metadata["projectId"] = config.project_id
 
+        # Assign to cycle if requested (two-step: create then update)
+        cycle_info = None
+        cycle_warning = None
+        if cycle:
+            try:
+                resolved_cycle = client.resolve_cycle(cycle, config.team_id)
+                client.update_issue(issue["id"], cycle_id=resolved_cycle["id"])
+                cycle_info = f"#{resolved_cycle['number']}"
+            except LinearError as e:
+                cycle_warning = f"Issue created but cycle assignment failed: {e.message}"
+
         result_data: dict[str, Any] = {
             "identifier": issue.get("identifier"),
             "title": issue.get("title"),
@@ -2279,6 +2801,10 @@ def create(
         label_nodes = issue.get("labels", {}).get("nodes", [])
         if label_nodes:
             result_data["labels"] = [l["name"] for l in label_nodes]
+        if cycle_info:
+            result_data["cycle"] = cycle_info
+        if cycle_warning:
+            result_data["cycleWarning"] = cycle_warning
 
         response = format_success(
             command=command,
@@ -2370,6 +2896,16 @@ def update(
         "--no-milestone",
         help="Remove milestone from the issue",
     ),
+    cycle: Optional[str] = typer.Option(
+        None,
+        "--cycle",
+        help='Cycle number or "active"',
+    ),
+    no_cycle: bool = typer.Option(
+        False,
+        "--no-cycle",
+        help="Remove from cycle",
+    ),
 ) -> None:
     """Update an existing issue.
 
@@ -2388,6 +2924,8 @@ def update(
         linear.py update ABC-123 --no-project
         linear.py update ABC-123 --milestone "v1.0"
         linear.py update ABC-123 --no-milestone
+        linear.py update ABC-123 --cycle active
+        linear.py update ABC-123 --no-cycle
     """
     command = "update"
 
@@ -2458,6 +2996,14 @@ def update(
             found_milestone = client.find_milestone_by_name(milestone, issue_project["id"])
             milestone_id = found_milestone["id"]
 
+        # Resolve cycle
+        cycle_id = None
+        if no_cycle:
+            cycle_id = ""  # Empty string signals removal
+        elif cycle:
+            resolved_cycle = client.resolve_cycle(cycle, config.team_id)
+            cycle_id = resolved_cycle["id"]
+
         issue = client.update_issue(
             issue_id=issue_id,
             title=title,
@@ -2470,6 +3016,7 @@ def update(
             assignee_id=assignee_id,
             project_id=project_id,
             milestone_id=milestone_id,
+            cycle_id=cycle_id,
         )
 
         result_data: dict[str, Any] = {
@@ -2487,6 +3034,9 @@ def update(
         milestone_node = issue.get("projectMilestone")
         if milestone_node:
             result_data["milestone"] = milestone_node.get("name")
+        cycle_node = issue.get("cycle")
+        if cycle_node:
+            result_data["cycle"] = f"#{cycle_node.get('number')} {cycle_node.get('name', '')}".strip()
 
         response = format_success(
             command=command,
@@ -2881,6 +3431,13 @@ def get(
                     "id": milestone_data.get("id"),
                     "name": milestone_data.get("name"),
                 }
+            cycle_data = issue.get("cycle")
+            if cycle_data:
+                result["cycle"] = {
+                    "id": cycle_data.get("id"),
+                    "number": cycle_data.get("number"),
+                    "name": cycle_data.get("name"),
+                }
             label_nodes = issue.get("labels", {}).get("nodes", [])
             if label_nodes:
                 result["labels"] = [{"id": l["id"], "name": l["name"]} for l in label_nodes]
@@ -2903,6 +3460,9 @@ def get(
             milestone_data = issue.get("projectMilestone")
             if milestone_data:
                 result["milestone"] = milestone_data.get("name")
+            cycle_data = issue.get("cycle")
+            if cycle_data:
+                result["cycle"] = f"#{cycle_data.get('number')} {cycle_data.get('name', '')}".strip()
             label_nodes = issue.get("labels", {}).get("nodes", [])
             if label_nodes:
                 result["labels"] = [l["name"] for l in label_nodes]
@@ -2985,6 +3545,15 @@ def get(
                 for c in comments_nodes
             ]
 
+        # Surface truncated connections so the agent knows there's more data
+        truncated = []
+        for field in ["children", "relations", "inverseRelations", "attachments", "documents", "comments"]:
+            conn = issue.get(field, {})
+            if has_next_page(conn):
+                truncated.append(field)
+        if truncated:
+            result["truncated"] = truncated
+
         response = format_success(command=command, result=result)
         typer.echo(output_json(response))
 
@@ -3043,9 +3612,13 @@ def states(
         for team_data in teams.values():
             team_data["states"].sort(key=lambda s: s.get("position", 0))
 
+        result_data: dict[str, Any] = {"teams": list(teams.values())}
+        if client.is_truncated("states"):
+            result_data["truncated"] = True
+
         response = format_success(
             command=command,
-            result={"teams": list(teams.values())},
+            result=result_data,
             metadata={"totalStates": len(states_list)},
         )
         typer.echo(output_json(response))
@@ -3104,9 +3677,13 @@ def projects(
         for team_data in teams.values():
             team_data["projects"].sort(key=lambda p: p.get("name", "").lower())
 
+        result_data: dict[str, Any] = {"teams": list(teams.values())}
+        if client.is_truncated("projects"):
+            result_data["truncated"] = True
+
         response = format_success(
             command=command,
-            result={"teams": list(teams.values())},
+            result=result_data,
             metadata={"totalProjects": len(projects_list)},
         )
         typer.echo(output_json(response))
@@ -3373,12 +3950,16 @@ def milestones(
                 entry["description"] = desc[:100] + "..." if len(desc) > 100 else desc
             formatted.append(entry)
 
+        result_data: dict[str, Any] = {
+            "project": project.get("name"),
+            "milestones": formatted,
+        }
+        if client.is_truncated("milestones"):
+            result_data["truncated"] = True
+
         response = format_success(
             command=command,
-            result={
-                "project": project.get("name"),
-                "milestones": formatted,
-            },
+            result=result_data,
             metadata={"count": len(formatted)},
         )
         typer.echo(output_json(response))
@@ -3494,6 +4075,320 @@ def delete_milestone_cmd(
 
 
 @app.command()
+def cycles(
+    active: bool = typer.Option(False, "--active", help="Show only active cycle"),
+    past: bool = typer.Option(False, "--past", help="Show past cycles"),
+    future: bool = typer.Option(False, "--future", help="Show future cycles"),
+    all_cycles: bool = typer.Option(False, "--all", help="Show all cycles"),
+) -> None:
+    """List cycles for the team.
+
+    Default: shows active and next cycles.
+
+    Examples:
+        linear.py cycles
+        linear.py cycles --active
+        linear.py cycles --past
+        linear.py cycles --all
+    """
+    command = "cycles"
+
+    try:
+        config = load_config()
+        client = LinearClient()
+
+        cycles_list = client.get_cycles(
+            team_id=config.team_id,
+            active=active,
+            past=past,
+            future=future,
+            all_cycles=all_cycles,
+        )
+
+        formatted = []
+        for c in cycles_list:
+            # Derive status from boolean flags
+            if c.get("isActive"):
+                status = "active"
+            elif c.get("isNext"):
+                status = "next"
+            elif c.get("isFuture"):
+                status = "future"
+            elif c.get("isPast"):
+                status = "past"
+            else:
+                status = "unknown"
+
+            issues_conn = c.get("issues", {})
+            issue_count = len(issues_conn.get("nodes", []))
+            progress = c.get("progress", 0)
+
+            entry: dict[str, Any] = {
+                "number": c.get("number"),
+                "status": status,
+                "startsAt": c.get("startsAt"),
+                "endsAt": c.get("endsAt"),
+                "progress": f"{progress * 100:.0f}%",
+                "issueCount": f"{issue_count}+" if has_next_page(issues_conn) else issue_count,
+            }
+            if c.get("name"):
+                entry["name"] = c["name"]
+            if c.get("completedAt"):
+                entry["completedAt"] = c["completedAt"]
+
+            formatted.append(entry)
+
+        # Sort: active first, then by startsAt
+        status_order = {"active": 0, "next": 1, "future": 2, "past": 3, "unknown": 4}
+        formatted.sort(key=lambda x: (status_order.get(x["status"], 4), x.get("startsAt", "")))
+
+        result_data: dict[str, Any] = {"cycles": formatted}
+        if client.is_truncated("cycles"):
+            result_data["truncated"] = True
+
+        response = format_success(
+            command=command,
+            result=result_data,
+            metadata={"count": len(formatted)},
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def cycle(
+    ref: Optional[str] = typer.Argument(
+        None,
+        help='Cycle number (default: active cycle)',
+    ),
+) -> None:
+    """Show cycle details with issues.
+
+    Defaults to the active cycle if no number is provided.
+
+    Examples:
+        linear.py cycle
+        linear.py cycle 42
+    """
+    command = "cycle"
+
+    try:
+        config = load_config()
+        client = LinearClient()
+
+        # Default to active cycle
+        cycle_ref = ref if ref else "active"
+        resolved = client.resolve_cycle(cycle_ref, config.team_id)
+        cycle_data = client.get_cycle(resolved["id"])
+
+        # Derive status
+        if cycle_data.get("isActive"):
+            status = "active"
+        elif cycle_data.get("isNext"):
+            status = "next"
+        elif cycle_data.get("isFuture"):
+            status = "future"
+        elif cycle_data.get("isPast"):
+            status = "past"
+        else:
+            status = "unknown"
+
+        # Group issues by state type
+        issues_conn = cycle_data.get("issues", {})
+        issues = issues_conn.get("nodes", [])
+        issues_by_state: dict[str, list[dict[str, Any]]] = {}
+        state_type_order = ["started", "unstarted", "backlog", "completed", "canceled"]
+
+        for issue in issues:
+            state_type = issue.get("state", {}).get("type", "unknown")
+            if state_type not in issues_by_state:
+                issues_by_state[state_type] = []
+
+            entry: dict[str, Any] = {
+                "identifier": issue.get("identifier"),
+                "title": issue.get("title"),
+                "state": issue.get("state", {}).get("name"),
+                "priority": issue.get("priority"),
+            }
+            if issue.get("estimate"):
+                entry["estimate"] = issue["estimate"]
+            if issue.get("assignee"):
+                entry["assignee"] = issue["assignee"].get("name")
+
+            issues_by_state[state_type].append(entry)
+
+        # Order the state groups
+        ordered_issues: dict[str, list[dict[str, Any]]] = {}
+        for st in state_type_order:
+            if st in issues_by_state:
+                ordered_issues[st] = issues_by_state[st]
+        # Include any unexpected state types
+        for st, items in issues_by_state.items():
+            if st not in ordered_issues:
+                ordered_issues[st] = items
+
+        progress = cycle_data.get("progress", 0)
+
+        result_data: dict[str, Any] = {
+            "number": cycle_data.get("number"),
+            "status": status,
+            "startsAt": cycle_data.get("startsAt"),
+            "endsAt": cycle_data.get("endsAt"),
+            "progress": f"{progress * 100:.0f}%",
+            "issueCount": f"{len(issues)}+" if has_next_page(issues_conn) else len(issues),
+        }
+        if cycle_data.get("name"):
+            result_data["name"] = cycle_data["name"]
+        if cycle_data.get("description"):
+            result_data["description"] = cycle_data["description"]
+        if cycle_data.get("completedAt"):
+            result_data["completedAt"] = cycle_data["completedAt"]
+        if ordered_issues:
+            result_data["issuesByState"] = ordered_issues
+        if has_next_page(issues_conn):
+            result_data["issuesTruncated"] = True
+
+        response = format_success(
+            command=command,
+            result=result_data,
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command("create-cycle")
+def create_cycle_cmd(
+    starts: str = typer.Option(..., "--starts", help="Start date (YYYY-MM-DD)"),
+    ends: str = typer.Option(..., "--ends", help="End date (YYYY-MM-DD)"),
+    name: Optional[str] = typer.Option(None, "--name", help="Cycle name"),
+    description: Optional[str] = typer.Option(
+        None,
+        "--description",
+        "-d",
+        help="Cycle description",
+    ),
+) -> None:
+    """Create a new cycle.
+
+    Examples:
+        linear.py create-cycle --starts 2026-04-07 --ends 2026-04-21
+        linear.py create-cycle --starts 2026-04-07 --ends 2026-04-21 --name "Sprint 42"
+    """
+    command = "create-cycle"
+
+    try:
+        config = load_config()
+        client = LinearClient()
+
+        # Convert YYYY-MM-DD to ISO 8601 datetime
+        starts_at = f"{starts}T00:00:00.000Z"
+        ends_at = f"{ends}T23:59:59.999Z"
+
+        cycle_data = client.create_cycle(
+            team_id=config.team_id,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            name=name,
+            description=description,
+        )
+
+        result_data: dict[str, Any] = {
+            "number": cycle_data.get("number"),
+            "startsAt": cycle_data.get("startsAt"),
+            "endsAt": cycle_data.get("endsAt"),
+        }
+        if cycle_data.get("name"):
+            result_data["name"] = cycle_data["name"]
+
+        team = cycle_data.get("team", {})
+        if team:
+            result_data["team"] = team.get("name")
+
+        response = format_success(
+            command=command,
+            result=result_data,
+            metadata={"id": cycle_data.get("id")},
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command("update-cycle")
+def update_cycle_cmd(
+    ref: str = typer.Argument(..., help="Cycle number"),
+    name: Optional[str] = typer.Option(None, "--name", help="New cycle name"),
+    description: Optional[str] = typer.Option(
+        None,
+        "--description",
+        "-d",
+        help="New description",
+    ),
+    ends: Optional[str] = typer.Option(
+        None,
+        "--ends",
+        help="New end date (YYYY-MM-DD)",
+    ),
+) -> None:
+    """Update an existing cycle.
+
+    Note: start date cannot be changed after creation.
+
+    Examples:
+        linear.py update-cycle 42 --name "Sprint 42 - Extended"
+        linear.py update-cycle 42 --ends 2026-04-28
+    """
+    command = "update-cycle"
+
+    try:
+        config = load_config()
+        client = LinearClient()
+
+        resolved = client.resolve_cycle(ref, config.team_id)
+
+        ends_at = f"{ends}T23:59:59.999Z" if ends else None
+
+        cycle_data = client.update_cycle(
+            cycle_id=resolved["id"],
+            name=name,
+            description=description,
+            ends_at=ends_at,
+        )
+
+        result_data: dict[str, Any] = {
+            "number": cycle_data.get("number"),
+            "startsAt": cycle_data.get("startsAt"),
+            "endsAt": cycle_data.get("endsAt"),
+        }
+        if cycle_data.get("name"):
+            result_data["name"] = cycle_data["name"]
+        if cycle_data.get("completedAt"):
+            result_data["completedAt"] = cycle_data["completedAt"]
+
+        response = format_success(
+            command=command,
+            result=result_data,
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def labels(
     team_id: Optional[str] = typer.Option(
         None,
@@ -3542,9 +4437,13 @@ def labels(
         for team_data in teams.values():
             team_data["labels"].sort(key=lambda l: l.get("name", "").lower())
 
+        result_data: dict[str, Any] = {"teams": list(teams.values())}
+        if client.is_truncated("labels"):
+            result_data["truncated"] = True
+
         response = format_success(
             command=command,
-            result={"teams": list(teams.values())},
+            result=result_data,
             metadata={"totalLabels": len(labels_list)},
         )
         typer.echo(output_json(response))
@@ -3738,9 +4637,13 @@ def members() -> None:
             if u.get("active", False)
         ]
 
+        result_data: dict[str, Any] = {"members": active_users}
+        if client.is_truncated("users"):
+            result_data["truncated"] = True
+
         response = format_success(
             command=command,
-            result={"members": active_users},
+            result=result_data,
             metadata={"count": len(active_users)},
         )
         typer.echo(output_json(response))
@@ -3815,6 +4718,11 @@ def list_cmd(
         None,
         "--milestone",
         help="Filter by milestone name",
+    ),
+    cycle: Optional[str] = typer.Option(
+        None,
+        "--cycle",
+        help='Filter by cycle number or "active"',
     ),
     verbose: bool = typer.Option(
         False,
@@ -3953,6 +4861,12 @@ def list_cmd(
         if label:
             label_ids = client.resolve_label_names(label, team_id)
 
+        # Handle cycle filter
+        cycle_id = None
+        if cycle:
+            resolved_cycle = client.resolve_cycle(cycle, team_id)
+            cycle_id = resolved_cycle["id"]
+
         # Fetch issues
         issues = client.list_issues(
             team_id=team_id,
@@ -3966,6 +4880,7 @@ def list_cmd(
             no_estimate=no_estimate,
             label_ids=label_ids,
             milestone_name=milestone,
+            cycle_id=cycle_id,
             limit=limit,
         )
 
@@ -3986,6 +4901,9 @@ def list_cmd(
             label_nodes = issue.get("labels", {}).get("nodes", [])
             if label_nodes:
                 formatted["labels"] = [l["name"] for l in label_nodes]
+            cycle_data = issue.get("cycle")
+            if cycle_data:
+                formatted["cycle"] = f"#{cycle_data.get('number')} {cycle_data.get('name', '')}".strip()
             formatted_issues.append(formatted)
 
         # Build metadata
@@ -4009,6 +4927,8 @@ def list_cmd(
             filters_applied.append(f"label={','.join(label)}")
         if milestone:
             filters_applied.append(f"milestone={milestone}")
+        if cycle:
+            filters_applied.append(f"cycle={cycle}")
         if team_id:
             filters_applied.append(f"team={team_id[:8]}...")
         if filters_applied:
@@ -4323,6 +5243,233 @@ def delete_comment_cmd(
             command=command,
             result={
                 "commentId": comment_id,
+                "deleted": True,
+            },
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def views(
+    team_id: Optional[str] = typer.Option(
+        None,
+        "--team",
+        "-t",
+        help="Filter by team ID",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-V",
+        help="Include filterData, icon, color, timestamps",
+    ),
+) -> None:
+    """List custom views.
+
+    Examples:
+        linear.py views
+        linear.py views -V
+        linear.py views --team abc123-team-uuid
+    """
+    command = "views"
+    global _verbose
+    _verbose = verbose
+
+    try:
+        client = LinearClient()
+        all_views = client.get_custom_views()
+
+        # Filter by team if specified
+        if team_id:
+            all_views = [
+                v for v in all_views
+                if v.get("team") and v["team"].get("id") == team_id
+            ]
+
+        formatted_views = []
+        for view in all_views:
+            view_data: dict[str, Any] = {
+                "id": view.get("id"),
+                "name": view.get("name"),
+                "shared": view.get("shared"),
+            }
+
+            owner = view.get("owner")
+            if owner:
+                view_data["owner"] = owner.get("name")
+
+            team = view.get("team")
+            if team:
+                view_data["team"] = {
+                    "key": team.get("key"),
+                    "name": team.get("name"),
+                }
+
+            if _verbose:
+                view_data["filterData"] = view.get("filterData")
+                view_data["color"] = view.get("color")
+                view_data["icon"] = view.get("icon")
+                view_data["description"] = view.get("description")
+                view_data["createdAt"] = view.get("createdAt")
+                view_data["updatedAt"] = view.get("updatedAt")
+
+            formatted_views.append(view_data)
+
+        # Sort by name
+        formatted_views.sort(key=lambda v: (v.get("name") or "").lower())
+
+        response = format_success(
+            command=command,
+            result={"views": formatted_views},
+            metadata={"totalViews": len(formatted_views)},
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command("create-view")
+def create_view_cmd(
+    name: str = typer.Argument(..., help="View name"),
+    filter_json: Optional[str] = typer.Option(
+        None,
+        "--filter-json",
+        help="Filter definition as JSON string",
+    ),
+    shared: bool = typer.Option(
+        False,
+        "--shared",
+        help="Share the view with the team/workspace",
+    ),
+    team_id: Optional[str] = typer.Option(
+        None,
+        "--team",
+        "-t",
+        help="Scope view to a specific team ID",
+    ),
+    color: Optional[str] = typer.Option(
+        None,
+        "--color",
+        help="Hex color (e.g. #FF6B6B)",
+    ),
+    icon: Optional[str] = typer.Option(
+        None,
+        "--icon",
+        help="PascalCase icon name (e.g. Bug, Target, AlertCircle)",
+    ),
+    description: Optional[str] = typer.Option(
+        None,
+        "--description",
+        "-d",
+        help="View description",
+    ),
+) -> None:
+    """Create a custom view.
+
+    Examples:
+        linear.py create-view "My Urgent" --filter-json '{"priority":{"in":[1,2]}}'
+        linear.py create-view "Team Bugs" --filter-json '{"label":{"name":{"in":["bug"]}}}' --shared
+    """
+    command = "create-view"
+
+    try:
+        client = LinearClient()
+
+        # Parse filter JSON if provided
+        filter_data = None
+        if filter_json:
+            try:
+                filter_data = json.loads(filter_json)
+            except json.JSONDecodeError as e:
+                raise LinearError(
+                    code=ErrorCode.INVALID_INPUT,
+                    message=f"Invalid filter JSON: {e}",
+                    suggestions=["Ensure --filter-json is valid JSON"],
+                )
+
+        # Use config team if --team not specified
+        effective_team_id = team_id
+        if not effective_team_id:
+            try:
+                config = load_config()
+                effective_team_id = config.team_id
+            except LinearError:
+                pass  # No config, proceed without team
+
+        view = client.create_custom_view(
+            name=name,
+            filter_data=filter_data,
+            shared=shared or None,  # Only send if True
+            team_id=effective_team_id,
+            color=color,
+            icon=icon,
+            description=description,
+        )
+
+        result: dict[str, Any] = {
+            "id": view.get("id"),
+            "name": view.get("name"),
+            "shared": view.get("shared"),
+        }
+        team = view.get("team")
+        if team:
+            result["team"] = {
+                "id": team.get("id"),
+                "key": team.get("key"),
+                "name": team.get("name"),
+            }
+
+        response = format_success(
+            command=command,
+            result=result,
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command("delete-view")
+def delete_view_cmd(
+    name_or_id: str = typer.Argument(..., help="View name or UUID to delete"),
+) -> None:
+    """Delete a custom view by name or ID.
+
+    Examples:
+        linear.py delete-view "My Urgent"
+        linear.py delete-view "a1b2c3d4-e5f6-..."
+    """
+    command = "delete-view"
+
+    try:
+        client = LinearClient()
+
+        # Try as UUID first (36 chars, 4 hyphens), otherwise find by name
+        if len(name_or_id) == 36 and name_or_id.count("-") == 4:
+            view_id = name_or_id
+            view_name = name_or_id
+        else:
+            view = client.find_view_by_name(name_or_id)
+            view_id = view["id"]
+            view_name = view["name"]
+
+        client.delete_custom_view(view_id)
+
+        response = format_success(
+            command=command,
+            result={
+                "id": view_id,
+                "name": view_name,
                 "deleted": True,
             },
         )
