@@ -42,6 +42,13 @@ Cost: search ~$0.005 | ask/reason ~$0.02 | docs free | map/scrape 1 FC credit ea
 
 Also available: WebSearch (free, broad), WebFetch (free, page summary)
 All CLI calls and WebSearch/WebFetch usage are logged to ~/.cache/research/logs/YYYY-MM-DD.jsonl
+
+YouTube script: `~/.claude/skills/research/scripts/youtube.py`
+
+uv run <yt-script> search "<query>" [--question Q] [--max-videos N] [--max-transcripts N] [--after YYYY-MM-DD] [--no-preprocess]
+
+Cost: free (yt-dlp + youtube-transcript-api, no API keys). Pre-processing uses Claude subscription (claude -p).
+Requires: yt-dlp installed (brew install yt-dlp)
 ```
 </cli_cheatsheet>
 
@@ -62,6 +69,8 @@ Examples: "how do I set up X?", "what tools exist for Y?", "how are people handl
 Examples: "best practices for X + Y", "evaluate X vs Y for our use case", "comprehensive guide to X"
 - 3-4 subagents in parallel.
 - Source diversity rule applies (2+ sources per subagent).
+
+**YouTube availability**: When yt-dlp is installed, subagents can search YouTube for video content. Assign YouTube to subagents when the sub-question involves tutorials, demos, conference talks, developer workflows, product reviews, or practitioner opinions. Skip YouTube for API specs, pricing lookups, legal/compliance questions, or purely factual reference queries.
 </complexity_assessment>
 
 <quick_mode>
@@ -89,6 +98,7 @@ Analyze the question and generate 2-4 specific sub-questions. For each, assign a
 - Does it have a **community experience** dimension?
 - Does it have an **ecosystem/third-party** dimension?
 - Does it have an **implementation/how-to** dimension?
+- Does it have a **practitioner experience/demo** dimension? → assign YouTube search
 
 **Mandatory source rules:**
 - At least one subagent must run **WebSearch** (broad discovery, free)
@@ -122,6 +132,7 @@ RULES:
 | Tier | Tools | When to use |
 |------|-------|-------------|
 | FREE | WebSearch, WebFetch, `research docs` | Always start here. Sufficient for well-documented topics. |
+| FREE | `youtube search` (yt-dlp, no API key) | Tutorials, demos, talks, practitioner workflows. Needs yt-dlp. |
 | CHEAP | `research search` ($0.005), `research map` (1 FC credit), `research ask` (~$0.02) | When free sources lack depth or specificity. |
 | MEDIUM | `research reason` (~$0.02), `research scrape` (1 FC credit) | For complex comparisons, when you need the full page content. |
 
@@ -199,4 +210,5 @@ Run `research config` to see resolved configuration (which keys are set, persist
 - [ ] Standard/deep runs are persisted to `~/Documents/Research/` with INDEX.md updated
 - [ ] Quick lookups resolve without subagents when answer is clear
 - [ ] Graceful degradation when API keys are missing
+- [ ] YouTube search assigned to subagents where video content adds value
 </success_criteria>

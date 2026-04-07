@@ -125,6 +125,45 @@ uv run ~/.claude/skills/research/scripts/research.py scrape https://ui.shadcn.co
 
 ---
 
+## YouTube CLI
+
+**CLI script:** `~/.claude/skills/research/scripts/youtube.py`
+
+Run with: `uv run ~/.claude/skills/research/scripts/youtube.py <command> [options]`
+
+**Prerequisite:** `yt-dlp` must be installed (`brew install yt-dlp`). No API keys needed.
+
+---
+
+### `search "<query>"` — YouTube search + transcript extraction (free)
+
+Search YouTube via yt-dlp, fetch transcripts via youtube-transcript-api, and optionally pre-process long transcripts through `claude -p` for directed extraction.
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--question` / `-q` | none | Research sub-question for directed transcript extraction |
+| `--max-videos` / `-v` | `5` | Max videos to return from search |
+| `--max-transcripts` / `-t` | `3` | Max transcripts to fetch (top videos by views) |
+| `--after` | none | Only videos after date (YYYY-MM-DD) — soft filter, relaxes if too few results |
+| `--no-preprocess` | false | Skip claude extraction, return raw transcripts only |
+
+**Pre-processing:** Transcripts with 1500+ words are automatically extracted via `claude -p --model sonnet` using the `--question` to direct extraction. Below 1500 words, the raw transcript is returned. Up to 3 transcripts are pre-processed in parallel. Omit `--question` or pass `--no-preprocess` to skip.
+
+**Output fields:**
+- `videos` — list of video objects, each with:
+  - `video_id`, `title`, `channel`, `upload_date` (YYYY-MM-DD), `url`, `view_count`, `like_count`, `duration` (seconds), `description_preview`
+  - `transcript_available` (bool)
+  - `extraction` (string, if pre-processed) OR `raw_transcript` (string, if below threshold or `--no-preprocess`)
+  - `word_count`, `preprocessed` (bool)
+- `metadata` — `backend`, `videos_searched`, `transcripts_fetched`, `transcripts_preprocessed`, `cache_hit`
+
+**Example:**
+```bash
+uv run ~/.claude/skills/research/scripts/youtube.py search "SwiftUI navigation patterns 2026" --question "What navigation patterns are recommended for complex SwiftUI apps?" --max-videos 5 --max-transcripts 3 --after 2026-01-01
+```
+
+---
+
 ### `credits` — Check Firecrawl balance
 
 No flags. Returns remaining credits and plan info.
@@ -146,3 +185,5 @@ No flags. Returns resolved API key status, persistence setting, and which env fi
 - `--site`: a real domain name like `stripe.com` or `pay.uk` (NOT topics/phrases). Repeatable.
 - `--recency`: preset window — `hour` | `day` | `week` | `month` | `year`. For custom ranges use `--after`/`--before` with YYYY-MM-DD dates.
 - Also available as built-in tools: **WebSearch** (free, broad) and **WebFetch** (free, page summary).
+- YouTube search requires `yt-dlp` installed locally (`brew install yt-dlp`). No API keys needed.
+- YouTube transcript pre-processing uses `claude -p --model sonnet` (Claude subscription, no API key). Pass `--no-preprocess` to skip.

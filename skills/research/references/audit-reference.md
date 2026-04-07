@@ -17,7 +17,7 @@ Reads JSONL logs from `~/.cache/research/logs/` and produces a usage summary. Lo
 **Output fields:**
 - `summary`: `total_calls`, `unique_sessions`, `cache_hits`, `cache_hit_rate`, `failures`, `total_cost_usd`, `total_credits`, `total_duration_ms`
 - `by_tool`: per-tool breakdown with `count`, `pct`, `cost_usd`, `credits`, `cache_hits`, `failures`
-- `by_backend`: per-backend breakdown (`builtin`, `perplexity`, `context7`, `firecrawl`) with `count`, `pct`, `cost_usd`, `credits`
+- `by_backend`: per-backend breakdown (`builtin`, `perplexity`, `context7`, `firecrawl`, `yt-dlp`) with `count`, `pct`, `cost_usd`, `credits`
 - `by_type`: `builtin` (WebSearch/WebFetch via hooks) vs `cli` (research.py commands)
 - `sessions`: per-session summary with `calls`, `cost_usd`, `credits`, `tools_used`
 - `calls` (only with `--detail`): full list of individual log entries
@@ -39,7 +39,7 @@ All CLI commands and WebSearch/WebFetch calls (via skill hooks) are logged to `~
 | `timestamp` | ISO 8601 UTC |
 | `session_id` | Claude Code session ID (from hooks or `CLAUDE_SESSION_ID` env) |
 | `type` | `cli` (research.py command) or `builtin` (WebSearch/WebFetch) |
-| `tool` | Tool name: `ask`, `search`, `reason`, `docs`, `map`, `scrape`, `WebSearch`, `WebFetch` |
+| `tool` | Tool name: `ask`, `search`, `reason`, `docs`, `map`, `scrape`, `youtube`, `WebSearch`, `WebFetch` |
 | `query` | The query string or URL |
 | `backend` | `perplexity`, `context7`, `firecrawl`, or `builtin` |
 | `model` | Perplexity model name (if applicable) |
@@ -59,6 +59,7 @@ Logs are retained for 30 days and automatically cleaned up on the first write of
 | Source | Mechanism | Captures |
 |--------|-----------|----------|
 | CLI calls (`ask`, `search`, `reason`, `docs`, `map`, `scrape`) | `research.py` logs after each call | Timing, cost, token usage, cache hits, errors |
+| YouTube search (`youtube`) | `youtube.py` logs after each call | Timing, videos searched/fetched/preprocessed |
 | WebSearch/WebFetch (main agent, QUICK mode) | PostToolUse hook in SKILL.md frontmatter | Query/URL, session ID |
 | WebSearch/WebFetch (subagents, STANDARD/DEEP) | PostToolUse hook in research-subagent.md frontmatter | Query/URL, session ID |
 
