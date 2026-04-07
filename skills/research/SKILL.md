@@ -45,7 +45,7 @@ All CLI calls and WebSearch/WebFetch usage are logged to ~/.cache/research/logs/
 
 YouTube script: `~/.claude/skills/research/scripts/youtube.py`
 
-uv run <yt-script> search "<query>" [--question Q] [--max-videos N] [--max-transcripts N] [--after YYYY-MM-DD] [--no-preprocess]
+uv run <yt-script> search "<query>" [--question Q] [--max-videos N] [--after YYYY-MM-DD] [--no-preprocess] [--no-select]
 
 Cost: free (yt-dlp + youtube-transcript-api, no API keys). Pre-processing uses Claude subscription (claude -p).
 Requires: yt-dlp installed (brew install yt-dlp)

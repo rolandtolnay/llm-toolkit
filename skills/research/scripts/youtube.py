@@ -12,7 +12,7 @@ Uses yt-dlp for search (no API key) and youtube-transcript-api for transcripts.
 Long transcripts are pre-processed via `claude -p` for directed extraction.
 
 Usage:
-    uv run youtube.py search "<query>" [--question Q] [--max-videos N] [--max-transcripts N] [--after YYYY-MM-DD]
+    uv run youtube.py search "<query>" [--question Q] [--max-videos N] [--after YYYY-MM-DD] [--no-preprocess] [--no-select]
 """
 
 from __future__ import annotations
@@ -42,6 +42,26 @@ WORD_THRESHOLD = 1500  # Transcripts above this get pre-processed
 MAX_PREPROCESS_WORKERS = 3  # Max concurrent claude --bare -p calls
 YTDLP_SEARCH_TIMEOUT = 120  # seconds
 CLAUDE_PREPROCESS_TIMEOUT = 60  # seconds per transcript
+SELECTION_TIMEOUT = 60  # seconds
+
+SELECTION_PROMPT_TEMPLATE = """\
+You are selecting YouTube videos for a research investigation.
+
+RESEARCH QUESTION: {question}
+
+VIDEOS:
+{video_list}
+
+Select which videos to transcribe for research. Return ONLY valid JSON:
+{{"selected": [{{"video_id": "...", "reason": "..."}}]}}
+
+Selection criteria:
+- Relevance: title/description must address the research question
+- Unique value: each selected video should likely contain different information
+- Source quality: prefer practitioners and established channels over clickbait
+- Skip off-topic videos regardless of view count
+- For narrow topics, selecting 1-2 videos is fine
+- For broad topics with multiple angles, select up to 4"""
 
 PREPROCESS_PROMPT_TEMPLATE = """\
 Extract the key findings relevant to this research question from the YouTube \
@@ -91,6 +111,7 @@ def _log_call(
     duration_ms: int | None = None,
     error: str | None = None,
     videos_searched: int = 0,
+    videos_selected: int = 0,
     transcripts_fetched: int = 0,
     transcripts_preprocessed: int = 0,
 ) -> None:
@@ -115,6 +136,7 @@ def _log_call(
         entry["cost_usd"] = 0.0
         entry["credits"] = 0
         entry["videos_searched"] = videos_searched
+        entry["videos_selected"] = videos_selected
         entry["transcripts_fetched"] = transcripts_fetched
         entry["transcripts_preprocessed"] = transcripts_preprocessed
         if error:
@@ -286,14 +308,150 @@ def _fetch_transcript(video_id: str) -> str | None:
         return None
 
 
-def _fetch_transcripts(
-    video_ids: list[str], max_transcripts: int
-) -> dict[str, str | None]:
-    """Fetch transcripts sequentially for up to max_transcripts videos."""
+def _fetch_transcripts(video_ids: list[str]) -> dict[str, str | None]:
+    """Fetch transcripts sequentially for the given video IDs."""
     results: dict[str, str | None] = {}
-    for vid in video_ids[:max_transcripts]:
+    for vid in video_ids:
         results[vid] = _fetch_transcript(vid)
     return results
+
+
+# ---------------------------------------------------------------------------
+# Intelligent video selection (claude -p)
+# ---------------------------------------------------------------------------
+
+
+def _parse_json_response(text: str) -> dict | None:
+    """Parse JSON from claude -p output, stripping code fences if present."""
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        text = "\n".join(lines).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def _format_count(n: int) -> str:
+    """Format a number as human-readable (e.g. 45000 -> '45K')."""
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.0f}K"
+    return str(n)
+
+
+def _format_duration(seconds: int | None) -> str:
+    """Format seconds as MM:SS or H:MM:SS."""
+    if seconds is None:
+        return "?"
+    m, s = divmod(seconds, 60)
+    if m >= 60:
+        h, m = divmod(m, 60)
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
+def _select_videos(
+    videos: list[dict], question: str
+) -> tuple[list[str], dict[str, str], str | None]:
+    """Use claude -p to select which videos to transcribe.
+
+    Returns (selected_ids, reasons_map, warning). Warning is None on success,
+    or a specific failure reason when fallback was used.
+    """
+    video_lines = []
+    for i, v in enumerate(videos, 1):
+        desc = v.get("description_preview", "")[:120]
+        line = (
+            f'{i}. video_id={v["video_id"]} | '
+            f'"{v["title"]}" | {v.get("channel", "Unknown")} | '
+            f'{_format_count(v["view_count"])} views | '
+            f'{_format_count(v.get("like_count", 0))} likes | '
+            f'{_format_duration(v.get("duration"))} | '
+            f'"{desc}"'
+        )
+        video_lines.append(line)
+
+    prompt = SELECTION_PROMPT_TEMPLATE.format(
+        question=question,
+        video_list="\n".join(video_lines),
+    )
+
+    cmd = [
+        "claude",
+        "-p",
+        prompt,
+        "--output-format",
+        "text",
+        "--no-session-persistence",
+    ]
+
+    valid_ids = {v["video_id"] for v in videos}
+
+    preexec = os.setsid if hasattr(os, "setsid") else None
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            preexec_fn=preexec,
+        )
+        try:
+            stdout, stderr = proc.communicate(timeout=SELECTION_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            except (ProcessLookupError, PermissionError, OSError):
+                proc.kill()
+            proc.wait(timeout=5)
+            _log_stderr("LLM selection timed out")
+            return _selection_fallback(videos, "LLM selection timed out")
+    except FileNotFoundError:
+        _log_stderr("claude command not found for selection")
+        return _selection_fallback(videos, "claude command not found")
+
+    if proc.returncode != 0:
+        detail = (stderr or "").strip()[:200]
+        _log_stderr(f"claude selection failed: {detail}")
+        return _selection_fallback(videos, f"claude selection failed: {detail}")
+
+    parsed = _parse_json_response(stdout or "")
+    if not parsed or "selected" not in parsed:
+        _log_stderr("Failed to parse selection response")
+        return _selection_fallback(videos, "Failed to parse LLM selection JSON")
+
+    selected = parsed["selected"]
+    if not isinstance(selected, list) or not selected:
+        _log_stderr("Empty selection from LLM")
+        return _selection_fallback(videos, "LLM returned empty selection")
+
+    # Validate all video_ids exist in input
+    ids = []
+    reasons = {}
+    for item in selected:
+        vid = item.get("video_id", "")
+        if vid in valid_ids and vid not in reasons:
+            ids.append(vid)
+            reasons[vid] = item.get("reason", "")
+
+    if not ids:
+        _log_stderr("No valid video_ids in selection response")
+        return _selection_fallback(videos, "No valid video_ids in LLM selection")
+
+    return ids, reasons, None
+
+
+def _selection_fallback(
+    videos: list[dict], reason: str
+) -> tuple[list[str], dict[str, str], str]:
+    """Fallback: top 3 videos by view count."""
+    top = videos[:3]  # Already sorted by views
+    return [v["video_id"] for v in top], {}, reason
 
 
 # ---------------------------------------------------------------------------
@@ -451,9 +609,8 @@ def search(
     question: Optional[str] = typer.Option(
         None, "--question", "-q", help="Research sub-question for directed extraction"
     ),
-    max_videos: int = typer.Option(5, "--max-videos", "-v", help="Max videos to search"),
-    max_transcripts: int = typer.Option(
-        3, "--max-transcripts", "-t", help="Max transcripts to fetch"
+    max_videos: int = typer.Option(
+        10, "--max-videos", "-v", help="Max videos to search"
     ),
     after: Optional[str] = typer.Option(
         None, "--after", help="Only videos after date (YYYY-MM-DD)"
@@ -461,10 +618,14 @@ def search(
     no_preprocess: bool = typer.Option(
         False, "--no-preprocess", help="Skip claude extraction, return raw transcripts"
     ),
+    no_select: bool = typer.Option(
+        False, "--no-select", help="Skip LLM selection, use top videos by views"
+    ),
 ) -> None:
     """Search YouTube, fetch transcripts, and optionally pre-process via claude."""
     _check_ytdlp()
     t0 = time.monotonic()
+    warnings: list[str] = []
 
     # Search
     videos = _ytdlp_search(query, max_videos, after)
@@ -481,38 +642,74 @@ def search(
                 "metadata": {
                     "backend": "yt-dlp",
                     "videos_searched": 0,
+                    "videos_selected": 0,
                     "transcripts_fetched": 0,
                     "transcripts_preprocessed": 0,
+                    "selection_method": "all",
+                    "warnings": [],
                     "cache_hit": False,
                 },
             }
         )
         return
 
-    # Fetch transcripts
-    video_ids = [v["video_id"] for v in videos]
-    transcripts = _fetch_transcripts(video_ids, max_transcripts)
+    # Select which videos to transcribe
+    selection_reasons: dict[str, str] = {}
+    if question and not no_select and len(videos) > 3:
+        selected_ids, selection_reasons, selection_warning = _select_videos(
+            videos, question
+        )
+        if selection_warning:
+            selection_method = "top_by_views"
+            warnings.append(selection_warning)
+        else:
+            selection_method = "llm"
+    elif len(videos) <= 3:
+        selected_ids = [v["video_id"] for v in videos]
+        selection_method = "all"
+    else:
+        # no question or --no-select: top 3 by views
+        selected_ids = [v["video_id"] for v in videos[:3]]
+        selection_method = "top_by_views"
+
+    selected_set = set(selected_ids)
+
+    # Mark selection on all videos
+    for video in videos:
+        vid = video["video_id"]
+        video["selected"] = vid in selected_set
+        if vid in selection_reasons:
+            video["selection_reason"] = selection_reasons[vid]
+
+    # Fetch transcripts only for selected videos
+    transcripts = _fetch_transcripts(selected_ids)
 
     # Attach transcripts to video dicts (internal field)
     for video in videos:
         vid = video["video_id"]
         if vid in transcripts:
             video["_transcript"] = transcripts[vid]
+        elif not video["selected"]:
+            pass  # Not selected, no transcript expected
         else:
             video["transcript_available"] = False
 
-    # Pre-process or pass raw
+    # Pre-process or pass raw (only for selected videos)
     preprocessed_count = 0
+    selected_videos = [v for v in videos if v["selected"]]
+    unselected_videos = [v for v in videos if not v["selected"]]
+
     if not no_preprocess and question:
-        preprocessed_count = _preprocess_transcripts_parallel(videos, question)
+        preprocessed_count = _preprocess_transcripts_parallel(
+            selected_videos, question
+        )
     else:
         # No preprocessing — attach raw transcripts
-        for video in videos:
+        for video in selected_videos:
             transcript = video.pop("_transcript", None)
             if transcript and transcript.strip():
                 video["transcript_available"] = True
                 video["word_count"] = len(transcript.split())
-                # Truncate very long transcripts in raw mode
                 words = transcript.split()
                 if len(words) > 2000:
                     video["raw_transcript"] = " ".join(words[:2000]) + "..."
@@ -521,6 +718,11 @@ def search(
                 video["preprocessed"] = False
             elif "transcript_available" not in video:
                 video["transcript_available"] = False
+
+    # Clean up unselected videos (no transcript data)
+    for video in unselected_videos:
+        video.pop("_transcript", None)
+        video["transcript_available"] = False
 
     transcripts_fetched = sum(
         1 for v in videos if v.get("transcript_available", False)
@@ -531,6 +733,7 @@ def search(
         query,
         duration_ms=duration_ms,
         videos_searched=len(videos),
+        videos_selected=len(selected_ids),
         transcripts_fetched=transcripts_fetched,
         transcripts_preprocessed=preprocessed_count,
     )
@@ -545,8 +748,11 @@ def search(
             "metadata": {
                 "backend": "yt-dlp",
                 "videos_searched": len(videos),
+                "videos_selected": len(selected_ids),
                 "transcripts_fetched": transcripts_fetched,
                 "transcripts_preprocessed": preprocessed_count,
+                "selection_method": selection_method,
+                "warnings": warnings,
                 "cache_hit": False,
             },
         }

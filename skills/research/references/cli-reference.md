@@ -142,24 +142,28 @@ Search YouTube via yt-dlp, fetch transcripts via youtube-transcript-api, and opt
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--question` / `-q` | none | Research sub-question for directed transcript extraction |
-| `--max-videos` / `-v` | `5` | Max videos to return from search |
-| `--max-transcripts` / `-t` | `3` | Max transcripts to fetch (top videos by views) |
+| `--max-videos` / `-v` | `10` | Max videos to return from search |
 | `--after` | none | Only videos after date (YYYY-MM-DD) — soft filter, relaxes if too few results |
 | `--no-preprocess` | false | Skip claude extraction, return raw transcripts only |
+| `--no-select` | false | Skip LLM selection, use top videos by views |
+
+**Intelligent selection:** When `--question` is provided and more than 3 videos are returned, an LLM (`claude -p`, Opus) evaluates search results and selects which videos to transcribe based on relevance, source quality, and unique value — rather than just picking by view count. With ≤3 results, all are fetched. Pass `--no-select` to skip LLM selection and use top-by-views fallback.
 
 **Pre-processing:** Transcripts with 1500+ words are automatically extracted via `claude -p --model sonnet` using the `--question` to direct extraction. Below 1500 words, the raw transcript is returned. Up to 3 transcripts are pre-processed in parallel. Omit `--question` or pass `--no-preprocess` to skip.
 
 **Output fields:**
 - `videos` — list of video objects, each with:
   - `video_id`, `title`, `channel`, `upload_date` (YYYY-MM-DD), `url`, `view_count`, `like_count`, `duration` (seconds), `description_preview`
+  - `selected` (bool) — whether this video was selected for transcription
+  - `selection_reason` (string, only for LLM-selected videos) — why this video was chosen
   - `transcript_available` (bool)
   - `extraction` (string, if pre-processed) OR `raw_transcript` (string, if below threshold or `--no-preprocess`)
   - `word_count`, `preprocessed` (bool)
-- `metadata` — `backend`, `videos_searched`, `transcripts_fetched`, `transcripts_preprocessed`, `cache_hit`
+- `metadata` — `backend`, `videos_searched`, `videos_selected`, `transcripts_fetched`, `transcripts_preprocessed`, `selection_method` (`llm` | `top_by_views` | `all`), `warnings`, `cache_hit`
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/youtube.py search "SwiftUI navigation patterns 2026" --question "What navigation patterns are recommended for complex SwiftUI apps?" --max-videos 5 --max-transcripts 3 --after 2026-01-01
+uv run ~/.claude/skills/research/scripts/youtube.py search "SwiftUI navigation patterns 2026" --question "What navigation patterns are recommended for complex SwiftUI apps?" --max-videos 10 --after 2026-01-01
 ```
 
 ---
@@ -186,4 +190,5 @@ No flags. Returns resolved API key status, persistence setting, and which env fi
 - `--recency`: preset window — `hour` | `day` | `week` | `month` | `year`. For custom ranges use `--after`/`--before` with YYYY-MM-DD dates.
 - Also available as built-in tools: **WebSearch** (free, broad) and **WebFetch** (free, page summary).
 - YouTube search requires `yt-dlp` installed locally (`brew install yt-dlp`). No API keys needed.
+- YouTube video selection uses `claude -p` (Opus, Claude subscription). Pass `--no-select` to skip.
 - YouTube transcript pre-processing uses `claude -p --model sonnet` (Claude subscription, no API key). Pass `--no-preprocess` to skip.
