@@ -11,6 +11,14 @@ the LLM handling information gathering and execution between them.
 Usage: `/work-ticket MIN-42`
 </objective>
 
+<formatting_principle>
+At every checkpoint, lead with user-visible behavior and system-level impact.
+Follow with code-level detail (files, lines, patterns) as supporting evidence.
+The behavior layer is what the engineer validates. The code layer is additive
+context — valuable when the engineer knows the codebase, safely skippable
+when they don't.
+</formatting_principle>
+
 <context>
 Ticket ID: $ARGUMENTS
 
@@ -101,8 +109,11 @@ Present a structured diagnosis:
 >
 > **What's happening:** [Current behavior from the user's perspective]
 >
-> **Root cause:** [The underlying technical reason, with evidence.
-> Reference specific files and lines.]
+> **Root cause:** [Why this happens — explained at the system/behavior level,
+> in terms any engineer can validate regardless of codebase familiarity]
+>
+> *Code path:* [Specific files, lines, and mechanism — supporting evidence
+> for the above.]
 >
 > **Symptom vs. cause:** [If the ticket description focuses on symptoms,
 > explicitly distinguish: "The ticket reports X, but the actual cause is Y."
@@ -160,15 +171,16 @@ a design lens, not as post-hoc validation.
 
 > **Design context**
 >
-> **Existing patterns:** [How similar functionality is implemented in this
-> codebase. Reference specific files.]
->
-> **Reusable code:** [Existing utilities, components, or abstractions the
-> solution should leverage. Skip if nothing relevant.]
+> **How it works today:** [How the affected area behaves — described at the
+> level of user flows and data flow, not implementation detail]
 >
 > **Hard constraints:** [API contracts, data formats, backwards compatibility]
 >
 > **Soft constraints:** [Team conventions, UX patterns, architectural preferences]
+>
+> *Implementation detail:* [Existing code patterns, reusable utilities or
+> abstractions the solution should follow or leverage. Reference specific
+> files. Skip if nothing relevant.]
 >
 > **Precedent:** [What the search found, if anything.
 > "No relevant precedent found" is a valid answer.]
@@ -187,14 +199,16 @@ resolves the root cause and fits the constraints above.
 
 > **Solution spectrum**
 >
-> **Quick fix:** [What changes, where. Speed gain vs. what you give up.
-> Resolves root cause: yes/partially/no. Fits existing patterns: yes/no.]
+> **Quick fix:** [What changes in behavior. Risk: what could break.
+> Speed gain vs. what you give up. Resolves root cause: yes/partially/no.]
+> *Implementation:* [What changes where in code. Fits existing patterns: yes/no.]
 >
-> **Pragmatic:** [What changes, where. Balances speed and quality.
-> How it leverages existing patterns and reusable code.]
+> **Pragmatic:** [What changes in behavior. Risk level.
+> Balances speed and quality.]
+> *Implementation:* [What changes where. How it leverages existing code.]
 >
-> **Scalable:** [What changes, where. Long-term quality gain vs.
-> what it costs now. Where it departs from existing patterns, and why.]
+> **Scalable:** [What changes in behavior. Long-term quality gain vs. cost now.]
+> *Implementation:* [What changes where. Departures from existing patterns, and why.]
 
 Not every ticket warrants all three points on the spectrum. Use judgment —
 a trivial bug fix needs one approach; a feature with real design latitude
@@ -229,13 +243,18 @@ After implementation, present verification mapped back to the diagnosis:
 
 > **Verification**
 >
+> **Before → After:** [What the user experienced before, and what they'll
+> experience now. Described in terms of visible behavior.]
+>
+> **Root cause resolved:** [Confirm the diagnosed root cause is addressed,
+> not just symptoms patched. Reference the diagnosis from Checkpoint 1.]
+>
+> *Change detail:*
+>
 > | Change | Addresses |
 > |--------|-----------|
 > | [file: what changed] | [which part of the root cause this resolves] |
 > | ... | ... |
->
-> **Root cause resolved:** [Confirm the diagnosed root cause is addressed,
-> not just symptoms patched]
 
 Then ask:
 
