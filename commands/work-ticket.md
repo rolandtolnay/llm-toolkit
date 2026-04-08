@@ -1,10 +1,12 @@
 ---
-description: Work on an existing Linear ticket — fetch, explore, clarify, plan, implement, commit, and close
+description: Work on an existing Linear ticket — diagnose, design, execute
 argument-hint: "<ticket-id>"
 ---
 
 <objective>
-End-to-end workflow for implementing a Linear ticket. Progresses through four distinct phases — Orient, Understand, Solve, Execute — each with a clear purpose and decision point. The user always knows what phase they're in and what comes next.
+End-to-end workflow for implementing a Linear ticket. Three decision checkpoints
+where the engineer's judgment matters most — diagnosis, design, verification — with
+the LLM handling information gathering and execution between them.
 
 Usage: `/work-ticket MIN-42`
 </objective>
@@ -19,14 +21,14 @@ uv run ~/.claude/skills/linear/scripts/linear.py get $ARGUMENTS```
 
 <process>
 
-<!-- PHASE 1: ORIENT — Gather context and set expectations -->
+<!-- PHASE 1: ORIENT — Gather context, no engineer input needed -->
 
 <step name="fetch_ticket">
 Parse the ticket JSON response. Extract:
-- **Title** and **description** (the core requirements)
-- **Priority** and **estimate** (scope signal)
+- **Title** and **description** (the problem statement)
+- **Priority** and **estimate** (urgency/scope signal)
 - **State** (confirm it's not already done)
-- **Comments** (may contain clarifications)
+- **Comments** (often contain clarifications or reproduction steps)
 - **Parent issue** (if sub-issue, fetch parent for broader context)
 - **Relations** (blocking/blocked-by tickets)
 
@@ -41,142 +43,213 @@ uv run ~/.claude/skills/linear/scripts/linear.py state $ARGUMENTS "In Progress"
 </step>
 
 <step name="announce_workflow">
-Present the ticket summary, then announce the workflow phases so the user knows what to expect:
+Present the ticket summary, then announce the workflow:
 
 > **$ARGUMENTS: [ticket title]**
-> [1-2 sentence summary of the ticket]
+> [1-2 sentence summary]
 >
 > Here's how we'll work through this:
-> 1. **Understand** — I'll explore the codebase and make sure I fully understand the requirements. I'll check in with you on anything I'm unsure about.
-> 2. **Solve** — I'll break down the problem and propose solution approaches for you to choose from.
-> 3. **Execute** — Once we've agreed on an approach, I'll plan, implement, commit, and close the ticket.
+> 1. **Diagnose** — I'll explore the codebase and present my understanding of
+>    the root cause. You confirm I've got it right.
+> 2. **Design** — I'll search for precedent and present solution approaches
+>    on a spectrum. You pick the direction.
+> 3. **Execute** — I'll implement and present changes mapped back to the
+>    diagnosis for your review before committing.
 >
-> Starting with exploration now.
+> Starting exploration now.
 
-This is informational — do not wait for confirmation. Proceed immediately.
+Do not wait for confirmation — proceed immediately.
 </step>
 
 <step name="load_skills">
-Scan the skill list in your system message for skills matching the ticket's technology or domain. Invoke each match via the Skill tool before proceeding — skills contain conventions and patterns that change what you look for during exploration.
+Scan the skill list for skills matching the ticket's technology or domain.
+Invoke each match via the Skill tool before proceeding.
 
-- One clear match -> invoke it directly
-- Multiple candidates -> use AskUserQuestion to let the user choose
-- No match -> proceed without
+- One clear match → invoke directly
+- Multiple candidates → use AskUserQuestion to let the user choose
+- No match → proceed without
 </step>
 
-<!-- PHASE 2: UNDERSTAND — Deep codebase knowledge + validated requirements -->
+<!-- PHASE 2: DIAGNOSE — Root cause analysis + engineer validation -->
 
 <step name="explore_codebase">
-Launch parallel Explore agents to understand the areas the ticket touches. Base search terms on ticket title, description, and any file/component names mentioned.
+Launch parallel Explore agents to understand the problem area. Frame searches
+around the ticket's symptoms and domain.
 
 **Scope-adaptive agent count:**
-- **1 agent** — Focused ticket with named files/components (bug fix, small feature in a known area)
-- **2-3 agents** — Ticket touching multiple areas or unfamiliar domain
+- **1 agent** — Focused ticket with named files/components
+- **2-3 agents** — Multiple areas or unfamiliar domain
 
-Search focuses (select based on scope):
-1. **Architecture search** — Find files, modules, and patterns related to the ticket's domain
-2. **Convention search** — Find existing patterns for the type of change described (e.g., how similar features are implemented)
-3. **Dependency search** — Find code that depends on or is depended upon by the target area
+**Search focuses (diagnostic lens):**
+1. **Symptom trace** — Find the code paths that produce the reported behavior.
+   Trace from user-facing symptoms inward.
+2. **Root cause search** — Follow the symptom trace deeper. Look for the
+   underlying reason, not just where it manifests.
+3. **Context scan** — What depends on this area? What conventions exist here?
+   Note existing patterns and reusable code for the Design phase.
 
-After agents return, read the key files yourself — do not rely solely on agent summaries.
+After agents return, read the key files yourself — do not rely solely on
+agent summaries.
 </step>
 
-<step name="validate_requirements">
-**Do NOT proceed to the Solve phase until you have 95% confidence that you know what to build.**
+<step name="present_diagnosis">
+**CHECKPOINT 1 — Highest-leverage decision point. Do not rush past it.**
 
-Tickets are written by humans for humans and almost always underspecify. Claude knows code, user knows intent. This step closes the information asymmetry gap.
+Present a structured diagnosis:
 
-**Present your understanding:**
+> **Diagnosis**
+>
+> **What's happening:** [Current behavior from the user's perspective]
+>
+> **Root cause:** [The underlying technical reason, with evidence.
+> Reference specific files and lines.]
+>
+> **Symptom vs. cause:** [If the ticket description focuses on symptoms,
+> explicitly distinguish: "The ticket reports X, but the actual cause is Y."
+> If the ticket correctly identifies the cause, state that.]
+>
+> **Desired outcome:** [What "fixed" looks like from the user's perspective]
+>
+> **Scope boundary:** [What we ARE fixing vs. what we're NOT touching, and why]
 
-> **Phase 2: Understand** — Here's what I found and what I think needs to happen.
+Then ask:
 
-- What the ticket requires (your interpretation of acceptance criteria)
-- High-confidence assumptions — state these as facts, not questions. Example: "The new field should follow the existing pattern in `UserProfile`."
-- Conflicts or gaps between ticket description and existing code
+> Does this diagnosis match your understanding? Specifically — am I targeting
+> the root cause, or is there something deeper I'm missing?
 
-**Resolve gaps actively:**
-
-For each medium or low-confidence assumption, ask a **separate, focused AskUserQuestion**. Do not bundle multiple gaps into one question — each gap is its own decision.
-
-Frame each question with the codebase context you discovered during exploration so the user has what they need to answer. Example:
-> "The ticket says 'add validation' but doesn't specify behavior on failure. The existing `OrderValidator` returns error messages inline. Should this new validation follow the same pattern, or did you have something different in mind?"
-
-**What NOT to ask** (Claude determines these from exploration):
-- Technical patterns to follow
-- Error handling strategy
-- Implementation details the user can't meaningfully influence
-- Only ask about: user intent, expected behavior, scope boundaries
-
-**If no gaps exist** (all assumptions are high-confidence), present your understanding and ask a single confirmation:
-> "I'm confident I understand the requirements. [1-2 sentence summary]. Does this match your expectations, or should I adjust anything before I move to proposing solutions?"
-
-**On corrections:** Absorb user feedback. Do not re-present the full understanding — proceed with updated context.
+**On correction:** Absorb feedback. If the diagnosis changes significantly,
+do a targeted follow-up exploration before proceeding. Do not re-present the
+full diagnosis — acknowledge the correction and move forward.
 </step>
 
-<!-- PHASE 3: SOLVE — First-principles decomposition + solution options -->
+<!-- PHASE 3: DESIGN — Precedent + constraints + solution spectrum -->
 
-<step name="decompose_problem">
-**Do NOT enter plan mode yet.** Before proposing solutions, decompose the problem to its fundamentals.
+<step name="search_precedent">
+Before proposing solutions, search for how similar problems have been solved.
 
-> **Phase 3: Solve** — Now that requirements are clear, here's my analysis and proposed approaches.
+Use AskUserQuestion to ask the engineer where to look:
 
-**First-principles decomposition:**
+> Before I propose solutions — have you seen a similar problem before?
+> Where should I look for precedent?
+>
+> 1. **This project** — I'll search git history for related changes
+> 2. **Another project** — tell me which one and I'll explore it
+> 3. **Past conversations** — I'll search session history for relevant discussions
+> 4. **Skip** — move straight to solution design
+> 5. **Your call** — I'll do a quick best-effort search without over-investing
 
-1. **Irreducible requirements** — What must be true regardless of implementation approach? Strip away conventions and list as bullet points.
+Based on the response:
+- **This project:** Search git log and codebase for related patterns
+  (`git log --all --oneline --grep="<keyword>"`, targeted Grep searches)
+- **Another project:** Explore the named project's relevant areas using
+  Explore agents
+- **Past conversations:** Invoke `/session-search` with a description of
+  the problem type
+- **Skip:** Proceed immediately to design constraints
+- **Your call:** Quick git log search in current project only. Limit to
+  2-3 queries, stop regardless of results. Do not over-invest.
 
-2. **Current situation** — What exists in the codebase today: relevant patterns, current behavior, key files. Note which existing patterns are load-bearing (must follow) vs. conventional (could depart from).
+Present findings briefly as context for the design step — this is not its
+own checkpoint.
+</step>
 
-3. **Constraints** — Hard constraints (API contracts, data formats, backwards compatibility) vs. soft constraints (existing conventions, team preferences).
+<step name="present_design_context">
+Present the constraints the engineer needs to evaluate solutions against.
+This context is presented BEFORE proposals so the engineer reads it with
+a design lens, not as post-hoc validation.
+
+> **Design context**
+>
+> **Existing patterns:** [How similar functionality is implemented in this
+> codebase. Reference specific files.]
+>
+> **Reusable code:** [Existing utilities, components, or abstractions the
+> solution should leverage. Skip if nothing relevant.]
+>
+> **Hard constraints:** [API contracts, data formats, backwards compatibility]
+>
+> **Soft constraints:** [Team conventions, UX patterns, architectural preferences]
+>
+> **Precedent:** [What the search found, if anything.
+> "No relevant precedent found" is a valid answer.]
 </step>
 
 <step name="propose_solutions">
-**Scale the number of proposals to actual decision space:**
+**CHECKPOINT 2 — Engineer chooses direction.**
 
-- **One obvious approach** (bug fix, clear-cut feature): Present the single approach with a brief note on why alternatives were dismissed. Still frame it against the irreducible requirements to confirm coverage.
+Scale proposals to actual decision space:
 
-- **Genuine design latitude** (multiple valid paths): Present **2-3 approaches**, each structured as:
-  - **Approach name** — one-line summary
-  - **How it works** — concrete description of what changes where
-  - **Tradeoffs** — what you gain and what you give up, evaluated against the irreducible requirements
-  - **Convention vs. departure** — note where this follows existing patterns and where it breaks new ground, with rationale for departures
+**One obvious approach** (bug fix, clear-cut feature): Present the single
+approach with a brief note on why alternatives don't apply. Verify it
+resolves the root cause and fits the constraints above.
 
-**For each approach, verify:** Does it satisfy every irreducible requirement? If not, flag the gap explicitly.
+**Genuine design latitude** (multiple valid paths): Present on a spectrum:
 
-**After presenting approaches:**
+> **Solution spectrum**
+>
+> **Quick fix:** [What changes, where. Speed gain vs. what you give up.
+> Resolves root cause: yes/partially/no. Fits existing patterns: yes/no.]
+>
+> **Pragmatic:** [What changes, where. Balances speed and quality.
+> How it leverages existing patterns and reusable code.]
+>
+> **Scalable:** [What changes, where. Long-term quality gain vs.
+> what it costs now. Where it departs from existing patterns, and why.]
 
-> If you'd like to evaluate these through a specific lens, you can use a mental framework — for example `/consider:opportunity-cost`, `/consider:second-order`, or `/consider:via-negativa`.
+Not every ticket warrants all three points on the spectrum. Use judgment —
+a trivial bug fix needs one approach; a feature with real design latitude
+needs the full spectrum.
 
-Then ask the user to choose:
-> Which approach would you like to go with? You can also propose a different direction entirely.
+> Which approach fits best? You can also combine elements or propose
+> something different.
+>
+> To evaluate through a specific lens: `/consider:opportunity-cost`,
+> `/consider:second-order`, `/consider:via-negativa`
 
-**This is a collaboration checkpoint** — wait for user input. The user may pick an approach, combine elements from multiple proposals, challenge the decomposition, or propose something entirely different. Engage fully; proceed to planning only when the user explicitly signals readiness.
+Wait for user input. The user may pick, combine, challenge, or redirect.
+Engage fully — proceed only when they explicitly signal readiness.
 </step>
 
-<!-- PHASE 4: EXECUTE — Plan, implement, commit, close -->
+<!-- PHASE 4: EXECUTE — Plan, implement, verify, finalize -->
 
-<step name="plan">
+<step name="plan_and_implement">
 Enter plan mode if not already in it.
 
-> **Phase 4: Execute** — Implementing the agreed approach.
+> **Executing** the agreed approach.
 
 Include the ticket ID ($ARGUMENTS) in the plan title for traceability.
 
-**The plan MUST include these final steps after all implementation steps (always present, always last):**
+The plan MUST include a final verification step before the commit step.
+</step>
 
-1. **Verify changes** — present a summary of all changes made
-2. **Commit** — ask the user to confirm changes are ready, then invoke `/commit-commands:commit`. The commit message MUST include `[$ARGUMENTS]` (e.g., `[MIN-44]`).
-3. **Comment on ticket with solution summary** — after the commit succeeds, invoke the `linear` skill with args: `Add a comment to $ARGUMENTS summarizing the solution: what approach was chosen, what files were changed, and any notable decisions. Then attach the commit to the ticket.`
-4. **Mark ticket as Done** — this is a SEPARATE step. Invoke the `linear` skill with args: `Mark $ARGUMENTS as done`. Always confirm the state change succeeded.
+<step name="verify_and_finalize">
+**CHECKPOINT 3 — Engineer approves before commit.**
 
-Do NOT combine steps 3 and 4 into a single skill invocation — they are separate actions.
+After implementation, present verification mapped back to the diagnosis:
+
+> **Verification**
+>
+> | Change | Addresses |
+> |--------|-----------|
+> | [file: what changed] | [which part of the root cause this resolves] |
+> | ... | ... |
+>
+> **Root cause resolved:** [Confirm the diagnosed root cause is addressed,
+> not just symptoms patched]
+
+Then ask:
+
+> Changes are ready. Want me to commit and close the ticket?
+
+On approval, invoke `/finalize-ticket $ARGUMENTS`.
 </step>
 
 </process>
 
 <success_criteria>
-- Ticket marked as Done (explicitly verified, not assumed)
-- Solution summary comment left on ticket
-- Commit message includes `[$ARGUMENTS]` for git-Linear traceability
-- Requirements validated through active gap resolution before solution design
-- Solution approach selected by user from first-principles-grounded proposals
+- Root cause explicitly diagnosed and confirmed by engineer before solution design
+- Precedent search attempted (or explicitly skipped by engineer)
+- Solutions evaluated against codebase conventions presented as design constraints
+- Changes verified against root cause diagnosis before commit
+- Ticket finalized via /finalize-ticket (committed, commented, attached, marked done)
 </success_criteria>
