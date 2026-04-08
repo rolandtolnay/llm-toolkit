@@ -80,6 +80,7 @@ _LOADED_ENV_FILES = _load_env_files()
 PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
 CONTEXT7_API_KEY = os.environ.get("CONTEXT7_API_KEY", "")
 FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY", "")
+SCRAPECREATORS_API_KEY = os.environ.get("SCRAPECREATORS_API_KEY", "")
 
 PERPLEXITY_BASE_URL = "https://api.perplexity.ai"
 CONTEXT7_BASE_URL = "https://context7.com/api/v2"
@@ -1088,6 +1089,7 @@ def config() -> None:
             "perplexity": bool(PERPLEXITY_API_KEY),
             "context7": bool(CONTEXT7_API_KEY),
             "firecrawl": bool(FIRECRAWL_API_KEY),
+            "scrapecreators": bool(SCRAPECREATORS_API_KEY),
         },
         "env_files": env_files,
     })

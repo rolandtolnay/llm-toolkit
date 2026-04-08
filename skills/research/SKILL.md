@@ -49,6 +49,14 @@ uv run <yt-script> search "<query>" [--question Q] [--max-videos N] [--after YYY
 
 Cost: free (yt-dlp + youtube-transcript-api, no API keys). Pre-processing uses Claude subscription (claude -p).
 Requires: yt-dlp installed (brew install yt-dlp)
+
+Social script: `~/.claude/skills/research/scripts/social.py`
+
+uv run <social-script> reddit "<query>" [--question Q] [--subreddit S] [--no-cache]
+uv run <social-script> shortform "<query>" [--no-cache]
+
+Cost: ScrapeCreators PAYG (100 free calls, then pay-as-you-go). Condensing uses Claude subscription (claude -p).
+Requires: SCRAPECREATORS_API_KEY in ~/.claude/research/.env
 ```
 </cli_cheatsheet>
 
@@ -71,6 +79,8 @@ Examples: "best practices for X + Y", "evaluate X vs Y for our use case", "compr
 - Source diversity rule applies (2+ sources per subagent).
 
 **YouTube availability**: When yt-dlp is installed, subagents can search YouTube for video content. Assign YouTube to subagents when the sub-question involves tutorials, demos, conference talks, developer workflows, product reviews, or practitioner opinions. Skip YouTube for API specs, pricing lookups, legal/compliance questions, or purely factual reference queries.
+
+**Social availability**: When SCRAPECREATORS_API_KEY is configured, subagents can search Reddit (`social reddit`) and short-form video (`social shortform`). Assign Reddit when community opinions or real-world experiences add value. Assign shortform when trending/viral/consumer content is relevant. Skip for official docs, compliance questions, or purely factual lookups.
 </complexity_assessment>
 
 <quick_mode>
@@ -93,12 +103,22 @@ For STANDARD and DEEP complexity queries:
 
 Analyze the question and generate 2-4 specific sub-questions. For each, assign a source strategy.
 
-**Angles checklist** (not rigid — pick what's relevant):
-- Does this question have an **official tooling/docs** dimension?
-- Does it have a **community experience** dimension?
-- Does it have an **ecosystem/third-party** dimension?
-- Does it have an **implementation/how-to** dimension?
-- Does it have a **practitioner experience/demo** dimension? → assign YouTube search
+**Source assignment** — for each sub-question, consider which sources add unique value:
+
+- **YouTube** (free): Would watching someone show, explain, or review this help?
+  Tutorials, reviews, travel vlogs, cooking demos, talks, product walkthroughs, "what is X actually like?"
+  Skip when: the answer is a fact, number, URL, or specification.
+- **Reddit** (ScrapeCreators): Would hearing what real people experienced or recommend help?
+  "Best X for Y", troubleshooting, honest opinions, local knowledge, community recommendations, "has anyone tried X?"
+  Skip when: you need official/authoritative info, or the topic is too niche for active communities.
+- **Short-form video** (ScrapeCreators): Is this about current trends, viral content, or quick visual takes?
+  Trending products, consumer sentiment, cultural moments, "what are people saying about X right now?"
+  Skip when: depth or nuance matters more than recency.
+
+Priority: YouTube ≥ WebSearch > Reddit > short-form.
+YouTube and WebSearch are free — prefer them when they cover the sub-question.
+Use Reddit when community perspective adds value beyond what WebSearch captures.
+Short-form is supplementary — assign only when trends/viral dimension is clearly relevant.
 
 **Mandatory source rules:**
 - At least one subagent must run **WebSearch** (broad discovery, free)
@@ -133,6 +153,7 @@ RULES:
 |------|-------|-------------|
 | FREE | WebSearch, WebFetch, `research docs` | Always start here. Sufficient for well-documented topics. |
 | FREE | `youtube search` (yt-dlp, no API key) | Tutorials, demos, talks, practitioner workflows. Needs yt-dlp. |
+| FREE | `social reddit`, `social shortform` (ScrapeCreators PAYG) | Community opinions, trending content. Needs SCRAPECREATORS_API_KEY. |
 | CHEAP | `research search` ($0.005), `research map` (1 FC credit), `research ask` (~$0.02) | When free sources lack depth or specificity. |
 | MEDIUM | `research reason` (~$0.02), `research scrape` (1 FC credit) | For complex comparisons, when you need the full page content. |
 
@@ -194,6 +215,7 @@ The CLI loads skill-specific env files before reading API keys. This lets users 
 PERPLEXITY_API_KEY=pplx-...
 CONTEXT7_API_KEY=...
 FIRECRAWL_API_KEY=fc-...
+SCRAPECREATORS_API_KEY=...
 
 # Settings
 RESEARCH_NO_PERSIST=0    # Set to 1 to disable research output persistence
@@ -211,4 +233,5 @@ Run `research config` to see resolved configuration (which keys are set, persist
 - [ ] Quick lookups resolve without subagents when answer is clear
 - [ ] Graceful degradation when API keys are missing
 - [ ] YouTube search assigned to subagents where video content adds value
+- [ ] Reddit/shortform assigned to subagents where community/trending content adds value
 </success_criteria>

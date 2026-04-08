@@ -11,4 +11,4 @@ hooks:
           timeout: 5
 ---
 
-You are a research subagent. Follow the instructions in your prompt exactly.
+You are a research subagent. Before starting work, read ~/.claude/skills/research/references/cli-reference.md for the full list of research CLI tools available to you. Then follow the instructions in your prompt exactly.

@@ -168,6 +168,66 @@ uv run ~/.claude/skills/research/scripts/youtube.py search "SwiftUI navigation p
 
 ---
 
+## Social CLI
+
+**CLI script:** `~/.claude/skills/research/scripts/social.py`
+
+Run with: `uv run ~/.claude/skills/research/scripts/social.py <command> [options]`
+
+**Prerequisite:** `SCRAPECREATORS_API_KEY` must be set in `~/.claude/research/.env` or shell environment.
+
+---
+
+### `reddit "<query>"` — Reddit thread search + comments (ScrapeCreators PAYG)
+
+Search Reddit globally or within a subreddit. Returns top threads ranked by upvotes with top comments. Optionally condenses findings via `claude -p` when content exceeds 2500 words.
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--question` / `-q` | none | Research question — triggers condensing when comment volume is high |
+| `--subreddit` / `-s` | none | Limit search to a specific subreddit (without `r/` prefix) |
+| `--no-cache` | false | Bypass cache |
+
+**Condensing:** When `--question` is provided and total comment text exceeds 2500 words, threads are condensed via `claude -p --model sonnet` to extract consensus views, contrarian opinions, specific mentions, and notable quotes.
+
+**Output fields:**
+- `threads` — list of thread objects, each with:
+  - `title`, `url`, `subreddit`, `date` (YYYY-MM-DD), `score`, `num_comments`, `selftext` (first 500 chars)
+  - `comments` — list of top 10 comments by score, each with:
+    - `author`, `score`, `excerpt` (300 chars at word boundary)
+    - `top_reply` — highest-scored reply (`{ author, score, excerpt }`) or `null`
+- `condensed` — bulleted findings string (when condensing triggered) or `null`
+- `metadata` — `backend`, `threads_found`, `threads_returned`, `condensed` (bool), `cache_hit`
+
+**Example:**
+```bash
+uv run ~/.claude/skills/research/scripts/social.py reddit "best React navigation library" --question "What do developers recommend?" --subreddit reactjs
+```
+
+---
+
+### `shortform "<query>"` — TikTok + Instagram Reels search (ScrapeCreators PAYG)
+
+Search TikTok and Instagram Reels in parallel, interleave top 3 from each, and fetch transcripts/captions. Items with captions under 30 words are filtered as noise.
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--no-cache` | false | Bypass cache |
+
+**Output fields:**
+- `items` — interleaved list (TT1/IG1/TT2/IG2/TT3/IG3), each with:
+  - `platform` (`tiktok` | `instagram`), `video_id`, `text` (description), `url`, `author`
+  - `views`, `likes`, `duration` (seconds)
+  - `caption` — transcript or description, max 500 words
+- `metadata` — `backend`, `tiktok_found`, `instagram_found`, `items_returned`, `captions_fetched`, `cache_hit`
+
+**Example:**
+```bash
+uv run ~/.claude/skills/research/scripts/social.py shortform "trending AI tools"
+```
+
+---
+
 ### `credits` — Check Firecrawl balance
 
 No flags. Returns remaining credits and plan info.
@@ -192,3 +252,5 @@ No flags. Returns resolved API key status, persistence setting, and which env fi
 - YouTube search requires `yt-dlp` installed locally (`brew install yt-dlp`). No API keys needed.
 - YouTube video selection uses `claude -p` (Opus, Claude subscription). Pass `--no-select` to skip.
 - YouTube transcript pre-processing uses `claude -p --model sonnet` (Claude subscription, no API key). Pass `--no-preprocess` to skip.
+- Social search requires `SCRAPECREATORS_API_KEY` set in `~/.claude/research/.env`
+- Reddit condensing uses `claude -p --model sonnet` (Claude subscription). Only triggers when `--question` provided and content exceeds 2500 words.
