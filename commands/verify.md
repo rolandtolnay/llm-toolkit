@@ -37,7 +37,7 @@ Analyze the changes. Use Explore agents to parallelize. Judge which dimensions m
 
 Run tests if they exist. Test failures are findings — no need for deeper analysis on code that tests already reject.
 
-Produce a findings list. Each finding: location, confidence (certain / likely / possible), description with code snippets, and the concrete failure scenario.
+Produce a findings list. Each finding: confidence (certain / likely / possible), the concrete failure scenario (what goes wrong for the user), then location and code evidence supporting the finding.
 
 ## Beat 3: Interrogation
 
