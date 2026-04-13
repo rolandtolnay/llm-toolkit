@@ -17,7 +17,7 @@ cd your-project && ~/toolkits/llm-toolkit/install.js
 
 ## What this is
 
-Slash commands, auto-activating skills, and reference guides for Claude Code. Workflow automation (commits, verification, handoffs), 12 mental frameworks for structured decisions, and guides for writing better prompts.
+Slash commands, auto-activating skills, and reference guides for Claude Code. Workflow automation (commits, verification, handoffs), integrations with Linear, Slack, and the web for research, 12 mental frameworks for structured decisions, and guides for writing better prompts.
 
 ---
 
@@ -173,49 +173,106 @@ Analyze what you give up by choosing each option. Use when deciding between buil
 
 Improve by removing rather than adding. Use when a prompt, config, or module feels bloated but you're unsure what to cut.
 
-### Linear integration
+### Integrations
 
-A conversational interface to Linear, built as a Claude Code skill. Describe what you're working on and it creates tickets, assigns work, updates status, and queries issues without leaving your terminal.
+Skills that connect Claude Code to your daily tools. Each activates automatically based on what you mention in conversation — no slash command needed.
 
-- **Effort and impact estimation** -- infers priority (user impact) and estimate (implementation effort) from your description, calibrated for AI-assisted development
-- **Project and label discovery** -- fetches available projects and labels, matches them to your ticket's domain, and suggests assignments
-- **Scope-change awareness** -- when a comment or description update changes the scope of work, automatically re-evaluates priority and estimate
+#### Linear
 
-Activates when you mention creating tickets, updating issues, or checking assignments. Configure with a `.linear.json` in your project root and a `LINEAR_API_KEY` in `.claude/settings.local.json`.
+A conversational interface to Linear. Describe what you're working on and Claude infers priority and effort, picks the right project and labels, confirms once, and creates the ticket.
 
-### Research
+- **Effort and impact estimation calibrated for AI-assisted development** — infers priority from user impact and estimates implementation effort using values appropriate for working with Claude, not human-week sprints
+- **Project and label discovery** — fetches available projects and labels and matches them to the ticket's domain
+- **Scope-change awareness** — when a comment or description update changes scope, re-evaluates priority and estimate
+- **Custom view management** — create, list, and delete Linear views from the conversation
+- **Document and attachment support** — create native markdown documents on issues, attach files, and link git commits
 
-Web research that scales from quick lookups to deep multi-source investigations. Searches the web, synthesizes answers, scrapes pages, and queries library docs -- then persists results so paid API calls are never wasted.
+Activates on phrases like "create a ticket", "mark done", "my issues", or any reference to an issue ID like `ABC-123`.
 
-- **Cost-conscious escalation** -- starts with free tools (WebSearch, WebFetch, Context7 docs), escalates to Perplexity and Firecrawl only when needed
-- **Parallel subagents** -- decomposes complex questions into sub-questions and investigates them simultaneously with source diversity requirements
-- **Source verification** -- cross-references findings, flags contradictions, and signals confidence levels (verified, likely, unverified)
-- **Persistence** -- standard and deep research runs are saved to `~/Documents/Research/` with a scannable index
+**Setup:**
+
+1. Create a `.linear.json` in your project root:
+   ```json
+   {
+     "teamId": "your-team-uuid",
+     "projectId": "default-project-uuid",
+     "defaultPriority": 3,
+     "defaultLabels": ["mobile"]
+   }
+   ```
+2. Add a Linear API key to `.claude/settings.local.json` (git-ignored):
+   ```json
+   {
+     "env": {
+       "LINEAR_API_KEY": "lin_api_..."
+     }
+   }
+   ```
+3. Generate a key at [linear.app/settings/api](https://linear.app/settings/api).
+
+#### Research
+
+Web research that scales from quick lookups to deep multi-source investigations. Decomposes a question into sub-questions, runs them in parallel across web search, library docs, Reddit, YouTube, and short-form video, then synthesizes a cited answer and saves it for later runs.
+
+- **Cost-conscious escalation** — starts with free tools (WebSearch, WebFetch, Context7 docs, YouTube via yt-dlp) and only spends API budget when free sources fall short
+- **Parallel decomposition** — splits complex questions across subagents that investigate independently, with mandatory source diversity per subagent
+- **Source verification** — cross-references findings across primary, secondary, and tertiary sources, flags contradictions, and signals confidence (verified, likely, unverified)
+- **Compounding knowledge** — saves standard and deep runs to `~/Documents/Research/` with a scannable index, then consults that index before spending API budget on questions you've already researched
+- **Audit trail** — every web call is logged so you can review what each subagent did and how much it cost
 
 Activates on "search for", "look up", "find out", "what's the latest", or "research".
 
-<details>
-<summary>API key setup</summary>
+**Setup:**
 
-The research skill uses three external services. Only Perplexity is required -- the others unlock additional capabilities.
+The skill loads keys from `~/.claude/research/.env` (global) or `.claude/research.env` (project-specific). Project files override global. Only Perplexity is required — the others unlock additional sources.
 
-| Key | Service | Powers | Required | Get one at |
-|-----|---------|--------|----------|------------|
-| `PERPLEXITY_API_KEY` | [Perplexity](https://docs.perplexity.ai/) | `ask` (synthesized answers), `search` (URL discovery), `reason` (complex analysis) | Yes | [docs.perplexity.ai](https://docs.perplexity.ai/) |
-| `CONTEXT7_API_KEY` | [Context7](https://context7.com/) | `docs` (version-aware library documentation) | No | [context7.com/dashboard](https://context7.com/dashboard) |
-| `FIRECRAWL_API_KEY` | [Firecrawl](https://firecrawl.dev/) | `map` (site URL discovery), `scrape` (page content extraction) | No | [firecrawl.dev](https://firecrawl.dev/) |
+| Variable | Service | Powers | Required |
+|----------|---------|--------|----------|
+| `PERPLEXITY_API_KEY` | [Perplexity](https://docs.perplexity.ai/) | Synthesized answers, web search, reasoning | Yes |
+| `CONTEXT7_API_KEY` | [Context7](https://context7.com/dashboard) | Version-aware library documentation | No |
+| `FIRECRAWL_API_KEY` | [Firecrawl](https://firecrawl.dev/) | Site mapping and full page scraping | No |
+| `SCRAPECREATORS_API_KEY` | [ScrapeCreators](https://scrapecreators.com/) | Reddit and short-form video search | No |
 
-Set keys in `~/.claude/research/.env` (global) or `.claude/research.env` (project-specific):
+Example `~/.claude/research/.env`:
 
 ```bash
 PERPLEXITY_API_KEY=pplx-...
 CONTEXT7_API_KEY=...
 FIRECRAWL_API_KEY=fc-...
+SCRAPECREATORS_API_KEY=...
 ```
 
-Run `research config` to verify which keys are set and which env files loaded.
+YouTube search additionally requires `yt-dlp` (`brew install yt-dlp` on macOS) — no API key.
 
-</details>
+Run `research config` to verify which keys are loaded and which env files were read.
+
+#### Slack
+
+A conversational interface to Slack that posts as your user, not a bot. Read-only commands run immediately; outbound messages always require explicit confirmation before posting.
+
+- **Posts as you** — uses your User OAuth Token, so messages appear from your account and respect your DMs, channels, and workspace permissions
+- **Confirmation gate on outbound** — every send, schedule, and edit is drafted and shown to you before it goes out, so you never ship a message you didn't approve
+- **PR announcements** — `share the PR in #engineering-pr` reads the current branch's PR via `gh`, drafts an impact-focused message, and posts after confirmation
+- **Search and history** — Slack search modifiers work (`from:me`, `in:#channel`, `before:2026-03-01`); channel history surfaces threads inline
+- **Status and scheduling** — set status with auto-clear durations (`2h`, `1h30m`), schedule messages with `--at "in 30m"`
+
+Activates on phrases like "message Roland", "post in #engineering", "search Slack for X", or "set my status to deep work".
+
+**Setup:**
+
+1. Create a Slack app at [api.slack.com/apps](https://api.slack.com/apps) → "From scratch" → pick your workspace.
+2. Under **OAuth & Permissions**, add these User Token Scopes: `chat:write`, `search:read`, `channels:history`, `channels:read`, `users:read`, `users.profile:write`, `groups:history`, `groups:read`, `reactions:write`, `im:history`.
+3. Click **Install to Workspace** and copy the **User OAuth Token** (starts with `xoxp-`).
+4. Add it to `.claude/settings.local.json` (git-ignored):
+   ```json
+   {
+     "env": {
+       "SLACK_USER_TOKEN": "xoxp-..."
+     }
+   }
+   ```
+
+Full reference: `skills/slack/references/setup-guide.md`.
 
 ### Skills
 
@@ -285,7 +342,7 @@ Remove empty Claude Code conversations across all projects. Use when cleaning up
 
 - **`prompt-quality-guide.md`** -- How LLMs process instructions: finite capacity, interference, positional bias, context depletion.
 - **`docs/prompt-engineering-research-2025.md`** -- Academic research on instruction-following capacity and degradation patterns.
-- **`docs/claudemd-effectiveness-research.md`** -- Research on CLAUDE.md and AGENT.md file effectiveness.
+- **`docs/writing-effective-claude-md.md`** -- Reference guide for writing effective CLAUDE.md files.
 - **`docs/readme-guide.md`** -- Writing effective READMEs (the principles behind `/generate-readme`).
 - **`docs/building-skills-guide.md`** -- Guide to building Claude Code skills.
 - **`docs/skill-description-guide.md`** -- Writing YAML skill descriptions that Claude Code reliably discovers.
