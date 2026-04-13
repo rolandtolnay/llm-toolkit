@@ -2950,9 +2950,9 @@ def update(
             current_labels = current_issue.get("labels", {}).get("nodes", [])
             current_label_ids = [l["id"] for l in current_labels]
 
-            if no_labels:
+            if no_labels and not label:
                 removed_label_ids = current_label_ids
-            elif label:
+            if label:
                 label_ids = client.resolve_label_names(label, config.team_id)
                 # Remove labels not in the new set
                 new_set = set(label_ids)
