@@ -29,6 +29,44 @@ Each activates automatically based on what you mention in conversation — no sl
 
 ---
 
+### Research
+
+Web research that scales from quick lookups to deep multi-source investigations. Decomposes a question into sub-questions, runs them in parallel across web search, library docs, Reddit, YouTube, and short-form video, then synthesizes a cited answer and saves it for later runs.
+
+- **Cost-conscious escalation** — starts with free tools (WebSearch, WebFetch, Context7 docs, YouTube via yt-dlp) and only spends API budget when free sources fall short
+- **Parallel decomposition** — splits complex questions across subagents that investigate independently, with mandatory source diversity per subagent
+- **Source verification** — cross-references findings across primary, secondary, and tertiary sources, flags contradictions, and signals confidence (verified, likely, unverified)
+- **Compounding knowledge** — saves standard and deep runs to `~/Documents/Research/` with a scannable index, then consults that index before spending API budget on questions you've already researched
+- **Audit trail** — every web call is logged so you can review what each subagent did and how much it cost
+
+Activates on "search for", "look up", "find out", "what's the latest", or "research".
+
+**Setup:**
+
+The skill loads keys from three sources in increasing precedence: your shell environment (lowest), `~/.claude/research/.env` (skill-global), then `.claude/research.env` in the project root (highest). Already export `PERPLEXITY_API_KEY` in your shell? It just works — the env files only need to exist if you want to override or scope a key. Only Perplexity is required; the others unlock additional sources.
+
+| Variable | Service | Powers | Required |
+|----------|---------|--------|----------|
+| `PERPLEXITY_API_KEY` | [Perplexity](https://docs.perplexity.ai/) | Synthesized answers, web search, reasoning | Yes |
+| `CONTEXT7_API_KEY` | [Context7](https://context7.com/dashboard) | Version-aware library documentation | No |
+| `FIRECRAWL_API_KEY` | [Firecrawl](https://firecrawl.dev/) | Site mapping and full page scraping | No |
+| `SCRAPECREATORS_API_KEY` | [ScrapeCreators](https://scrapecreators.com/) | Reddit and short-form video search | No |
+
+Example `~/.claude/research/.env`:
+
+```bash
+PERPLEXITY_API_KEY=pplx-...
+CONTEXT7_API_KEY=...
+FIRECRAWL_API_KEY=fc-...
+SCRAPECREATORS_API_KEY=...
+```
+
+YouTube search additionally requires `yt-dlp` (`brew install yt-dlp` on macOS) — no API key.
+
+Run `research config` to verify which keys are loaded and which env files were read.
+
+---
+
 ### Linear
 
 A conversational interface to Linear. Describe what you're working on and Claude infers priority and effort, picks the right project and labels, confirms once, and creates the ticket.
@@ -61,44 +99,6 @@ Activates on phrases like "create a ticket", "mark done", "my issues", or any re
    }
    ```
 3. Generate a key at [linear.app/settings/api](https://linear.app/settings/api).
-
----
-
-### Research
-
-Web research that scales from quick lookups to deep multi-source investigations. Decomposes a question into sub-questions, runs them in parallel across web search, library docs, Reddit, YouTube, and short-form video, then synthesizes a cited answer and saves it for later runs.
-
-- **Cost-conscious escalation** — starts with free tools (WebSearch, WebFetch, Context7 docs, YouTube via yt-dlp) and only spends API budget when free sources fall short
-- **Parallel decomposition** — splits complex questions across subagents that investigate independently, with mandatory source diversity per subagent
-- **Source verification** — cross-references findings across primary, secondary, and tertiary sources, flags contradictions, and signals confidence (verified, likely, unverified)
-- **Compounding knowledge** — saves standard and deep runs to `~/Documents/Research/` with a scannable index, then consults that index before spending API budget on questions you've already researched
-- **Audit trail** — every web call is logged so you can review what each subagent did and how much it cost
-
-Activates on "search for", "look up", "find out", "what's the latest", or "research".
-
-**Setup:**
-
-The skill loads keys from `~/.claude/research/.env` (global) or `.claude/research.env` (project-specific). Project files override global. Only Perplexity is required — the others unlock additional sources.
-
-| Variable | Service | Powers | Required |
-|----------|---------|--------|----------|
-| `PERPLEXITY_API_KEY` | [Perplexity](https://docs.perplexity.ai/) | Synthesized answers, web search, reasoning | Yes |
-| `CONTEXT7_API_KEY` | [Context7](https://context7.com/dashboard) | Version-aware library documentation | No |
-| `FIRECRAWL_API_KEY` | [Firecrawl](https://firecrawl.dev/) | Site mapping and full page scraping | No |
-| `SCRAPECREATORS_API_KEY` | [ScrapeCreators](https://scrapecreators.com/) | Reddit and short-form video search | No |
-
-Example `~/.claude/research/.env`:
-
-```bash
-PERPLEXITY_API_KEY=pplx-...
-CONTEXT7_API_KEY=...
-FIRECRAWL_API_KEY=fc-...
-SCRAPECREATORS_API_KEY=...
-```
-
-YouTube search additionally requires `yt-dlp` (`brew install yt-dlp` on macOS) — no API key.
-
-Run `research config` to verify which keys are loaded and which env files were read.
 
 ---
 
