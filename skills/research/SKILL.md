@@ -126,7 +126,24 @@ Short-form is supplementary — assign only when trends/viral dimension is clear
 - Each subagent must use **2+ independent sources**
 - Trust hierarchy: **primary sources** (official docs, source code, author's post) > **secondary** (well-known blogs, curated lists) > **tertiary** (Perplexity synthesis, random forum posts)
 
-## STEP 2: SPAWN SUBAGENTS
+## STEP 2: CONSULT PRIOR RESEARCH
+
+Skip if `~/Documents/Research/INDEX.md` does not exist. Otherwise mandatory — prior research can answer your sub-questions outright or surface angles you missed.
+
+1. Read `~/Documents/Research/INDEX.md`. The index is organized by sub-question for exactly this matching purpose.
+2. For every sub-question from STEP 1, scan for matches and read each linked file (with anchor) to judge whether the prior finding still holds. Treat research older than ~6 months on fast-moving topics as context, not authority.
+3. Produce an explicit per-sub-question mapping before proceeding:
+   - SQ-A "X pricing tiers" → covered by `2026-03-12-x.md#pricing` → **DROP**
+   - SQ-B "X rate limits" → partial: free tier only → **KEEP, narrow to paid**
+   - SQ-C "X webhooks" → no prior coverage → **KEEP**
+   - SQ-D "X auth rotation" → new angle from `2026-03-12-x.md#auth` → **ADD**
+4. Branch on the mapping:
+   - All sub-questions DROPPED → synthesize from prior files and return. Do not spawn subagents. Cite the prior files.
+   - Some KEPT/ADDED → spawn subagents only for those, and paste relevant prior findings into their prompts as verified context to extend rather than re-derive.
+
+Without the explicit mapping, this step degenerates into a glance and both outcomes get missed.
+
+## STEP 3: SPAWN SUBAGENTS
 
 One **research-subagent** per sub-question, launched in **parallel** (use `subagent_type: "research-subagent"`). This agent type has PostToolUse hooks that log WebSearch/WebFetch calls for audit.
 
@@ -159,7 +176,7 @@ RULES:
 
 Start subagents at the lowest cost tier that covers their sub-question. Escalate within the subagent only if cheaper sources are insufficient.
 
-## STEP 3: SYNTHESIZE
+## STEP 4: SYNTHESIZE
 
 After all subagents return:
 
@@ -182,7 +199,7 @@ After all subagents return:
 
 4. **Cite sources** throughout the response. Every non-obvious claim should have a source.
 
-## STEP 4: PERSIST
+## STEP 5: PERSIST
 
 After synthesis, persist the research to disk. **First run `research config`** — if `persistence` is `false`, skip this step. Read `~/.claude/skills/research/references/persistence-format.md` for full format details.
 
@@ -230,6 +247,7 @@ Run `research config` to see resolved configuration (which keys are set, persist
 - [ ] Official tooling claims are verified against primary sources
 - [ ] Every research run includes at least one WebSearch call (broad discovery)
 - [ ] Standard/deep runs are persisted to `~/Documents/Research/` with INDEX.md updated
+- [ ] Prior research consulted via INDEX.md (when it exists), with an explicit drop/keep/add mapping per sub-question before any subagent spawns
 - [ ] Quick lookups resolve without subagents when answer is clear
 - [ ] Graceful degradation when API keys are missing
 - [ ] YouTube search assigned to subagents where video content adds value

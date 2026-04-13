@@ -42,7 +42,7 @@ STANDARD and DEEP research runs are persisted to `~/Documents/Research/` so paid
 <orchestrator's final synthesized answer with citations>
 ```
 
-Sub-question headings should be descriptive topic labels (e.g., "Compliance Requirements & Regulations"), not generic names like "Sub-agent 1". These headings become anchor targets for the index.
+Sub-question headings MUST be descriptive topic labels (e.g., "Compliance Requirements & Regulations"), not generic names like "Sub-agent 1". These headings become anchor targets for the index AND the matching surface for STEP 2 of `research_mode` — future research runs scan INDEX.md sub-question by sub-question to decide whether to skip or refine. Vague headings break that match and waste prior work.
 
 ## INDEX.md format
 
