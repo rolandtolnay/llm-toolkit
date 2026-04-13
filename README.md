@@ -364,44 +364,61 @@ Remove empty Claude Code conversations across all projects. Use when cleaning up
 
 ## Quick start
 
-Requires Node.js 16.7+ and [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
-
-**Clone once, install anywhere:**
-
 ```bash
 git clone https://github.com/rolandtolnay/llm-toolkit.git ~/toolkits/llm-toolkit
+cd your-project && ~/toolkits/llm-toolkit/install.js
 ```
 
-**Install into a project** (default — symlinks into `./.claude/`):
+Requires Node.js 16.7+ and [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Open Claude Code and try `/verify`, or describe a Linear ticket to see the integrations auto-activate.
+
+For global install, copy mode, or uninstall, see [Install options](#install-options).
+
+---
+
+## Install options
+
+The default install symlinks the toolkit into `./.claude/` of the current project. A `git pull` in `~/toolkits/llm-toolkit` then updates every project that points at it.
 
 ```bash
-cd your-project
 ~/toolkits/llm-toolkit/install.js
 ```
 
-**Install globally** (available in all projects):
+**Global** — available in every project, installed into `~/.claude/`:
 
 ```bash
 ~/toolkits/llm-toolkit/install.js --global
 ```
 
-**Copy mode** (for team sharing via git):
+**Copy mode** — copies files instead of symlinking, so they can be committed and shared with a team via git. Required on Windows since symlinks aren't supported.
 
 ```bash
 cd your-project
 ~/toolkits/llm-toolkit/install.js --copy
 ```
 
-**Uninstall:**
+**Uninstall** — removes every toolkit file from the target scope (add `--global` to uninstall the global install):
 
 ```bash
 cd your-project
 ~/toolkits/llm-toolkit/install.js --uninstall
 ```
 
-Symlinks are the default — a `git pull` in the toolkit repo updates all installations automatically. Use `--copy` when you need to commit the files into your project. Not supported on Windows (use `--copy`).
+---
 
-After installation, open Claude Code and use any command (e.g., `/verify`) or start working on a task that matches a skill.
+## Updating
+
+Symlink installs (the default) update automatically when you pull the toolkit repo:
+
+```bash
+cd ~/toolkits/llm-toolkit && git pull
+```
+
+Copy installs need to be re-run after pulling:
+
+```bash
+cd ~/toolkits/llm-toolkit && git pull
+cd your-project && ~/toolkits/llm-toolkit/install.js --copy
+```
 
 ---
 
