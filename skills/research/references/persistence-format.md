@@ -1,66 +1,142 @@
 # Research Persistence Format
 
-STANDARD and DEEP research runs are persisted to `~/Documents/Research/` so paid API results are never lost. QUICK lookups are NOT persisted.
+STANDARD and DEEP research runs are persisted to `~/Documents/Research/`. Each run becomes a directory with one file per sub-agent plus a short orchestrator synthesis. QUICK lookups are NOT persisted.
 
-**Opt-out:** Set `RESEARCH_NO_PERSIST=1` in an env file (see `<configuration>` in SKILL.md) or shell to disable persistence.
+**Opt-out:** Set `RESEARCH_NO_PERSIST=1` in an env file (see `<configuration>` in SKILL.md) or shell.
 
-## File structure
+## Directory layout
 
 ```
 ~/Documents/Research/
-  INDEX.md                              # Scannable topic index
-  2026-03-30-bank-account-verification.md
-  2026-03-31-nextjs-auth-patterns.md
+  INDEX.md
+  _archive/                              # populated only during backfill migrations
+  2026-04-15-nmi-gpay-double-confirm/
+    00-synthesis.md                      # orchestrator, decision-focused
+    01-nmi-iframe-limitation.md          # sub-agent A
+    02-google-pay-direct-pattern.md      # sub-agent B
+    03-transient-user-activation.md      # sub-agent C
+    04-community-discussion.md           # sub-agent D
+  2026-04-14-claude-code-adaptive-thinking/
+    00-synthesis.md
+    01-official-env-var-source.md
+    02-github-issues.md
+    03-reddit-hn-community.md
 ```
 
-**File naming:** `YYYY-MM-DD-<slug>.md` — slug is a short kebab-case summary of the query (3-5 words max).
+**Run-id (directory name):** `YYYY-MM-DD-<slug>` where slug is a 3-5 word kebab-case summary of the query.
+**Angle filename:** `0N-<angle-slug>.md` where N starts at `01` and angle-slug is a short kebab of the sub-question (3-5 words).
+**Synthesis filename:** always `00-synthesis.md`.
 
-## Research file format
+## Authorship model
+
+- **Angle files are written by sub-agents** directly to a target path the orchestrator assigns. This preserves source URLs, verbatim quotes, per-claim confidence, and methodological detail that a single-author synthesis pass would compress away.
+- **The synthesis file is written by the orchestrator** after all sub-agents return. It is short, decision-oriented, and links to angle files for evidence. It does not duplicate finding bodies.
+- **Write-failure fallback:** if a sub-agent returns without writing its expected file, the orchestrator writes it from the text return and sets `write_fallback: true` in the frontmatter.
+
+## Angle file format
 
 ```markdown
-# <Research Topic>
-**Date:** YYYY-MM-DD
-**Query:** <original user question>
-
+---
+title: "NMI iframe limitation and escape hatch"
+date: 2026-04-15
+run_id: 2026-04-15-nmi-gpay-double-confirm
+role: angle
+sub_question: "Has anyone else encountered NMI Collect.js Google Pay cross-domain iframe limitation? What workarounds exist?"
+source_strategy: [WebSearch, "research ask", "research scrape"]
+confidence: verified
+tags: [payment-gateway, nmi, google-pay, iframe, browser-security]
+sources:
+  - url: https://docs.nmi.com/docs/digital-wallet-setup
+    role: primary
+  - url: https://docs.nmi.com/docs/collectjs
+    role: primary
+  - url: https://developers.googleblog.com/google-pay-inside-sandboxed-iframe-for-pci-dss-v4-compliance/
+    role: secondary
+write_fallback: false
 ---
 
-## <Sub-question 1 heading>
-**Source strategy:** <commands used>
-**Confidence:** <verified | likely | unverified>
+# <Descriptive heading>
 
-<sub-agent findings with citations — written as-is from the sub-agent return>
-
----
-
-## <Sub-question 2 heading>
-...
-
----
-
-## Synthesis
-
-<orchestrator's final synthesized answer with citations>
+<Findings written by the sub-agent, with inline source citations, verbatim quotes where relevant, and methodological notes (what was searched and found empty). Length is not bounded — angle files are the evidence layer.>
 ```
 
-Sub-question headings MUST be descriptive topic labels (e.g., "Compliance Requirements & Regulations"), not generic names like "Sub-agent 1". These headings become anchor targets for the index AND the matching surface for STEP 2 of `research_mode` — future research runs scan INDEX.md sub-question by sub-question to decide whether to skip or refine. Vague headings break that match and waste prior work.
+**Frontmatter field rules:**
+- `tags`: 3-7 free-form, specific nouns chosen by the sub-agent. Prefer `google-pay-iframe` over `web`. No controlled vocabulary.
+- `sources.role`: `primary` (official docs, source code, author's post), `secondary` (well-known blogs, curated lists), `tertiary` (Perplexity synthesis, random forum posts).
+- `confidence`: `verified` (checked against primary source), `likely` (multiple secondary sources agree), `unverified` (single source).
+- `source_strategy`: list of commands + built-in tools actually used. Reflects what happened, not what was prescribed.
+
+## Synthesis file format
+
+```markdown
+---
+title: "NMI Google Pay Double-Confirm UX"
+date: 2026-04-15
+run_id: 2026-04-15-nmi-gpay-double-confirm
+role: synthesis
+query: "Why does NMI Google Pay require a second tap? How do we fix it?"
+tags: [payment-gateway, google-pay, iframe, browser-security, user-activation, nmi]
+angles:
+  - 01-nmi-iframe-limitation.md
+  - 02-google-pay-direct-pattern.md
+  - 03-transient-user-activation.md
+  - 04-community-discussion.md
+confidence: verified
+---
+
+# <Topic> — Synthesis
+
+**Query:** <original user question>
+**Context:** <optional project/background>
+
+## Answer
+
+<1-3 paragraphs: the recommended decision + the single most important reason.>
+
+## Why
+
+<Key mechanism, with links to angle files for evidence.>
+- Cross-origin DOM isolation — see [transient activation](03-transient-user-activation.md)
+- Escape hatch exists — see [NMI iframe limitation](01-nmi-iframe-limitation.md)
+
+## Implementation critical path
+
+1. Step with pointer to [pattern](02-google-pay-direct-pattern.md)
+2. ...
+
+## Contradictions / open items
+
+- <Flagged contradictions between sources — not silently resolved.>
+- <Verification items deferred to support/stakeholders.>
+
+## Evidence
+
+See angle files in this directory for full findings, source URLs, and verbatim quotes.
+```
+
+**Style rules:**
+- Decision-first. Lead with the recommended action; explain the mechanism second.
+- Do not duplicate finding bodies. Link to the angle file.
+- Target length: under 1500 words.
+- `tags`: union of angle-file tags plus any synthesis-level additions.
 
 ## INDEX.md format
-
-Each research run gets a heading with its sub-questions listed individually. This makes the index a topic discovery tool — readers can scan all angles covered across all past research.
 
 ```markdown
 # Research Index
 
-### Bank Account Verification Best Practices — 2026-03-30
-- [Compliance requirements & regulations](2026-03-30-bank-account-verification.md#compliance-requirements--regulations)
-- [Backend architecture & implementation patterns](2026-03-30-bank-account-verification.md#backend-architecture--implementation-patterns)
-- [Competitor approaches to verification](2026-03-30-bank-account-verification.md#competitor-approaches-to-verification)
-
-### Next.js Auth Patterns — 2026-03-28
-- [Official Next.js auth support](2026-03-28-nextjs-auth-patterns.md#official-nextjs-auth-support)
-- [Community patterns & libraries](2026-03-28-nextjs-auth-patterns.md#community-patterns--libraries)
+### NMI Google Pay Double-Confirm UX — 2026-04-15
+**Tags:** payment-gateway, google-pay, iframe, browser-security, user-activation, nmi
+- [Synthesis](2026-04-15-nmi-gpay-double-confirm/00-synthesis.md) — Drop Collect.js GPay button; go direct to Google Pay with NMI Direct Connect tokenization.
+- [NMI iframe limitation](2026-04-15-nmi-gpay-double-confirm/01-nmi-iframe-limitation.md) — `googlepay-token` Direct Post escape hatch; Collect.js button only works for card flows.
+- [Google Pay direct pattern](2026-04-15-nmi-gpay-double-confirm/02-google-pay-direct-pattern.md) — `loadPaymentData()` must be inside sync click handler; Braintree default, Stripe legacy.
+- [Transient user activation](2026-04-15-nmi-gpay-double-confirm/03-transient-user-activation.md) — HTML spec filters activation downward to same-origin only.
+- [Community discussion](2026-04-15-nmi-gpay-double-confirm/04-community-discussion.md) — W3C issue #917 confirms root cause; zero NMI-specific complaints.
 ```
 
-**Anchor format:** GitHub-style — lowercase, spaces→hyphens, strip special chars except hyphens. E.g., heading `## Compliance Requirements & Regulations` → anchor `#compliance-requirements--regulations`.
+- Entries prepended (newest first).
+- Run-level `**Tags:**` line enables grep-based discovery across topics.
+- One bullet per angle file plus one for the synthesis. Each bullet has a one-line finding, NOT a generic heading.
+- No within-file anchors — each bullet links to a dedicated file.
 
-Prepend new entries at the top of INDEX.md (most recent first). Create `~/Documents/Research/` and `INDEX.md` if they don't exist.
+Create `~/Documents/Research/` and `INDEX.md` if they don't exist.

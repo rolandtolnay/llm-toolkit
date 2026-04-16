@@ -130,22 +130,33 @@ Short-form is supplementary — assign only when trends/viral dimension is clear
 
 Skip if `~/Documents/Research/INDEX.md` does not exist. Otherwise mandatory — prior research can answer your sub-questions outright or surface angles you missed.
 
-1. Read `~/Documents/Research/INDEX.md`. The index is organized by sub-question for exactly this matching purpose.
-2. For every sub-question from STEP 1, scan for matches and read each linked file (with anchor) to judge whether the prior finding still holds. Treat research older than ~6 months on fast-moving topics as context, not authority.
-3. Produce an explicit per-sub-question mapping before proceeding:
-   - SQ-A "X pricing tiers" → covered by `2026-03-12-x.md#pricing` → **DROP**
+Each past run lives in its own directory with a short synthesis and one file per sub-agent ("angle file"). Angle files are the directly-comparable unit for matching against a new sub-question.
+
+1. Read `~/Documents/Research/INDEX.md` in full. Each run has a title line, a `**Tags:**` line, and one bullet per angle file + synthesis.
+2. For every current sub-question, identify candidate prior runs by:
+   - Keyword overlap with run titles or angle bullets,
+   - Tag overlap with run-level `**Tags:**` lines (grep-friendly).
+3. For each candidate, open the specific angle file first (not the whole synthesis) — angle files are shorter and more directly comparable. Open the synthesis only when a decision-level summary is what you need. Treat research older than ~6 months on fast-moving topics as context, not authority.
+4. Produce an explicit per-sub-question mapping before proceeding:
+   - SQ-A "X pricing tiers" → covered by `2026-03-12-x/02-pricing.md` → **DROP**
    - SQ-B "X rate limits" → partial: free tier only → **KEEP, narrow to paid**
    - SQ-C "X webhooks" → no prior coverage → **KEEP**
-   - SQ-D "X auth rotation" → new angle from `2026-03-12-x.md#auth` → **ADD**
-4. Branch on the mapping:
+   - SQ-D "X auth rotation" → new angle surfaced by `2026-03-12-x/03-auth.md` → **ADD**
+5. Branch on the mapping:
    - All sub-questions DROPPED → synthesize from prior files and return. Do not spawn subagents. Cite the prior files.
-   - Some KEPT/ADDED → spawn subagents only for those, and paste relevant prior findings into their prompts as verified context to extend rather than re-derive.
+   - Some KEPT/ADDED → spawn subagents only for those, and paste relevant prior angle-file excerpts into their prompts as verified context to extend rather than re-derive.
 
 Without the explicit mapping, this step degenerates into a glance and both outcomes get missed.
 
 ## STEP 3: SPAWN SUBAGENTS
 
 One **research-subagent** per sub-question, launched in **parallel** (use `subagent_type: "research-subagent"`). This agent type has PostToolUse hooks that log WebSearch/WebFetch calls for audit.
+
+Sub-agents write their findings directly to files you assign. Do path coordination BEFORE spawning:
+
+1. Generate the run-id: `YYYY-MM-DD-<3-5-word-kebab-slug>`.
+2. Create the run directory: `~/Documents/Research/<run-id>/`.
+3. For each sub-question, derive an angle slug (3-5 word kebab of the sub-question). Assemble target paths `<run-dir>/0N-<angle-slug>.md` starting at `01`.
 
 Each subagent prompt must include:
 
@@ -154,13 +165,26 @@ You are a research subagent investigating: [specific sub-question]
 
 First, read ~/.claude/skills/research/references/cli-reference.md for full CLI details.
 
+TARGET PATH: <absolute path, e.g. /Users/you/Documents/Research/<run-id>/0N-<angle-slug>.md>
+
 SOURCE STRATEGY: [which commands + built-in tools to use for THIS sub-question]
+
+WRITE PROTOCOL:
+- After research is complete, WRITE your findings to TARGET PATH as a markdown file.
+- File must start with YAML frontmatter (schema in
+  ~/.claude/skills/research/references/persistence-format.md) and be followed by the
+  findings body with inline source citations, verbatim quotes where relevant, and
+  notes on searches that turned up empty.
+- Choose 3-7 specific, free-form tags that reflect the content (prefer specific
+  nouns like "google-pay-iframe" over generic categories like "web").
+- Your RETURN MESSAGE is a short summary only: one-line key finding, the tags you
+  chose, your confidence level, and the source URLs you relied on. Do NOT paste the
+  full findings body into your return — it lives in the file.
 
 RULES:
 - Use at least 2 independent sources
 - Verify claims about official features against canonical sources (WebFetch or research scrape)
 - If a CLI call fails, retry once with --no-cache, then note the failure and continue
-- Return findings with sources cited
 - Note confidence level: verified (checked against primary source), likely (multiple secondary sources agree), unverified (single source)
 ```
 
@@ -201,15 +225,16 @@ After all subagents return:
 
 ## STEP 5: PERSIST
 
-After synthesis, persist the research to disk. **First run `research config`** — if `persistence` is `false`, skip this step. Read `~/.claude/skills/research/references/persistence-format.md` for full format details.
+After synthesis, persist the run to disk. **First run `research config`** — if `persistence` is `false`, skip this step. Read `~/.claude/skills/research/references/persistence-format.md` for full format details.
 
-1. **Write the research file** to `~/Documents/Research/YYYY-MM-DD-<slug>.md` containing:
-   - Header with topic, date, and original query
-   - One section per sub-question with its findings as-is from the sub-agent return
-   - Final synthesis section with the orchestrator's combined answer
-2. **Prepend an entry to `~/Documents/Research/INDEX.md`** with one line per sub-question linking to the file with anchor
+The run directory already exists (created in STEP 3) and sub-agents have already written their angle files. Your job here is verification, synthesis, and indexing.
 
-If the write fails, still return the research results to the user — persistence is best-effort, never blocking.
+1. **Verify angle files.** Read each expected angle path. For any that are missing or malformed, write the file yourself from the sub-agent's text return and set `write_fallback: true` in the frontmatter.
+2. **Write the synthesis.** Create `<run-dir>/00-synthesis.md` with the decision-oriented style described in the persistence-format reference. Short. Links to angle files for evidence. Do NOT duplicate finding bodies. Tags = union of angle tags + any synthesis-level additions.
+3. **Prepend to INDEX.md.** Add a new entry at the top: title + date line, `**Tags:**` line, one bullet per angle file + one for the synthesis, each with a one-line finding.
+4. **Return the user-facing answer.** Can be the synthesis body verbatim or a tighter version of it.
+
+If any write fails, still return the research results to the user — persistence is best-effort, never blocking.
 </research_mode>
 
 <configuration>
@@ -246,8 +271,8 @@ Run `research config` to see resolved configuration (which keys are set, persist
 - [ ] Findings cite their sources
 - [ ] Official tooling claims are verified against primary sources
 - [ ] Every research run includes at least one WebSearch call (broad discovery)
-- [ ] Standard/deep runs are persisted to `~/Documents/Research/` with INDEX.md updated
-- [ ] Prior research consulted via INDEX.md (when it exists), with an explicit drop/keep/add mapping per sub-question before any subagent spawns
+- [ ] Standard/deep runs are persisted as per-run directories under `~/Documents/Research/` with angle files written by sub-agents, a decision-focused `00-synthesis.md` written by the orchestrator, and INDEX.md updated
+- [ ] Prior research consulted via INDEX.md (when it exists), with an explicit drop/keep/add mapping per sub-question before any subagent spawns — matching uses run-level `**Tags:**` lines and angle-file reads, not just titles
 - [ ] Quick lookups resolve without subagents when answer is clear
 - [ ] Graceful degradation when API keys are missing
 - [ ] YouTube search assigned to subagents where video content adds value
