@@ -1,10 +1,10 @@
 ---
-name: exa
+name: searchexa
 description: >
   Semantic web search with inline page content via EXA API. Returns actual page
   text with results — search + fetch in one free call. Use for discovery when you
   need content, not just URLs. Free tier: 1000 searches/month.
-  Triggers on: "exa search", "search with exa", "free web search".
+  Triggers on: "exa search", "search with exa", "free web search", "searchexa".
 ---
 
 <objective>
@@ -14,7 +14,7 @@ Use this when you need to find AND read pages — not when you need AI-synthesiz
 </objective>
 
 <cli_cheatsheet>
-Script path: `~/.claude/skills/exa/scripts/exa.py`
+Script path: `~/.claude/skills/searchexa/scripts/exa.py`
 
 ```
 uv run <script> "<query>" [--limit N] [--site S] [--chars N] [--recency R]
