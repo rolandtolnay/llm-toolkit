@@ -9,7 +9,7 @@ git clone https://github.com/rolandtolnay/llm-toolkit.git ~/toolkits/llm-toolkit
 cd your-project && ~/toolkits/llm-toolkit/install.js
 ```
 
-[Integrations](#integrations) · [Quick start](#quick-start) · [Commands & skills](#also-included) · [Usage examples](#usage-examples)
+[Integrations](#integrations) · [Quick start](#quick-start) · [Commands](#commands) · [Skills](#skills) · [Usage examples](#usage-examples)
 
 </div>
 
@@ -132,15 +132,13 @@ Full reference: `skills/slack/references/setup-guide.md`.
 
 ---
 
-## Also included
-
-### Commands
+## Commands
 
 Slash commands you invoke directly in Claude Code.
 
-#### Workflow
+**Workflow**
 
-##### `/work-ticket`
+### `/work-ticket`
 
 Runs the full Linear-ticket loop end-to-end: diagnose → design → execute, with checkpoints where engineer judgment matters most.
 
@@ -160,7 +158,7 @@ Examples:
 
 Requires the [Linear](#linear) skill configured with `.linear.json` and `LINEAR_API_KEY`.
 
-##### `/explain`
+### `/explain`
 
 Deeper, clearer explanation of the current issue, options, or behavior so you can make a confident decision.
 
@@ -182,7 +180,7 @@ Examples:
 
 Ends with an interactive confidence check — does not assume you're satisfied with the first pass.
 
-##### `/verify`
+### `/verify`
 
 Second-opinion verification on completed work. Analyzes correctness, behavioral preservation, and completeness, then interrogates interactively before declaring anything an issue.
 
@@ -207,7 +205,7 @@ Examples:
 
 Pairs well with [`/ripple-check`](#ripple-check) when a fix might apply in more places than you touched.
 
-##### `/ripple-check`
+### `/ripple-check`
 
 After a fix or improvement, probes the codebase for other places where the same learning might apply.
 
@@ -221,7 +219,7 @@ No arguments. Uses session context to extract the abstract pattern behind the re
 
 "Checked X, Y, Z and the pattern doesn't apply because…" is a valid outcome — the command will not invent findings.
 
-##### `/finalize-ticket`
+### `/finalize-ticket`
 
 Commits pending changes, posts a solution summary comment, attaches the commit, and marks a Linear ticket as Done.
 
@@ -240,7 +238,7 @@ Examples:
 
 Usually invoked by [`/work-ticket`](#work-ticket) at the end of its execute phase, but safe to call directly.
 
-##### `/tidy-commits`
+### `/tidy-commits`
 
 Analyzes unpushed commits on the current branch and proposes squash/reorder groupings before executing an interactive rebase.
 
@@ -255,7 +253,7 @@ Use it when you want:
 
 No arguments. Uses the upstream tracking branch, falling back to `origin/main`. Bails early if fewer than two unpushed commits exist. Identifies cross-cutting commits that might need splitting before folding, and warns about reorder conflicts based on file overlap.
 
-##### `/create-pr`
+### `/create-pr`
 
 Creates a pull request against `main` with a summary that combines diff analysis, conversation context, and any referenced Linear ticket.
 
@@ -276,7 +274,7 @@ Examples:
 
 Posts to Slack via the [Slack](#slack) skill if configured; skips silently otherwise.
 
-##### `/reflect`
+### `/reflect`
 
 Reviews recent work across commits and past conversations, extracts principles, and writes them to a destination you choose.
 
@@ -297,7 +295,7 @@ Examples:
 
 Asks before writing whether to target auto-memory, CLAUDE.md, or a custom path.
 
-##### `/handoff`
+### `/handoff`
 
 Writes a `handoff.md` in the current directory capturing everything a fresh Claude Code session needs to continue this work.
 
@@ -309,9 +307,9 @@ Use it when you want:
 
 No arguments. Produces an XML-structured document with: `original_task`, `work_completed`, `work_remaining`, `attempted_approaches`, `critical_context`, `current_state`.
 
-#### Documentation
+**Documentation**
 
-##### `/generate-readme`
+### `/generate-readme`
 
 Walks through the codebase, asks clarifying questions, and writes a README that works as a standalone pitch.
 
@@ -331,9 +329,9 @@ Examples:
 
 Enforces a banned-word list ("streamline", "seamlessly", "simply", "leverage"…) so output doesn't read as AI-generated.
 
-#### Mental frameworks
+**Mental frameworks**
 
-##### `/analyze-problem`
+### `/analyze-problem`
 
 Describe your situation and get a recommended framework to apply before diving into analysis.
 
@@ -352,7 +350,7 @@ Examples:
 /analyze-problem the backfill job keeps failing with different errors each time
 ```
 
-##### `/consider:*`
+### `/consider:*`
 
 Twelve frameworks for structured analysis. Pick directly when you already know which lens fits, or run [`/analyze-problem`](#analyze-problem) for a recommendation.
 
@@ -428,53 +426,53 @@ Analyze what you give up by choosing each option. Use when deciding between buil
 
 Improve by removing rather than adding. Use when a prompt, config, or module feels bloated but you're unsure what to cut.
 
-### Skills
+## Skills
 
 Skills activate automatically based on what you're doing — no slash command needed. Claude Code picks the right one for the task. The three flagship skills ([Research](#research), [Linear](#linear), [Slack](#slack)) are documented under [Integrations](#integrations) above.
 
-#### Authoring
+**Authoring**
 
-##### `create-skill`
+### `create-skill`
 
 Build new SKILL.md files through collaborative conversation. Use when turning a workflow into a reusable skill.
 
-##### `create-slash-command`
+### `create-slash-command`
 
 Generate slash command files with YAML frontmatter, argument hints, and dynamic context. Use when building custom `/commands`.
 
-##### `create-subagent`
+### `create-subagent`
 
 Configure subagent specs with tool restrictions and orchestration patterns. Use when defining agent types or launching specialized agents with the Task tool.
 
-##### `create-hook`
+### `create-hook`
 
 Write hook configurations for event-driven automation. Use when adding PreToolUse, PostToolUse, Stop, or other Claude Code lifecycle hooks.
 
-##### `create-prompt`
+### `create-prompt`
 
 Create standalone prompts that another Claude can execute. Saves to `./prompts/` as numbered `.md` files.
 
-##### `create-toolkit-installer`
+### `create-toolkit-installer`
 
 Generate `install.js` for Claude Code toolkit repos with manifest tracking, symlink/copy modes, and uninstall support.
 
-#### Review
+**Review**
 
-##### `audit-prompt`
+### `audit-prompt`
 
 Check prompt files for wasted tokens, poor positioning, and vague instructions. Use when reviewing changes to commands, skills, agents, or any file containing LLM instructions.
 
-##### `readme-best-practices`
+### `readme-best-practices`
 
 Apply consistent structure, tone, and formatting to README files. Pairs with [`/generate-readme`](#generate-readme) — the command drafts, this skill polishes. Use when rewriting or reviewing a project README.
 
-##### `triage-pr-comments`
+### `triage-pr-comments`
 
 Fetches PR comments from GitHub, applies a fix-vs-ignore framework to each, resolves dismissed threads, and plans fixes. Deferred items log as tickets via the [Linear](#linear) skill. Use when addressing PR feedback or following up on code review.
 
-#### Specialized workflows
+**Specialized workflows**
 
-##### `nano-banana-app-icon`
+### `nano-banana-app-icon`
 
 Interactive iOS/Android app icon design with Nano Banana 2. Runs a discovery brief, writes a JSON prompt you paste into gemini.google.com, then critiques the resulting PNG and outputs a refinement prompt.
 
@@ -483,7 +481,7 @@ Interactive iOS/Android app icon design with Nano Banana 2. Runs a discovery bri
 
 Use when making, replacing, or refining an app icon.
 
-##### `searchexa`
+### `searchexa`
 
 Semantic web search via EXA API that returns actual page content inline — search and fetch in one call. A cheaper alternative to the [Research](#research) skill when you want raw content rather than AI-synthesized answers.
 
@@ -492,7 +490,7 @@ Semantic web search via EXA API that returns actual page content inline — sear
 
 Use when you need to find and read pages in one pass, and synthesis isn't required.
 
-### Reference guides
+## Reference guides
 
 - **`prompt-quality-guide.md`** -- How LLMs process instructions: finite capacity, interference, positional bias, context depletion.
 - **`docs/prompt-engineering-research-2025.md`** -- Academic research on instruction-following capacity and degradation patterns.
