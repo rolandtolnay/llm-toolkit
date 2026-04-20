@@ -34,8 +34,8 @@ Use `-V` only when the user:
 **Commands:**
 | Command | Usage | Purpose |
 |---------|-------|---------|
-| `create` | `create "<title>" [-d desc] [-p priority] [-e estimate] [--parent ID] [--project name] [--no-project] [--label name] [--assignee <name-or-email>] [--cycle <number-or-"active">]` | Create issue |
-| `update` | `update <ID> [-t title] [-d desc] [-p priority] [-e estimate] [--parent ID] [--label name] [--no-labels] [--assignee <name-or-email>] [--no-assignee] [--project name] [--no-project] [--cycle <number-or-"active">] [--no-cycle]` | Update fields |
+| `create` | `create "<title>" [-d desc] [-p priority] [-e estimate] [--parent ID] [--project name] [--no-project] [--label name] [--assignee <email-or-@me>] [--cycle <number-or-"active">]` | Create issue |
+| `update` | `update <ID> [-t title] [-d desc] [-p priority] [-e estimate] [--parent ID] [--label name] [--no-labels] [--assignee <email-or-@me>] [--no-assignee] [--project name] [--no-project] [--cycle <number-or-"active">] [--no-cycle]` | Update fields |
 | `done` | `done <ID>` | Mark completed |
 | `state` | `state <ID> "<name>"` | Change state |
 | `break` | `break <ID> --issues '[{...}]' [--project name] [--no-project] [--label name] [--no-labels]` | Create sub-issues |
@@ -73,8 +73,8 @@ Use `-V` only when the user:
 
 **List filters:**
 - `--mine` / `-m`: Issues assigned to current user
-- `--assignee` / `-a`: By assignee email or name
-- `--creator` / `-c`: By creator email or name
+- `--assignee` / `-a`: By exact assignee email, or `@me` for self
+- `--creator` / `-c`: By exact creator email, or `@me` for self
 - `--priority` / `-p`: By priority (0-4 or none/urgent/high/normal/low)
 - `--project`: By project name
 - `--state` / `-s`: By state name or type (backlog/todo/started/done/canceled)
@@ -163,7 +163,7 @@ Filters combine with AND logic.
 | `"create a view"`, `"new view"`, `"set up views"`, `"help me organize my Linear"`, `"I want to see [X] issues"`, `"surface [X]"`, `"help me stay on top of"`, `"I need visibility into"` | Create view | Read `references/views.md`, then follow the view creation process |
 | `"delete view"`, `"remove view"` | Delete view | Execute `delete-view` directly |
 | `list [filters]`, `my issues`, `show issues` | List/filter issues | Execute `list` with filters |
-| `assign <ID> to <name>`, `reassign <ID> to <name>` | Assign/reassign | Execute `update <ID> --assignee <name>` |
+| `assign <ID> to <name>`, `reassign <ID> to <name>` | Assign/reassign | Resolve per `resolve_assignee`, then `update <ID> --assignee <email-or-@me>` |
 | `unassign <ID>`, `remove assignee from <ID>` | Remove assignee | Execute `update <ID> --no-assignee` |
 | `members`, `team members`, `who's on the team` | List members | Execute `members` directly |
 | `update <ID> <text>` | Update issue | Execute `update` with parsed fields |
@@ -213,13 +213,16 @@ When adding a comment or updating a ticket's description that changes the scope 
 </step>
 
 <step name="resolve_assignee">
-**When the user mentions an assignee casually (e.g., "assign to Roland", "give this to Sarah", "create a ticket for Alex"):**
+**When the user mentions an assignee casually (e.g., "assign to me", "assign to Roland", "give this to Sarah", "create a ticket for Alex"):**
 
-1. Run `members` to fetch the active member list
-2. Fuzzy match the name in-context (first name, last name, display name, or email)
-3. If exactly one match, use `--assignee` with that name
-4. If multiple matches, use AskUserQuestion to disambiguate with the matching names as options
-5. If no match, show available members and ask the user to clarify
+The CLI's `--assignee` accepts only an exact email or the `@me` sentinel. Fuzzy intent resolution happens here, at the skill layer — never rely on the CLI to guess.
+
+1. **Self-assignment** — if the user means themselves ("assign to me", "for me", "my ticket"), pass `--assignee @me` directly. Do not run `members`.
+2. Otherwise, run `members` to fetch the active member list.
+3. Fuzzy match the requested name in-context against `name`, `displayName`, and `email`.
+4. If exactly one match, pass `--assignee <email>` (the email, not the name).
+5. If multiple matches, use AskUserQuestion to disambiguate with the matching names as options, then pass the chosen user's email.
+6. If no match, show available members and ask the user to clarify.
 </step>
 
 <step name="direct_commands">

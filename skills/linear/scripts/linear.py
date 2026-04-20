@@ -1952,30 +1952,28 @@ class LinearClient:
         return conn.get("nodes", [])
 
     def find_user(self, identifier: str) -> dict[str, Any] | None:
-        """Find active user by email (exact), name (partial), or displayName (partial).
+        """Find active user by exact email (case-insensitive) or '@me' sentinel.
+
+        Fuzzy name/displayName matching is intentionally not supported: the CLI's
+        consumer is an LLM that can fuzzy-match in-context via `members` and
+        disambiguate explicitly, so CLI-level fuzzy matching would only hide
+        ambiguity behind a silent first-match-wins result.
 
         Args:
-            identifier: Email address, name, or display name to search for
+            identifier: Exact email address, or '@me' to resolve to the API key owner
 
         Returns:
             User dict or None if not found
         """
-        users = [u for u in self.get_users() if u.get("active", False)]
+        if identifier == "@me":
+            viewer = self.get_viewer()
+            return viewer or None
+
         identifier_lower = identifier.lower()
-
-        # Try exact email match first
-        for user in users:
+        for user in self.get_users():
+            if not user.get("active", False):
+                continue
             if user.get("email", "").lower() == identifier_lower:
-                return user
-
-        # Try partial name match
-        for user in users:
-            if identifier_lower in user.get("name", "").lower():
-                return user
-
-        # Try partial displayName match
-        for user in users:
-            if identifier_lower in user.get("displayName", "").lower():
                 return user
 
         return None
@@ -2709,7 +2707,7 @@ def create(
     assignee: Optional[str] = typer.Option(
         None,
         "--assignee",
-        help="Assignee name or email (resolved to user ID)",
+        help="Exact assignee email, or '@me' for self (resolved to user ID)",
     ),
     cycle: Optional[str] = typer.Option(
         None,
@@ -2726,7 +2724,8 @@ def create(
         linear.py create "Mobile bug" --project "Mobile App"
         linear.py create "Backlog item" --no-project
         linear.py create "Mobile bug" --label mobile
-        linear.py create "Fix login" --assignee "Roland"
+        linear.py create "Fix login" --assignee roland@example.com
+        linear.py create "Fix login" --assignee @me
         linear.py create "Sprint task" --cycle active
     """
     command = "create"
@@ -2756,7 +2755,11 @@ def create(
                 raise LinearError(
                     code=ErrorCode.INVALID_INPUT,
                     message=f"User '{assignee}' not found",
-                    suggestions=["Try email address or a different name", "Use `members` command to list users"],
+                    suggestions=[
+                        "Pass the exact email address (e.g. user@example.com)",
+                        "Use '@me' to refer to yourself",
+                        "Use `members` command to list users",
+                    ],
                 )
             assignee_id = user.get("id")
 
@@ -2869,7 +2872,7 @@ def update(
     assignee: Optional[str] = typer.Option(
         None,
         "--assignee",
-        help="Assignee name or email (resolved to user ID)",
+        help="Exact assignee email, or '@me' for self (resolved to user ID)",
     ),
     no_assignee: bool = typer.Option(
         False,
@@ -2968,7 +2971,11 @@ def update(
                 raise LinearError(
                     code=ErrorCode.INVALID_INPUT,
                     message=f"User '{assignee}' not found",
-                    suggestions=["Try email address or a different name", "Use `members` command to list users"],
+                    suggestions=[
+                        "Pass the exact email address (e.g. user@example.com)",
+                        "Use '@me' to refer to yourself",
+                        "Use `members` command to list users",
+                    ],
                 )
             assignee_id = user.get("id")
 
@@ -4666,13 +4673,13 @@ def list_cmd(
         None,
         "--assignee",
         "-a",
-        help="Filter by assignee (email or name)",
+        help="Filter by exact assignee email, or '@me' for self",
     ),
     creator: Optional[str] = typer.Option(
         None,
         "--creator",
         "-c",
-        help="Filter by creator (email or name)",
+        help="Filter by exact creator email, or '@me' for self",
     ),
     priority: Optional[str] = typer.Option(
         None,
@@ -4781,7 +4788,11 @@ def list_cmd(
                 raise LinearError(
                     code=ErrorCode.INVALID_INPUT,
                     message=f"User '{assignee}' not found",
-                    suggestions=["Try email address or a different name"],
+                    suggestions=[
+                        "Pass the exact email address (e.g. user@example.com)",
+                        "Use '@me' to refer to yourself",
+                        "Use `members` command to list users",
+                    ],
                 )
             assignee_id = user.get("id")
 
@@ -4793,7 +4804,11 @@ def list_cmd(
                 raise LinearError(
                     code=ErrorCode.INVALID_INPUT,
                     message=f"User '{creator}' not found",
-                    suggestions=["Try email address or a different name"],
+                    suggestions=[
+                        "Pass the exact email address (e.g. user@example.com)",
+                        "Use '@me' to refer to yourself",
+                        "Use `members` command to list users",
+                    ],
                 )
             creator_id = user.get("id")
 
