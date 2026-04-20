@@ -98,7 +98,7 @@ Activates on phrases like "create a ticket", "mark done", "my issues", or any re
      }
    }
    ```
-3. Generate a key at [linear.app/settings/api](https://linear.app/settings/api).
+3. Generate a key at [linear.app/settings/account/security](https://linear.app/settings/account/security).
 
 ---
 
