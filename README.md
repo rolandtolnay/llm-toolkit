@@ -159,6 +159,12 @@ Commit changes, post a summary comment, attach the commit, and mark a Linear tic
 Second-opinion verification of completed work. Analyzes correctness, behavioral preservation, and completeness (blast-radius sweep for stale references) autonomously, then interrogates interactively before declaring issues. Use after finishing any feature, fix, or refactor.
 
 ```
+/ripple-check
+```
+
+After a fix or improvement, probe the codebase for other places where the same learning might apply. Use when a bug pattern, wrong assumption, or better approach likely repeats elsewhere.
+
+```
 /handoff
 ```
 
@@ -177,12 +183,6 @@ Analyze unpushed commits for squash and streamlining opportunities. Use when you
 Review recent work across commits, conversations, and project artifacts. Extract principles and learnings, then write them to a destination you choose. Use when starting a new session to build on recent work.
 
 ```
-/work-report
-```
-
-Generate a time-tracked report from git commit history. Use when reporting work done during a period.
-
-```
 /find-conversation
 ```
 
@@ -195,18 +195,6 @@ Search prior Claude Code conversations by natural language description. Use when
 ```
 
 Walk through a codebase, ask clarifying questions, and produce a README. Use when creating or rewriting a project README.
-
-```
-/heal-docs
-```
-
-Restructure Markdown docs so LLMs can consume them more effectively. Use when optimizing reference docs, skills, or guides.
-
-```
-/heal-claude-md
-```
-
-Apply priority hierarchy and self-verification patterns to CLAUDE.md files. Use when improving project instructions for Claude Code.
 
 #### Mental frameworks (`/consider:*`)
 
