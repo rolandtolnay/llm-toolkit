@@ -136,69 +136,225 @@ Full reference: `skills/slack/references/setup-guide.md`.
 
 ### Commands
 
-Slash commands you invoke directly in Claude Code (e.g., `/verify`).
+Slash commands you invoke directly in Claude Code.
 
 #### Workflow
 
-```
-/work-ticket
+##### `/work-ticket`
+
+Runs the full Linear-ticket loop end-to-end: diagnose → design → execute, with checkpoints where engineer judgment matters most.
+
+Use it when you want:
+
+- to start implementation on a known Linear ticket
+- a structured pass that separates "what's the root cause" from "which approach fits" from "is the change correct"
+- the LLM to handle information gathering between checkpoints while you stay in control of decisions
+
+Takes a ticket ID as its one argument. Fetches the ticket (including comments and parent) via the Linear CLI, moves it to **In Progress**, loads any matching domain skill, and runs three checkpoints: diagnosis, solution spectrum, and verification-before-commit. On final approval, hands off to [`/finalize-ticket`](#finalize-ticket).
+
+Examples:
+
+```bash
+/work-ticket MIN-42
 ```
 
-Fetch a Linear ticket, explore context, plan, implement, and commit. Use when starting work on an existing ticket.
+Requires the [Linear](#linear) skill configured with `.linear.json` and `LINEAR_API_KEY`.
 
-```
-/finalize-ticket
-```
+##### `/explain`
 
-Commit changes, post a summary comment, attach the commit, and mark a Linear ticket as done. Use when wrapping up a completed ticket.
+Deeper, clearer explanation of the current issue, options, or behavior so you can make a confident decision.
 
-```
-/verify
-```
+Use it when you want:
 
-Second-opinion verification of completed work. Analyzes correctness, behavioral preservation, and completeness (blast-radius sweep for stale references) autonomously, then interrogates interactively before declaring issues. Use after finishing any feature, fix, or refactor.
+- to understand *why* something is happening before picking a fix
+- to evaluate consequences of two or three alternatives Claude just proposed
+- to gauge whether an issue is worth addressing or is noise
+- architectural context on how a component fits into the larger system
 
-```
-/ripple-check
-```
+Takes an optional topic. If omitted, uses the current conversation context. Detects which shape of confusion is active (what's happening, which option, is this important, how does this fit), then explains in layers: plain-language summary, familiar-ground anchor, specifics, confidence check.
 
-After a fix or improvement, probe the codebase for other places where the same learning might apply. Use when a bug pattern, wrong assumption, or better approach likely repeats elsewhere.
+Examples:
 
-```
-/handoff
+```bash
+/explain why the middleware is rejecting the request
+/explain the difference between these two caching approaches
 ```
 
-Generate a handoff doc with full context for a fresh session. Use when the conversation is long or you need to continue elsewhere.
+Ends with an interactive confidence check — does not assume you're satisfied with the first pass.
 
-```
-/tidy-commits
+##### `/verify`
+
+Second-opinion verification on completed work. Analyzes correctness, behavioral preservation, and completeness, then interrogates interactively before declaring anything an issue.
+
+Use it when you want:
+
+- a final pass after finishing a feature, fix, or refactor
+- a blast-radius sweep that greps the whole codebase for stale references the diff alone can't find
+- a structured conversation to distinguish real bugs from intentional omissions
+
+> [!NOTE]
+> Every finding is confirmed with you before being declared an issue. Nothing is fixed without explicit approval.
+
+Takes an optional scope argument: commit range, plan path, or a prose description. If omitted, asks once. Uses parallel Explore agents for analysis and runs tests when present. Ends with one of: **CLEAN**, **ISSUES FOUND**, or **NEEDS MANUAL TEST**.
+
+Examples:
+
+```bash
+/verify abc123..HEAD
+/verify .planning/0042-rate-limiter.md
+/verify the session timeout refactor
 ```
 
-Analyze unpushed commits for squash and streamlining opportunities. Use when you're about to push a branch with messy commit history.
+Pairs well with [`/ripple-check`](#ripple-check) when a fix might apply in more places than you touched.
 
-```
-/reflect
+##### `/ripple-check`
+
+After a fix or improvement, probes the codebase for other places where the same learning might apply.
+
+Use it when you want:
+
+- to check whether a bug pattern exists elsewhere (copy-paste lineage, same wrong assumption)
+- to propagate a better approach learned from a reference implementation
+- an honest assessment — not forced findings
+
+No arguments. Uses session context to extract the abstract pattern behind the recent change, then launches parallel Explore agents to find candidates. For each candidate, states explicitly whether the pattern transfers and why.
+
+"Checked X, Y, Z and the pattern doesn't apply because…" is a valid outcome — the command will not invent findings.
+
+##### `/finalize-ticket`
+
+Commits pending changes, posts a solution summary comment, attaches the commit, and marks a Linear ticket as Done.
+
+Use it when you want:
+
+- to close out a completed ticket in one step instead of four manual Linear actions
+- the commit message to carry the `[TICKET-ID]` suffix automatically
+
+Takes a ticket ID. Commits using the repo's existing commit style (adds `[TICKET-ID]` to the first line), then runs the Linear CLI for comment, attach-commit, and state transition.
+
+Examples:
+
+```bash
+/finalize-ticket MIN-42
 ```
 
-Review recent work across commits, conversations, and project artifacts. Extract principles and learnings, then write them to a destination you choose. Use when starting a new session to build on recent work.
+Usually invoked by [`/work-ticket`](#work-ticket) at the end of its execute phase, but safe to call directly.
 
-```
-/find-conversation
+##### `/tidy-commits`
+
+Analyzes unpushed commits on the current branch and proposes squash/reorder groupings before executing an interactive rebase.
+
+Use it when you want:
+
+- to clean up "add X / fix X typo / refactor X" chains before pushing
+- to fold fixup commits into their originals
+- a safety-checked rebase that verifies the diff stat before and after
+
+> [!WARNING]
+> This rewrites history. The command captures a pre-rebase `git diff --stat` and confirms it matches post-rebase — but only run on branches you haven't shared yet.
+
+No arguments. Uses the upstream tracking branch, falling back to `origin/main`. Bails early if fewer than two unpushed commits exist. Identifies cross-cutting commits that might need splitting before folding, and warns about reorder conflicts based on file overlap.
+
+##### `/create-pr`
+
+Creates a pull request against `main` with a summary that combines diff analysis, conversation context, and any referenced Linear ticket.
+
+Use it when you want:
+
+- a PR whose summary explains *why* — not just *what* — the changes happened
+- Linear ticket links woven into the narrative (primary, parent, related)
+- an optional auto-post to `#engineering-pr` after you confirm the message
+
+Takes optional extra context as an argument ("use the last 3 commits", "cherry-pick abc123"). Auto-detects whether to PR from the current branch, isolate uncommitted changes onto a new branch, or both. Every git operation (mode, branch name, push) confirms before running.
+
+Examples:
+
+```bash
+/create-pr use the last 2 commits only
+/create-pr this relates to ENG-1234
 ```
 
-Search prior Claude Code conversations by natural language description. Use when you need to locate a past discussion.
+Posts to Slack via the [Slack](#slack) skill if configured; skips silently otherwise.
+
+##### `/reflect`
+
+Reviews recent work across commits and past conversations, extracts principles, and writes them to a destination you choose.
+
+Use it when you want:
+
+- to compound learnings from the past week into durable memory
+- to refresh CLAUDE.md with patterns that have proved out in practice
+- to start a new session with recent context already loaded
+
+Takes an optional timeframe (defaults to "past week"). Reads CHANGELOG, README, CLAUDE.md, and git log. Uses parallel Explore subagents to search JSONL conversation history for user-voiced principles (never loads JSONL into main context). Presents candidates tagged **NEW / UPDATE / STALE** before writing anywhere.
+
+Examples:
+
+```bash
+/reflect past 3 days
+/reflect past month
+```
+
+Asks before writing whether to target auto-memory, CLAUDE.md, or a custom path.
+
+##### `/handoff`
+
+Writes a `handoff.md` in the current directory capturing everything a fresh Claude Code session needs to continue this work.
+
+Use it when you want:
+
+- to bail out of a long conversation without losing context
+- to hand work to another session, machine, or collaborator
+- a structured snapshot of what's done, what's left, what was tried, and what's in-flight
+
+No arguments. Produces an XML-structured document with: `original_task`, `work_completed`, `work_remaining`, `attempted_approaches`, `critical_context`, `current_state`.
 
 #### Documentation
 
+##### `/generate-readme`
+
+Walks through the codebase, asks clarifying questions, and writes a README that works as a standalone pitch.
+
+Use it when you want:
+
+- a README for a project that doesn't have one
+- to rewrite an existing README that has drifted from reality
+- structure tuned for scannability — top 20% pitches, below that is reference material
+
+Takes an optional path argument (defaults to the current directory). Uses parallel Explore agents to investigate project identity, core functionality, and existing docs, then uses AskUserQuestion to fill gaps (target audience, install method, features to highlight). Shows a summary of key changes before overwriting an existing README.
+
+Examples:
+
+```bash
+/generate-readme ./packages/api
 ```
-/generate-readme
+
+Enforces a banned-word list ("streamline", "seamlessly", "simply", "leverage"…) so output doesn't read as AI-generated.
+
+#### Mental frameworks
+
+##### `/analyze-problem`
+
+Describe your situation and get a recommended framework to apply before diving into analysis.
+
+Use it when you want:
+
+- to pick the right lens for a decision rather than defaulting to one
+- a quick diagnostic before running a `/consider:*` command
+- guidance on whether to gather external information (via `/research`) before thinking it through
+
+Takes an optional problem description. If omitted, deduces the problem from conversation context. Matches signal words across 12 frameworks covering decision-making, problem-solving, focus, and strategy. Also recommends `/research` when external facts would change the analysis.
+
+Examples:
+
+```bash
+/analyze-problem should I migrate from Redux to Zustand now or after the launch
+/analyze-problem the backfill job keeps failing with different errors each time
 ```
 
-Walk through a codebase, ask clarifying questions, and produce a README. Use when creating or rewriting a project README.
+##### `/consider:*`
 
-#### Mental frameworks (`/consider:*`)
-
-Twelve decision-making frameworks for structured analysis. Run `/analyze-problem` to describe your situation and get a recommendation for which one fits.
+Twelve frameworks for structured analysis. Pick directly when you already know which lens fits, or run [`/analyze-problem`](#analyze-problem) for a recommendation.
 
 ```
 /consider:first-principles
@@ -274,67 +430,67 @@ Improve by removing rather than adding. Use when a prompt, config, or module fee
 
 ### Skills
 
-Skills activate automatically based on what you're doing — no slash command needed. Claude Code picks the right one for the task.
+Skills activate automatically based on what you're doing — no slash command needed. Claude Code picks the right one for the task. The three flagship skills ([Research](#research), [Linear](#linear), [Slack](#slack)) are documented under [Integrations](#integrations) above.
 
 #### Authoring
 
-```
-create-skill
-```
+##### `create-skill`
 
 Build new SKILL.md files through collaborative conversation. Use when turning a workflow into a reusable skill.
 
-```
-create-slash-command
-```
+##### `create-slash-command`
 
-Generate slash command files with proper YAML frontmatter and structure. Use when building custom `/commands` or adding arguments and dynamic context.
+Generate slash command files with YAML frontmatter, argument hints, and dynamic context. Use when building custom `/commands`.
 
-```
-create-subagent
-```
+##### `create-subagent`
 
 Configure subagent specs with tool restrictions and orchestration patterns. Use when defining agent types or launching specialized agents with the Task tool.
 
-```
-create-hook
-```
+##### `create-hook`
 
-Write hook configurations for event-driven automation. Use when adding PreToolUse, PostToolUse, Stop, or other event hooks to validate commands or automate workflows.
+Write hook configurations for event-driven automation. Use when adding PreToolUse, PostToolUse, Stop, or other Claude Code lifecycle hooks.
 
-```
-create-prompt
-```
+##### `create-prompt`
 
-Create standalone prompts that another Claude can execute. Use when writing reusable prompts for coding, analysis, or research tasks.
+Create standalone prompts that another Claude can execute. Saves to `./prompts/` as numbered `.md` files.
 
-```
-create-toolkit-installer
-```
+##### `create-toolkit-installer`
 
-Generate `install.js` for Claude Code toolkit repos with manifest tracking, symlink/copy modes, and uninstall support. Use when creating a new distributable collection of commands, skills, agents, or references.
+Generate `install.js` for Claude Code toolkit repos with manifest tracking, symlink/copy modes, and uninstall support.
 
-#### Quality
+#### Review
 
-```
-audit-prompt
-```
+##### `audit-prompt`
 
 Check prompt files for wasted tokens, poor positioning, and vague instructions. Use when reviewing changes to commands, skills, agents, or any file containing LLM instructions.
 
-```
-readme-best-practices
-```
+##### `readme-best-practices`
 
-Apply consistent structure, tone, and formatting to README files. Use when drafting, rewriting, or reviewing a project README to make it scannable and developer-friendly.
+Apply consistent structure, tone, and formatting to README files. Pairs with [`/generate-readme`](#generate-readme) — the command drafts, this skill polishes. Use when rewriting or reviewing a project README.
 
-#### Maintenance
+##### `triage-pr-comments`
 
-```
-clean-conversations
-```
+Fetches PR comments from GitHub, applies a fix-vs-ignore framework to each, resolves dismissed threads, and plans fixes. Deferred items log as tickets via the [Linear](#linear) skill. Use when addressing PR feedback or following up on code review.
 
-Remove empty Claude Code conversations across all projects. Use when cleaning up sessions that were opened then immediately closed.
+#### Specialized workflows
+
+##### `nano-banana-app-icon`
+
+Interactive iOS/Android app icon design with Nano Banana 2. Runs a discovery brief, writes a JSON prompt you paste into gemini.google.com, then critiques the resulting PNG and outputs a refinement prompt.
+
+> [!NOTE]
+> This skill does not generate images itself. It produces prompts you paste into Gemini, then iterates based on the downloaded PNG.
+
+Use when making, replacing, or refining an app icon.
+
+##### `searchexa`
+
+Semantic web search via EXA API that returns actual page content inline — search and fetch in one call. A cheaper alternative to the [Research](#research) skill when you want raw content rather than AI-synthesized answers.
+
+> [!NOTE]
+> Free tier is 1000 searches/month. Requires `EXA_API_KEY` in the same env-file chain as Research.
+
+Use when you need to find and read pages in one pass, and synthesis isn't required.
 
 ### Reference guides
 
