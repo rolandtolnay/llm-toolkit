@@ -9,7 +9,7 @@ git clone https://github.com/rolandtolnay/llm-toolkit.git ~/toolkits/llm-toolkit
 cd your-project && ~/toolkits/llm-toolkit/install.js
 ```
 
-[Integrations](#integrations) · [Quick start](#quick-start) · [Commands](#commands) · [Skills](#skills) · [Usage examples](#usage-examples)
+[Quick start](#quick-start) · [Commands](#commands) · [Skills](#skills) · [Usage examples](#usage-examples)
 
 </div>
 
@@ -17,19 +17,11 @@ cd your-project && ~/toolkits/llm-toolkit/install.js
 
 ## What this is
 
-Slash commands, auto-activating skills, and reference guides for Claude Code. Workflow automation (commits, verification, handoffs), integrations with Linear, Slack, and the web for research, 12 mental frameworks for structured decisions, and guides for writing better prompts.
+Slash commands, auto-activating skills, and reference guides for Claude Code. The three featured skills below — Research, Linear, and Slack — are the toolkit's centerpiece, each substantial enough to stand alone. Other commands and skills (workflow automation, decision frameworks, prompt helpers) are grouped later under [Commands](#commands) and [Skills](#skills).
 
 ---
 
-## Integrations
-
-These three skills are the highlight of the toolkit. Each is complex enough to deserve its own repository — they live together here so one install gives you all of them. If you adopt nothing else from this repo, adopt these.
-
-Each activates automatically based on what you mention in conversation — no slash command needed.
-
----
-
-### Research
+## Research
 
 Web research that scales from quick lookups to deep multi-source investigations. Decomposes a question into sub-questions, runs them in parallel across web search, library docs, Reddit, YouTube, and short-form video, then synthesizes a cited answer and saves it for later runs.
 
@@ -40,6 +32,20 @@ Web research that scales from quick lookups to deep multi-source investigations.
 - **Audit trail** — every web call is logged so you can review what each subagent did and how much it cost
 
 Activates on "search for", "look up", "find out", "what's the latest", or "research".
+
+**Example run:**
+
+The skill mirrors how a careful person researches: split the question into angles, then actually check the right source for each — read the docs, scan Reddit threads, watch a YouTube review — instead of asking a single oracle. Each angle is its own sub-agent running in parallel, writing findings to its own file.
+
+> "How is Opus 4.7 landing with developers?"
+
+| Angle | Sources | One-line finding |
+|-------|---------|------------------|
+| Official release | WebSearch + WebFetch | SWE-bench Verified 87.6% (+6.8pp), CursorBench 70 vs 58; `budget_tokens` removed, `/ultrareview` added |
+| Reddit/HN reaction | `social reddit` + `research ask` + WebFetch | ~55% skeptical; tokenizer change inflates cost 1.0-1.35×; MRCR v2 @ 1M flagged 78.3% → 32.2% (Craig_VG, 226 upvotes) |
+| YouTube reviews | `youtube search` (free, yt-dlp) | CodeRabbit measures ~15% bug-finding recall gain; AI for Work's head-to-head shows 4.7 skipping mobile-responsive testing 4.6 did unprompted |
+
+Three sub-agents ran in parallel, each writing a findings file to `~/Documents/Research/2026-04-16-opus-4-7-community-reception/` alongside a `00-synthesis.md` verdict. Tagged in `INDEX.md` so future "Opus 4.7" questions reuse this run instead of re-spending API budget.
 
 **Setup:**
 
@@ -67,7 +73,7 @@ Run `research config` to verify which keys are loaded and which env files were r
 
 ---
 
-### Linear
+## Linear
 
 A conversational interface to Linear. Describe what you're working on and Claude infers priority and effort, picks the right project and labels, confirms once, and creates the ticket.
 
@@ -102,7 +108,7 @@ Activates on phrases like "create a ticket", "mark done", "my issues", or any re
 
 ---
 
-### Slack
+## Slack
 
 A conversational interface to Slack that posts as your user, not a bot. Read-only commands run immediately; outbound messages always require explicit confirmation before posting.
 
@@ -135,8 +141,6 @@ Full reference: `skills/slack/references/setup-guide.md`.
 ## Commands
 
 Slash commands you invoke directly in Claude Code.
-
-**Workflow**
 
 ### `/work-ticket`
 
@@ -307,8 +311,6 @@ Use it when you want:
 
 No arguments. Produces an XML-structured document with: `original_task`, `work_completed`, `work_remaining`, `attempted_approaches`, `critical_context`, `current_state`.
 
-**Documentation**
-
 ### `/generate-readme`
 
 Walks through the codebase, asks clarifying questions, and writes a README that works as a standalone pitch.
@@ -328,8 +330,6 @@ Examples:
 ```
 
 Enforces a banned-word list ("streamline", "seamlessly", "simply", "leverage"…) so output doesn't read as AI-generated.
-
-**Mental frameworks**
 
 ### `/analyze-problem`
 
@@ -428,10 +428,6 @@ Improve by removing rather than adding. Use when a prompt, config, or module fee
 
 ## Skills
 
-Skills activate automatically based on what you're doing — no slash command needed. Claude Code picks the right one for the task. The three flagship skills ([Research](#research), [Linear](#linear), [Slack](#slack)) are documented under [Integrations](#integrations) above.
-
-**Authoring**
-
 ### `create-skill`
 
 Build new SKILL.md files through collaborative conversation. Use when turning a workflow into a reusable skill.
@@ -456,8 +452,6 @@ Create standalone prompts that another Claude can execute. Saves to `./prompts/`
 
 Generate `install.js` for Claude Code toolkit repos with manifest tracking, symlink/copy modes, and uninstall support.
 
-**Review**
-
 ### `audit-prompt`
 
 Check prompt files for wasted tokens, poor positioning, and vague instructions. Use when reviewing changes to commands, skills, agents, or any file containing LLM instructions.
@@ -469,8 +463,6 @@ Apply consistent structure, tone, and formatting to README files. Pairs with [`/
 ### `triage-pr-comments`
 
 Fetches PR comments from GitHub, applies a fix-vs-ignore framework to each, resolves dismissed threads, and plans fixes. Deferred items log as tickets via the [Linear](#linear) skill. Use when addressing PR feedback or following up on code review.
-
-**Specialized workflows**
 
 ### `nano-banana-app-icon`
 
@@ -599,10 +591,6 @@ Infers priority (High, degraded core flow), estimate (S, 1-2 files, known approa
 Walks through the codebase, asks clarifying questions, and produces a README.
 
 ---
-
-## Not included
-
-This is not a replacement for Claude Code's built-in capabilities. No general-purpose coding assistance, test generation, or CI/CD. The mental frameworks structure your reasoning but still need your judgment.
 
 ## License
 
