@@ -31,7 +31,17 @@ gh repo view --json nameWithOwner -q .nameWithOwner
 
 If no PR found, inform the user and stop.
 
-**Read the PR `body`** — it often contains links to tickets, issues, or context that inform the triage. Note any ticket or issue references for Step 2.
+**Read the PR `body`** — it often contains links to tickets or context that inform the triage.
+
+**If the PR body, branch name, or commit messages reference any Linear tickets, fetch each one (plus its parent epic and any blockers) before triage.** The Scope check in `references/triage-framework.md` depends on this context.
+
+Fetch ticket details directly via the Linear CLI (no need to load the full `/linear` skill for reads):
+
+```bash
+uv run ~/.claude/skills/linear/scripts/linear.py get TICKET-ID -c
+```
+
+The `-c` flag includes comments. From the response, follow `parent.identifier` to fetch the parent epic and any `relations` entries of type `blocks`/`blocked_by` to fetch related tickets — run these fetches in parallel.
 
 Read `references/github-api-reference.md` for fetch commands.
 
@@ -59,8 +69,6 @@ For a handful of comments touching a few files, reading directly may be fastest.
 Also check project-level context:
 - Are any commented files (e.g., proto files) synced from another repo? Check `git log --oneline -20` for "sync" commits.
 - Does CLAUDE.md contain relevant ownership or build notes?
-
-**Fetch Linear ticket context** if the PR description, branch name, or commit messages reference any tickets or issues. Don't just scan for ID patterns — read the PR body from Step 1 and follow any links to tickets, epics, or issues. Invoke the `/linear` skill to fetch each referenced ticket including its comments. Also fetch related tickets (parent epic, blocking/blocked-by) since they often contain the broader motivation and acceptance criteria that inform whether a reviewer's suggestion is in scope. This context helps distinguish "valid concern but out of scope for this ticket" from "this contradicts what the ticket requires."
 
 ## Step 3: Triage each comment
 
@@ -167,6 +175,7 @@ Supporting files in `references/`:
 </reference_index>
 
 <success_criteria>
+- [ ] Linear tickets referenced in the PR body (plus parent epics and blockers) were fetched via the Linear CLI before any triage decisions — skipped only if no tickets are referenced
 - [ ] Comments requiring investigation are either verified via agent-browser or escalated to user — never silently assumed
 - [ ] All triage decisions confirmed by user before proceeding — never skip confirmation regardless of confidence
 - [ ] Ignored comments replied to on GitHub with reasoning and threads resolved

@@ -25,6 +25,8 @@ Does the comment target a file/system within this PR's scope and ownership?
 - File is owned by another team (e.g., proto files synced from backend, shared configs managed elsewhere)
 - Comment targets a skill, CI config, or tool unrelated to the PR's feature
 
+**Ticket-scope check:** A fix can be technically sound *and* out of scope. Check the originating ticket's acceptance criteria (and parent epic's architectural decisions) to decide between **ACT** (aligns with a stated goal or AC), **DEFER** (valid but needs its own ticket), and **IGNORE** (ticket explicitly contradicts the suggestion).
+
 **Do NOT ignore** comments about architecture, patterns, or test coverage just because they aren't bugs. These are legitimate code review concerns — proceed to fix assessment.
 
 ### Likelihood: Can I determine P(bug) from static analysis?
