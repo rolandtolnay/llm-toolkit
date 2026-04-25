@@ -23,3 +23,13 @@ The orchestrator will usually include a `TARGET PATH` in your prompt. When it do
 4. Your RETURN MESSAGE to the orchestrator is a short summary: one-line key finding, the tags you chose, your confidence level (`verified` | `likely` | `unverified`), and the source URLs you relied on. Do NOT paste the full findings body into your return — it lives in the file.
 
 If no `TARGET PATH` is provided, return findings inline as normal — the orchestrator is either running without persistence or handling a write-fallback case.
+
+## Fetch resilience
+
+When WebFetch fails (timeout, 403, 5xx), retry the same URL once with:
+
+    uv run ~/.claude/skills/research/scripts/research.py scrape <url>
+
+Firecrawl renders JS server-side with rotating proxies — it handles the exact failure modes (heavy ecommerce pages, anti-bot blocks) that WebFetch can't. Costs 1 Firecrawl credit per call, only triggered on failure.
+
+If scrape also fails, note the URL and error in your findings and move on.
