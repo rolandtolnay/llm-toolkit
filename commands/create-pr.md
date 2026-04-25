@@ -13,7 +13,8 @@ Create a pull request targeting main with a descriptive summary that combines co
 - Uncommitted diff: !`git diff --stat`
 - Staged diff: !`git diff --cached --stat`
 - Remote tracking: !`git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "no upstream"`
-- Recent commits on this branch vs main: !`git log --oneline main..HEAD 2>/dev/null`
+- Default base branch: !`git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo "origin/main"`
+- Recent commits on this branch vs base: !`git log --oneline "$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"..HEAD 2>/dev/null || true`
 - Working directory: !`pwd`
 </context>
 
@@ -107,7 +108,7 @@ Present the full PR title and summary as a regular chat message (not AskUserQues
 
 Once confirmed:
 1. Push the branch if not already pushed: `git push -u origin <branch-name>`
-2. Create the PR: `gh pr create --title "<title>" --body "<body>" --base main`
+2. Create the PR: `gh pr create --title "<title>" --body "<body>" --base "$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || echo main)"`
 3. Return the PR URL.
 
 **Step 7 — Post to Slack**
