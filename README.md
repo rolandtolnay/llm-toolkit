@@ -9,7 +9,7 @@ git clone https://github.com/rolandtolnay/llm-toolkit.git ~/toolkits/llm-toolkit
 cd your-project && ~/toolkits/llm-toolkit/install.js
 ```
 
-[Quick start](#quick-start) · [Commands](#commands) · [Skills](#skills) · [Usage examples](#usage-examples)
+[Quick start](#quick-start) · [Commands](#commands) · [Skills](#skills) · [Usage examples](#usage-examples) · [Product Research](#product-research)
 
 </div>
 
@@ -17,7 +17,7 @@ cd your-project && ~/toolkits/llm-toolkit/install.js
 
 ## What this is
 
-Slash commands, auto-activating skills, and reference guides for Claude Code. The three featured skills below — Research, Linear, and Slack — are the toolkit's centerpiece, each substantial enough to stand alone. Other commands and skills (workflow automation, decision frameworks, prompt helpers) are grouped later under [Commands](#commands) and [Skills](#skills).
+Slash commands, auto-activating skills, and reference guides for Claude Code. The four featured skills below — Research, Product Research, Linear, and Slack — are the toolkit's centerpiece, each substantial enough to stand alone. Other commands and skills (workflow automation, decision frameworks, prompt helpers) are grouped later under [Commands](#commands) and [Skills](#skills).
 
 ---
 
@@ -70,6 +70,24 @@ SCRAPECREATORS_API_KEY=...
 YouTube search additionally requires `yt-dlp` (`brew install yt-dlp` on macOS) — no API key.
 
 Run `research config` to verify which keys are loaded and which env files were read.
+
+---
+
+## Product Research
+
+Staged buying-decision research for household and personal products (appliances, furniture, electronics). Runs a 5-stage pipeline — interview, preliminary research, product evaluation, verification, synthesis — that resists SEO/affiliate noise and produces a ranked recommendation grounded in real owner and expert voices.
+
+- **Structured interview** — generates 4-6 category-specific questions using a calibration frame (not a generic template), surfacing the constraints that actually change the recommendation
+- **Research-derived criteria** — builds a ranked criteria list from expert reviews, non-affiliate YouTube, and Reddit owner threads; user priorities become input signal and tiebreaker, not gospel
+- **Three independent voices** — parallel subagents gather owner voice (Reddit, YouTube long-form), expert voice (trade publications, specialized reviewers), and retailer voice (current availability and pricing in RO/EU)
+- **Verification pass** — scrapes retailer URLs for the final 6 recommendations to flag out-of-stock, price changes, or ambiguous listings without rewriting the quality-based recommendation
+- **Master-class synthesis** — output teaches you what actually matters for the category, calls out marketing myths, and presents 3 tiers (overall / budget / premium) with primary + runner-up per tier, tradeoff analysis, and a considered-and-discarded section
+
+Invoked via `/product-research`. One product per run — deep focus over breadth.
+
+**Availability tiering:** Green (RO retailer, full recommend) → Yellow (EU retailer, recommend with import flag) → Red (US-only, excluded).
+
+**Setup:** Uses the same infrastructure as [Research](#research) — CLI tools, API keys, output directory (`~/Documents/Research/`), and persistence format. No additional configuration needed beyond what Research requires.
 
 ---
 
