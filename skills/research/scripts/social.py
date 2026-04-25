@@ -43,10 +43,25 @@ REDDIT_API_BASE = "https://api.scrapecreators.com/v1/reddit"
 TIKTOK_API_BASE = "https://api.scrapecreators.com/v1/tiktok"
 INSTAGRAM_API_BASE = "https://api.scrapecreators.com/v2/instagram"
 
-REDDIT_MAX_THREADS = 5
+REDDIT_MAX_THREADS = 7
 REDDIT_TOP_COMMENTS = 10
 REDDIT_COMMENT_EXCERPT = 300
 REDDIT_CONDENSE_THRESHOLD = 2500  # words
+REDDIT_DISCOVERY_SUBS = 3  # subs to drill into after global search
+REDDIT_MIN_COMMENT_LEN = 30  # filter out one-liners ("this", "agreed", etc.)
+
+# Subs that match keywords but aren't discussion communities.
+_UTILITY_SUBS = frozenset({
+    'namethatsong', 'findthatsong', 'tipofmytongue', 'whatisthissong',
+    'helpmefind', 'whatisthisthing', 'whatsthissong', 'findareddit',
+    'subredditdrama',
+})
+
+# Low-value comment patterns (compiled once).
+_COMMENT_SKIP_RE = re.compile(
+    r'^(this|same|agreed|exactly|yep|nope|yes|no|thanks|thank\s+you)\.?\s*$|^(lol|lmao|haha)',
+    re.IGNORECASE,
+)
 
 SHORTFORM_MAX_PER_PLATFORM = 3
 SHORTFORM_CAPTION_MAX_WORDS = 500
@@ -448,6 +463,39 @@ def _reddit_normalize_post(post: dict) -> dict:
     }
 
 
+def _discover_subreddits(posts: list[dict], query: str, max_subs: int) -> list[str]:
+    """Score subreddits from global-search results and return the top N.
+
+    Blends post frequency with a topic-word match bonus and a high-engagement
+    bonus, then penalises known utility/meta subs.
+    """
+    from collections import Counter
+
+    q_tokens = {t for t in _tokenize(query) if len(t) > 2}
+    scores: Counter = Counter()
+
+    for post in posts:
+        sub = post.get("subreddit", post.get("subreddit_name_prefixed", ""))
+        if isinstance(sub, dict):
+            sub = sub.get("name", sub.get("display_name", ""))
+        sub = str(sub).strip().lstrip("r/")
+        if not sub:
+            continue
+
+        weight = 1.0
+        sub_lower = sub.lower()
+        if q_tokens and any(w in sub_lower for w in q_tokens):
+            weight += 2.0
+        if sub_lower in _UTILITY_SUBS:
+            weight *= 0.3
+        if (post.get("score") or 0) > 100:
+            weight += 0.5
+
+        scores[sub] += weight
+
+    return [sub for sub, _ in scores.most_common(max_subs)]
+
+
 def _truncate_at_word(text: str, max_chars: int) -> str:
     """Truncate text at a word boundary."""
     if len(text) <= max_chars:
@@ -482,7 +530,12 @@ def _reddit_fetch_comments(post_url: str) -> list[dict]:
         body = c.get("body", "") or ""
         if author.lower() in ("[deleted]", "[removed]", "automoderator"):
             continue
-        if body.strip().lower() in ("[deleted]", "[removed]"):
+        stripped = body.strip()
+        if stripped.lower() in ("[deleted]", "[removed]"):
+            continue
+        if len(stripped) < REDDIT_MIN_COMMENT_LEN:
+            continue
+        if _COMMENT_SKIP_RE.match(stripped):
             continue
         filtered.append(c)
 
@@ -499,12 +552,20 @@ def _reddit_fetch_comments(post_url: str) -> list[dict]:
         top_reply = None
         replies = c.get("replies", None)
         if replies and isinstance(replies, list):
-            valid_replies = [
-                r for r in replies
-                if isinstance(r, dict)
-                and (r.get("author", "") or "").lower() not in ("[deleted]", "[removed]", "automoderator")
-                and (r.get("body", "") or "").strip().lower() not in ("[deleted]", "[removed]")
-            ]
+            valid_replies = []
+            for r in replies:
+                if not isinstance(r, dict):
+                    continue
+                if (r.get("author", "") or "").lower() in ("[deleted]", "[removed]", "automoderator"):
+                    continue
+                rstripped = (r.get("body", "") or "").strip()
+                if rstripped.lower() in ("[deleted]", "[removed]"):
+                    continue
+                if len(rstripped) < REDDIT_MIN_COMMENT_LEN:
+                    continue
+                if _COMMENT_SKIP_RE.match(rstripped):
+                    continue
+                valid_replies.append(r)
             if valid_replies:
                 best = max(valid_replies, key=lambda r: r.get("score", 0) or 0)
                 top_reply = {
@@ -837,6 +898,24 @@ def reddit(
     else:
         raw_posts = _reddit_global_search(query)
 
+    # Subreddit discovery + targeted follow-up (skipped on explicit --subreddit)
+    discovered_subs: list[str] = []
+    if not subreddit and raw_posts:
+        candidates = [
+            p for p in raw_posts
+            if _relevance_score(query, f"{p.get('title', '')} {p.get('selftext', '')}") >= RELEVANCE_THRESHOLD
+        ] or raw_posts
+        discovered_subs = _discover_subreddits(candidates, query, REDDIT_DISCOVERY_SUBS)
+
+        if discovered_subs:
+            with ThreadPoolExecutor(max_workers=len(discovered_subs)) as executor:
+                futures = {
+                    executor.submit(_reddit_subreddit_search, sub, query): sub
+                    for sub in discovered_subs
+                }
+                for future in as_completed(futures):
+                    raw_posts.extend(future.result())
+
     # Normalize, deduplicate, score relevance, filter, rank
     seen_ids: set[str] = set()
     posts = []
@@ -896,6 +975,8 @@ def reddit(
             "backend": "scrapecreators",
             "threads_found": threads_found,
             "threads_returned": len(posts),
+            "discovered_subreddits": discovered_subs,
+            "discovery_skipped": bool(subreddit),
             "condensed": did_condense,
             "cache_hit": False,
         },
@@ -909,6 +990,7 @@ def reddit(
         duration_ms=duration_ms,
         threads_found=threads_found,
         threads_returned=len(posts),
+        discovered_subs=discovered_subs,
         condensed=did_condense,
     )
 

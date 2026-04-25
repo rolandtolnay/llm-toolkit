@@ -180,24 +180,28 @@ Run with: `uv run ~/.claude/skills/research/scripts/social.py <command> [options
 
 ### `reddit "<query>"` — Reddit thread search + comments (ScrapeCreators PAYG)
 
-Search Reddit globally or within a subreddit. Returns top threads ranked by upvotes with top comments. Optionally condenses findings via `claude -p` when content exceeds 2500 words.
+Search Reddit globally or within a subreddit. Returns up to 7 top threads ranked by blended relevance + upvote score, each with up to 10 quality-filtered comments. Optionally condenses findings via `claude -p` when content exceeds 2500 words.
+
+When no `--subreddit` is passed, a discovery pass scores which subreddits the global hits cluster into and runs targeted follow-up searches inside the top 3, merging the results before ranking. Costs 1 ScrapeCreators credit per discovered sub (so a typical call uses 4 search credits + 1 per thread enriched with comments).
 
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--question` / `-q` | none | Research question — triggers condensing when comment volume is high |
-| `--subreddit` / `-s` | none | Limit search to a specific subreddit (without `r/` prefix) |
+| `--subreddit` / `-s` | none | Limit search to a specific subreddit (without `r/` prefix). Also disables the discovery pass. |
 | `--no-cache` | false | Bypass cache |
+
+**Comment filter:** Comments shorter than 30 characters or matching low-value patterns (`this`, `agreed`, `lol`, `thanks`, etc.) are dropped before the top-10 selection, so returned `comments[]` slots aren't wasted on one-word reactions.
 
 **Condensing:** When `--question` is provided and total comment text exceeds 2500 words, threads are condensed via `claude -p --model sonnet` to extract consensus views, contrarian opinions, specific mentions, and notable quotes.
 
 **Output fields:**
 - `threads` — list of thread objects, each with:
   - `title`, `url`, `subreddit`, `date` (YYYY-MM-DD), `score`, `num_comments`, `selftext` (first 500 chars)
-  - `comments` — list of top 10 comments by score, each with:
+  - `comments` — list of top 10 comments by score (after quality filter), each with:
     - `author`, `score`, `excerpt` (300 chars at word boundary)
     - `top_reply` — highest-scored reply (`{ author, score, excerpt }`) or `null`
 - `condensed` — bulleted findings string (when condensing triggered) or `null`
-- `metadata` — `backend`, `threads_found`, `threads_returned`, `condensed` (bool), `cache_hit`
+- `metadata` — `backend`, `threads_found`, `threads_returned`, `discovered_subreddits` (list of sub names searched in the follow-up pass), `discovery_skipped` (bool — true when `--subreddit` was passed), `condensed` (bool), `cache_hit`
 
 **Example:**
 ```bash
