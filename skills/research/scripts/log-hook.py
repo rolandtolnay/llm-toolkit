@@ -39,6 +39,10 @@ def main():
 
         tool_name = data.get("tool_name", "")
         tool_input = data.get("tool_input", {})
+        response = str(data.get("tool_response", ""))
+
+        _ERROR_PATTERNS = ["timeout", "status code 4", "status code 5", "econnrefused", "enotfound"]
+        is_error = any(p in response.lower() for p in _ERROR_PATTERNS)
 
         entry = {
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -46,7 +50,11 @@ def main():
             "type": "builtin",
             "tool": tool_name,
             "query": tool_input.get("query", tool_input.get("url", "")),
+            "url": tool_input.get("url", ""),
             "backend": "builtin",
+            "success": not is_error,
+            "error": response[:200] if is_error else "",
+            "response_length": len(response) if not is_error else 0,
             "cost_usd": 0.0,
             "credits": 0,
         }

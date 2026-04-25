@@ -44,7 +44,10 @@ All CLI commands and WebSearch/WebFetch calls (via skill hooks) are logged to `~
 | `backend` | `perplexity`, `context7`, `firecrawl`, or `builtin` |
 | `model` | Perplexity model name (if applicable) |
 | `cache_hit` | Whether the result was served from cache |
-| `success` | Whether the call succeeded |
+| `success` | Whether the call succeeded (CLI: from exception handling; builtin: inferred from response error patterns) |
+| `url` | Request URL (builtin WebFetch only) |
+| `error` | Truncated error message, max 200 chars (builtin only, when `success` is false) |
+| `response_length` | Length of successful response body (builtin only, when `success` is true) |
 | `duration_ms` | API call duration in milliseconds |
 | `usage` | Token usage from Perplexity (prompt_tokens, completion_tokens) |
 | `cost_usd` | Estimated cost (0 for free/cached calls) |
