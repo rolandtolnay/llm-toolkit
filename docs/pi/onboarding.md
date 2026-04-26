@@ -3,9 +3,11 @@
 This guide covers how to get productive in Pi, organized by dependency order — what you need first.
 
 **Confidence levels:**
-- **Verified** — Directly documented in Pi's official docs
+- **Verified** — Directly documented in Pi's official docs or confirmed via primary sources
 - **Inferred** — Logical from the API surface, but no reference implementation seen
 - **Needs validation** — Likely works but needs hands-on testing
+
+**Status:** All outstanding research questions resolved (2026-04-26). See [OUTSTANDING.md](OUTSTANDING.md). Community packages confirmed for all missing features. GPT 5.5 prompting guidance integrated. Next step: hands-on installation and validation.
 
 ---
 
@@ -18,7 +20,7 @@ This guide covers how to get productive in Pi, organized by dependency order —
 5. [Prompt Templates (Porting Slash Commands)](#5-prompt-templates)
 6. [Extensions Overview](#6-extensions-overview)
 7. [Hooks via Extensions](#7-hooks-via-extensions)
-8. [Features to Build](#8-features-to-build)
+8. [Features to Install](#8-features-to-install)
 9. [Pi-Native Features to Adopt](#9-pi-native-features-to-adopt)
 10. [Feature Matrix](#10-feature-matrix)
 11. [Quick Reference](#11-quick-reference)
@@ -91,6 +93,51 @@ Pi loads `AGENTS.md` at startup from multiple locations, identical to how Claude
 2. **Project instructions**: Either rename `CLAUDE.md` to `AGENTS.md` or keep both — Pi reads `CLAUDE.md` as fallback
 3. **Content adjustments**: If your CLAUDE.md references Claude-specific features (hooks config, permissions, etc.), strip those for the Pi version
 
+### GPT 5.5 AGENTS.md Template
+
+GPT 5.5 is actively harmed by Claude Code-style process-heavy prompts. OpenAI's official guidance: "start with the smallest prompt that preserves the product contract." Pi's ~200-token default is a strength — keep AGENTS.md to ~400 tokens covering only true invariants and outcome standards.
+
+Key GPT 5.5 behavioral differences:
+- **Outcome-first, not process-heavy** — define what you want, not step-by-step how to get there
+- **MUST/NEVER only for true invariants** — git safety, factual accuracy. For judgment calls, use "prefer" / "suggest"
+- **Contradictory instructions degrade GPT 5.5 significantly** — worse than in Claude models. Remove ambiguities.
+- **Start reasoning effort at `medium`** — GPT 5.5 reasons more efficiently; escalate only when needed
+
+Recommended global `~/.pi/agent/AGENTS.md`:
+
+```markdown
+# Conventions
+
+## Identity
+Senior engineer. High agency, principled judgment. Proceed without asking when the next step is low-risk and intent is clear.
+
+## Outcome Standards
+- Correctness first, brevity second
+- No emojis, filler, or ceremony
+- Verify all directly affected artifacts (callsites, tests, docs) before yielding
+- Do not present partial work as complete — mark [blocked] if stuck
+- Do not fabricate outputs that were not observed
+
+## Tool Use
+- Use `rg` for text search, `rg --files` for file discovery
+- Search before you read — do not read files hoping to find the right thing
+- Resolve prerequisites before acting
+- Do not stop at the first plausible answer if another tool call would reduce uncertainty
+
+## Git Safety
+- NEVER revert changes you did not make unless explicitly requested
+- NEVER use `git reset --hard`, `git checkout --`, `git clean -fd`
+- Do not amend commits unless explicitly requested
+- Only commit files YOU changed in THIS session using specific file paths
+
+## Presentation
+- Be concise. Lead with what changed and why, then context
+- Reference file paths, do not dump file contents
+- Use numbered lists for multiple options so user can respond with a number
+```
+
+Sources: [OpenAI GPT-5.5 Prompt Guidance](https://developers.openai.com/api/docs/guides/prompt-guidance), [Codex CLI system prompt](https://github.com/openai/codex/blob/main/codex-rs/core/gpt-5.2-codex_prompt.md), [oh-my-pi system prompt](https://github.com/can1357/oh-my-pi/blob/main/packages/coding-agent/src/prompts/system/system-prompt.md)
+
 ### System Prompt Override
 
 For deeper customization beyond AGENTS.md:
@@ -102,7 +149,7 @@ For deeper customization beyond AGENTS.md:
 | `~/.pi/agent/SYSTEM.md` | Global system prompt override |
 | `~/.pi/agent/APPEND_SYSTEM.md` | Global system prompt append |
 
-This is more powerful than Claude Code — you can fully replace the system prompt, not just add context.
+**Recommendation: Use AGENTS.md, not SYSTEM.md.** Pi's default prompt is already minimal (~200 tokens) — there's nothing to remove. It dynamically injects tool listings that you'd have to replicate manually in a SYSTEM.md. Mario Zechner's own usage (pi-mono repo) uses AGENTS.md. Reserve SYSTEM.md only for fundamentally different agent identity (non-coding tasks, RFC 2119-style normative frameworks like oh-my-pi).
 
 ### Disable Context Files
 
@@ -477,45 +524,171 @@ export default function (pi: ExtensionAPI) {
 
 ---
 
-## 8. Features to Build
+## 8. Features to Install
 
-These are Claude Code capabilities that Pi doesn't include — you build them as extensions (or find existing packages). Each has a dedicated research/implementation brief.
+**Confidence: Verified** (packages confirmed via npm and GitHub; runtime behavior needs validation)
 
-| Feature | Description | Brief |
-|---------|-------------|-------|
-| **Ask User Question** | Tool for the model to pause and ask the user a question mid-task | [features/ask-user-question.md](features/ask-user-question.md) |
-| **Plan Mode** | Read-only planning phase before execution, with user approval | [features/plan-mode.md](features/plan-mode.md) |
-| **Subagents** | Spawn independent child agents for parallel/specialized work | [features/subagents.md](features/subagents.md) |
-| **Web Search** | Search the web and fetch pages during a task | [features/web-search.md](features/web-search.md) |
+All four Claude Code features missing from Pi have mature, actively-maintained community packages. Install them — don't build from scratch.
 
-**Approach for each:** Research whether an existing Pi package or community extension already provides it. If not, build a custom extension. See [OUTSTANDING.md](OUTSTANDING.md) for open research questions.
+```bash
+pi install npm:pi-subagents
+pi install npm:pi-ask-user
+# Web search: build custom Codex delegation extension (~15 lines) — see below
+# Plan mode: build custom extension (~80 lines) — see below
+```
+
+### Subagents — `pi-subagents` (nicobailon)
+
+964 stars · 38K downloads/wk · v0.18.1 (Apr 2026) · [GitHub](https://github.com/nicobailon/pi-subagents)
+
+Agents are markdown files with YAML frontmatter stored in `.pi/agents/`. Three execution modes:
+- **Single** — one agent, one task
+- **Chain** — sequential steps with `{task}`, `{previous}`, `{chain_dir}` template variables
+- **Parallel** — concurrent with optional git worktree isolation
+
+Slash commands: `/run`, `/chain`, `/parallel` with tab-completion. Agents Manager overlay: `Ctrl+Shift+A`. Forked context mode branches the parent's current session state. Default 4 concurrent agents, configurable.
+
+**Alternative:** `pi-subagent` (mjakl, 36 stars) — intentionally minimal single-file spawner with spawn/fork context modes. Good if you want the smallest possible surface area.
+
+### Plan Mode — Build Custom (~80 lines)
+
+Pi's API surface makes this straightforward to build as a small custom extension. The core components:
+
+- `pi.registerCommand("plan")` — toggle command
+- `pi.setActiveTools()` / `pi.getActiveTools()` — restrict to read-only tools (`read`, `grep`, `find`, `ls`) during planning
+- `tool_call` event — block `write`, `edit`, `bash` with `{ block: true, reason }`
+- `ctx.ui.setStatus()` — show "PLAN MODE" indicator in footer
+- `ctx.ui.confirm()` — approval dialog before switching to execution
+
+Workflow: `/plan` toggles on → agent explores read-only and produces a plan → user reviews → approves via confirm dialog → full tools unlock.
+
+```typescript
+// .pi/extensions/plan-mode.ts
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  let planMode = false;
+  const readOnlyTools = ["read", "grep", "find", "ls"];
+
+  pi.registerCommand("plan", {
+    description: "Toggle plan mode (read-only exploration)",
+    async execute(_args, ctx) {
+      planMode = !planMode;
+      if (planMode) {
+        ctx.ui.setStatus("plan-mode", "PLAN MODE");
+        pi.sendMessage({
+          role: "user",
+          content: "You are now in plan mode. Explore the codebase using read-only tools only. Write your plan, then I will approve before execution.",
+        });
+      } else {
+        ctx.ui.setStatus("plan-mode", "");
+      }
+    },
+  });
+
+  pi.on("tool_call", async (event, ctx) => {
+    if (!planMode) return;
+    if (!readOnlyTools.includes(event.toolName)) {
+      return { block: true, reason: "Plan mode active — read-only tools only. Write your plan first." };
+    }
+  });
+}
+```
+
+This is a starting skeleton — extend with `ctx.ui.confirm()` for plan approval and `ctx.ui.setWidget()` to display the plan persistently.
+
+**Fallback:** File-based PLAN.md approach — instruct via AGENTS.md to write a plan first and wait for approval. No extension needed, but no enforcement.
+
+### Ask User Question — `pi-ask-user` (edlsh)
+
+44 stars · v0.6.1 (Apr 2026) · [GitHub](https://github.com/edlsh/pi-ask-user)
+
+Registers an `ask_user` tool with: searchable single/multi-select, optional freeform responses, timeout for auto-dismiss, split-pane details preview on wide terminals. Bundled `ask-user` skill for decision-gating in high-stakes tasks.
+
+**Alternative:** Build custom (~50 lines). Core pattern: `pi.registerTool()` → call `ctx.ui.select()` → return result. But the existing extension's UX polish (searchable options, overlay mode) would take meaningful effort to replicate.
+
+### Web Search — Codex CLI Delegation (Build Custom ~15 lines)
+
+Delegates web search to Codex CLI's built-in search tool. When authenticated via `codex login` (ChatGPT OAuth), search is included in your subscription quota — no separate API keys or credits needed. Codex uses OpenAI's own web search index (cached mode, default) or live web fetching (`--search` flag).
+
+**Why not `pi-web-access`?** The popular community package (378 stars, 16K dl/wk) has 32 open issues including macOS Keychain popups, Exa MCP timeouts, and provider breakage. Codex delegation is simpler and costs nothing extra.
+
+```typescript
+// .pi/extensions/codex-search.ts
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
+import { execSync } from "child_process";
+
+export default function (pi: ExtensionAPI) {
+  pi.registerTool({
+    name: "web_search",
+    label: "Web Search",
+    description: "Search the web using Codex CLI (uses subscription quota)",
+    parameters: Type.Object({
+      query: Type.String({ description: "Search query" }),
+    }),
+    async execute(toolCallId, params) {
+      const escaped = params.query.replace(/"/g, '\\"');
+      const result = execSync(
+        `codex exec --search --full-auto "Search the web for: ${escaped}. Return only factual findings with source URLs. Do not write any code."`,
+        { timeout: 30000, encoding: "utf-8" }
+      );
+      return { content: [{ type: "text", text: result }], details: {} };
+    },
+  });
+}
+```
+
+**Tradeoffs:** ~3-8s latency per search (full Codex agent loop), consumes subscription tokens. If you hit quota limits, swap to MCP-direct (Brave Search or Perplexity MCP via `.mcp.json`) — Pi has native MCP support so it's just a config change, no extension needed.
+
+**Alternatives:**
+- `pi-web-access` (nicobailon, 378 stars) — feature-rich (video, PDF, GitHub cloning) but 32 open issues and macOS pain points
+- MCP-direct: Brave Search MCP, Perplexity MCP, or Exa MCP via `.mcp.json` — lowest latency, but requires separate API keys/credits
+- `badlogic/pi-skills/brave-search` (official, skill-only, requires Brave API key)
+
+### Extension Security Note
+
+Extensions are TypeScript code that runs in the agent process. The community warns: "Prompt injections and vibe coded hacks are just one install away." Vet extension source code before installing, especially for packages with low star counts.
 
 ---
 
 ## 9. Pi-Native Features to Adopt
 
-These are capabilities Pi offers that **don't have Claude Code equivalents**. Worth learning rather than trying to replicate your CC workflow.
+**Confidence: Verified** (features documented; adoption priorities based on community research)
 
-### Session Branching & Tree (`/tree`)
+These are capabilities Pi offers that **don't have Claude Code equivalents**. Ordered by adoption priority based on what real Pi users actually rely on daily.
 
-Navigate your entire session history as a tree. Select any previous point and continue from there. All branches preserved in a single file. **This replaces the need for git-based checkpointing** in many cases.
+### Day 1: Permission Gate (MANDATORY)
 
-- `Escape` twice — opens `/tree`
-- Search by typing, fold/unfold branches
-- Filter modes: default, no-tools, user-only, labeled-only, all
-- Label entries as bookmarks with `Shift+L`
+Pi runs in YOLO mode by default — no permission prompts, full system access. Real incidents of agents deleting entire projects have been reported. Before doing anything else, install a safety extension:
 
-### Model Cycling (Ctrl+P)
+```bash
+pi install npm:pi-permission-gate
+```
 
-Rapidly switch between models mid-conversation. Configure which models to cycle through:
+Or use a sandbox solution: Agent Safehouse (macOS `sandbox-exec`), bubblewrap (Linux), or Docker.
+
+### Day 1: Plan-First Skill File
+
+The single most praised workflow pattern in the Pi community. Create a skill file that enforces structured planning before coding:
+
+```
+.pi/skills/plan-first/SKILL.md
+```
+
+This is separate from the Plannotator extension (§8) — it's a lightweight prompt-based approach. Reddit users report: "It actually follows what you say and does everything step by step without going off the rails."
+
+### Week 1: Model Cycling (Ctrl+P)
+
+Rapidly switch between models mid-conversation. Context carries over between models.
 
 ```json
 { "enabledModels": ["gpt-5.5", "claude-sonnet*", "gemini-3-flash"] }
 ```
 
-Use `Shift+Tab` to cycle thinking levels without switching models.
+Use `Shift+Tab` to cycle thinking levels without switching models. Power users run local models (Qwen3.6 35B) for cheap tasks and switch to GPT 5.5 / Claude for complex work.
 
-### Message Queue (Steering vs Follow-up)
+### Week 1: Message Queue (Steering vs Follow-up)
 
 More nuanced than Claude Code:
 - **Enter** while agent works: queue a **steering** message (delivered after current tool calls finish, before next LLM call)
@@ -523,30 +696,45 @@ More nuanced than Claude Code:
 - **Escape**: abort and restore queued messages
 - **Alt+Up**: retrieve queued messages back to editor
 
-### Extension Stacking
+### Week 1: File References (@)
+
+Type `@` in the editor to fuzzy-search project files and include them in your message. More integrated than Claude Code's file references.
+
+### Week 2-4: Session Branching & Tree (`/tree`)
+
+Navigate your entire session history as a tree. Select any previous point and continue from there. All branches preserved in a single file. Useful for recovery from agent mistakes — `/fork` backtracks without losing successful earlier context.
+
+- `Escape` twice — opens `/tree`
+- Search by typing, fold/unfold branches
+- Filter modes: default, no-tools, user-only, labeled-only, all
+- Label entries as bookmarks with `Shift+L`
+
+**Note:** Complementary to git, not a replacement. Session branching manages conversation state; git manages code artifacts. Reddit and blog discussions conspicuously don't mention branching in daily workflow — it's valuable for specific recovery scenarios.
+
+### Week 2-4: Extension Stacking
 
 Compose capabilities via CLI flags:
 ```bash
 pi -e ./ext/footer.ts -e ./ext/subagents.ts -e ./ext/damage-control.ts
 ```
 
-Build extensions in isolation, stack the ones you need for each task.
+Start with 1-2 extensions. Common first stack: permission-gate + one workflow extension. Add complexity only as needed.
 
-### Widget System
+### Later: Widget System
 
-Persistent UI above or below the editor. Use for:
-- Active task display
-- Subagent status
-- Custom context display
-- Tool counters
+Persistent UI above or below the editor. Becomes useful once you have subagents running — the `pi-subagents` extension uses widgets for real-time agent status display.
 
-### RPC Mode
+### Later: RPC Mode
 
-Full programmatic control via JSONL protocol. Build tools that orchestrate Pi instances from other languages or processes.
+Full programmatic control via JSONL protocol (14 commands, 12 event types). For embedding Pi in other applications or non-Node.js integrations, not daily interactive use.
 
-### File References (@)
+### Later: Custom Compaction
 
-Type `@` in the editor to fuzzy-search project files and include them in your message. More integrated than Claude Code's file references.
+Extensions can intercept `session_before_compact` to replace default summarization. Mario Zechner himself says "all compaction implementations are not good" — auto-compaction suffices for now.
+
+### Later: Mental Models / Per-Agent Context
+
+Persistent files where each agent stores accumulated knowledge across sessions. An advanced multi-agent pattern from IndyDevDan's content — not relevant for solo developers. Revisit when running agent teams.
 
 ---
 
@@ -558,14 +746,14 @@ Type `@` in the editor to fuzzy-search project files and include them in your me
 | Skills | Skills (Agent Skills standard) | Low | Native |
 | Slash commands | Prompt templates | Low | Native |
 | Hooks (shell-based) | Extension events (TypeScript) | Medium | Native (richer) |
-| Permission system | YOLO default; build via extensions | Medium | Build it |
-| AskUserQuestion | `ctx.ui.input/select/confirm` | Medium | Build it |
-| Plan mode | Extension or file-based | Medium | Build it |
-| Subagents (Agent tool) | RPC subprocess or SDK | High | Build it |
-| WebSearch | Skill or extension | Medium | Build it |
+| Permission system | YOLO default; `pi-permission-gate` | Low | **Install** |
+| AskUserQuestion | `pi-ask-user` (edlsh) | Low | **Install** |
+| Plan mode | Custom extension (~80 lines) | Low | **Build** |
+| Subagents (Agent tool) | `pi-subagents` (nicobailon) | Low | **Install** |
+| WebSearch | Codex CLI delegation (~15 lines) | Low | **Build** |
 | TodoWrite/TaskCreate | Extension or PLAN.md file | Medium | Build it |
 | MCP servers | Not supported; use skills/extensions | Varies | Not available |
-| Multi-agent teams | Extension with RPC orchestration | High | Build it |
+| Multi-agent teams | `pi-subagents` chains/parallel | Medium | **Install** + configure |
 | Status line | Footer customization (richer) | Low | Native |
 | Background agents | Not built in; use tmux | Low | Workaround |
 | Git checkpointing | Extension or session branching | Low | Partial native |
