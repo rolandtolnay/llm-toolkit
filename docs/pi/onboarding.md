@@ -3,6 +3,7 @@
 This guide covers how to get productive in Pi, organized by dependency order — what you need first.
 
 **Confidence levels:**
+
 - **Verified** — Directly documented in Pi's official docs or confirmed via primary sources
 - **Inferred** — Logical from the API surface, but no reference implementation seen
 - **Needs validation** — Likely works but needs hands-on testing
@@ -81,11 +82,11 @@ Pi loads `AGENTS.md` at startup from multiple locations, identical to how Claude
 
 ### Locations (loaded in order, concatenated)
 
-| Location | Scope |
-|----------|-------|
-| `~/.pi/agent/AGENTS.md` | Global (all projects) |
-| Parent directories (walking up from cwd) | Inherited |
-| Current directory `./AGENTS.md` | Project |
+| Location                                 | Scope                 |
+| ---------------------------------------- | --------------------- |
+| `~/.pi/agent/AGENTS.md`                  | Global (all projects) |
+| Parent directories (walking up from cwd) | Inherited             |
+| Current directory `./AGENTS.md`          | Project               |
 
 ### Migration Steps
 
@@ -98,6 +99,7 @@ Pi loads `AGENTS.md` at startup from multiple locations, identical to how Claude
 GPT 5.5 is actively harmed by Claude Code-style process-heavy prompts. OpenAI's official guidance: "start with the smallest prompt that preserves the product contract." Pi's ~200-token default is a strength — keep AGENTS.md to ~400 tokens covering only true invariants and outcome standards.
 
 Key GPT 5.5 behavioral differences:
+
 - **Outcome-first, not process-heavy** — define what you want, not step-by-step how to get there
 - **MUST/NEVER only for true invariants** — git safety, factual accuracy. For judgment calls, use "prefer" / "suggest"
 - **Contradictory instructions degrade GPT 5.5 significantly** — worse than in Claude models. Remove ambiguities.
@@ -109,9 +111,11 @@ Recommended global `~/.pi/agent/AGENTS.md`:
 # Conventions
 
 ## Identity
+
 Senior engineer. High agency, principled judgment. Proceed without asking when the next step is low-risk and intent is clear.
 
 ## Outcome Standards
+
 - Correctness first, brevity second
 - No emojis, filler, or ceremony
 - Verify all directly affected artifacts (callsites, tests, docs) before yielding
@@ -119,18 +123,21 @@ Senior engineer. High agency, principled judgment. Proceed without asking when t
 - Do not fabricate outputs that were not observed
 
 ## Tool Use
+
 - Use `rg` for text search, `rg --files` for file discovery
 - Search before you read — do not read files hoping to find the right thing
 - Resolve prerequisites before acting
 - Do not stop at the first plausible answer if another tool call would reduce uncertainty
 
 ## Git Safety
+
 - NEVER revert changes you did not make unless explicitly requested
 - NEVER use `git reset --hard`, `git checkout --`, `git clean -fd`
 - Do not amend commits unless explicitly requested
 - Only commit files YOU changed in THIS session using specific file paths
 
 ## Presentation
+
 - Be concise. Lead with what changed and why, then context
 - Reference file paths, do not dump file contents
 - Use numbered lists for multiple options so user can respond with a number
@@ -142,12 +149,12 @@ Sources: [OpenAI GPT-5.5 Prompt Guidance](https://developers.openai.com/api/docs
 
 For deeper customization beyond AGENTS.md:
 
-| File | Effect |
-|------|--------|
-| `.pi/SYSTEM.md` | **Replaces** the default 200-token system prompt entirely |
-| `.pi/APPEND_SYSTEM.md` | **Appends** to the default system prompt |
-| `~/.pi/agent/SYSTEM.md` | Global system prompt override |
-| `~/.pi/agent/APPEND_SYSTEM.md` | Global system prompt append |
+| File                           | Effect                                                    |
+| ------------------------------ | --------------------------------------------------------- |
+| `.pi/SYSTEM.md`                | **Replaces** the default 200-token system prompt entirely |
+| `.pi/APPEND_SYSTEM.md`         | **Appends** to the default system prompt                  |
+| `~/.pi/agent/SYSTEM.md`        | Global system prompt override                             |
+| `~/.pi/agent/APPEND_SYSTEM.md` | Global system prompt append                               |
 
 **Recommendation: Use AGENTS.md, not SYSTEM.md.** Pi's default prompt is already minimal (~200 tokens) — there's nothing to remove. It dynamically injects tool listings that you'd have to replicate manually in a SYSTEM.md. Mario Zechner's own usage (pi-mono repo) uses AGENTS.md. Reserve SYSTEM.md only for fundamentally different agent identity (non-coding tasks, RFC 2119-style normative frameworks like oh-my-pi).
 
@@ -165,10 +172,10 @@ pi --no-context-files    # or -nc
 
 ### File Locations
 
-| Location | Scope |
-|----------|-------|
-| `~/.pi/agent/settings.json` | Global |
-| `.pi/settings.json` | Project (overrides global via nested merge) |
+| Location                    | Scope                                       |
+| --------------------------- | ------------------------------------------- |
+| `~/.pi/agent/settings.json` | Global                                      |
+| `.pi/settings.json`         | Project (overrides global via nested merge) |
 
 ### Essential Settings for Migration
 
@@ -206,6 +213,7 @@ The `enabledModels` array controls what Ctrl+P cycles through. Supports glob pat
 ### Auto-Compaction
 
 Enabled by default. When approaching the context limit:
+
 1. Older messages get summarized
 2. Recent messages (controlled by `keepRecentTokens`) stay untouched
 3. Full history remains in the JSONL session file — use `/tree` to revisit
@@ -244,33 +252,35 @@ description: Does X when the user asks about Y. Use when Z.
 # My Skill
 
 ## Steps
+
 1. Do this
 2. Then that
 
 ## Reference
+
 See [API docs](references/api-reference.md) for details.
 ```
 
 ### Frontmatter Fields
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Max 64 chars. Lowercase a-z, 0-9, hyphens. Must match directory name. |
-| `description` | Yes | Max 1024 chars. Determines when the agent auto-loads it. |
-| `license` | No | License reference |
-| `compatibility` | No | Environment requirements |
-| `disable-model-invocation` | No | When `true`, only manual `/skill:name` works |
-| `allowed-tools` | No | Pre-approved tools (experimental) |
+| Field                      | Required | Description                                                           |
+| -------------------------- | -------- | --------------------------------------------------------------------- |
+| `name`                     | Yes      | Max 64 chars. Lowercase a-z, 0-9, hyphens. Must match directory name. |
+| `description`              | Yes      | Max 1024 chars. Determines when the agent auto-loads it.              |
+| `license`                  | No       | License reference                                                     |
+| `compatibility`            | No       | Environment requirements                                              |
+| `disable-model-invocation` | No       | When `true`, only manual `/skill:name` works                          |
+| `allowed-tools`            | No       | Pre-approved tools (experimental)                                     |
 
 ### Discovery Locations
 
-| Location | Notes |
-|----------|-------|
-| `~/.pi/agent/skills/` | Global |
-| `~/.agents/skills/` | Global (Agent Skills standard path) |
-| `.pi/skills/` | Project |
-| `.agents/skills/` (cwd + ancestors) | Project + parent dirs |
-| Pi packages | Via `pi install` |
+| Location                            | Notes                               |
+| ----------------------------------- | ----------------------------------- |
+| `~/.pi/agent/skills/`               | Global                              |
+| `~/.agents/skills/`                 | Global (Agent Skills standard path) |
+| `.pi/skills/`                       | Project                             |
+| `.agents/skills/` (cwd + ancestors) | Project + parent dirs               |
+| Pi packages                         | Via `pi install`                    |
 
 ### Invocation
 
@@ -308,11 +318,13 @@ Prompt templates are Pi's equivalent of simple Claude Code slash commands — re
 ### File Format
 
 ```markdown
-<!-- ~/.pi/agent/prompts/review.md -->
----
+## <!-- ~/.pi/agent/prompts/review.md -->
+
 description: Review code for bugs, security, and performance
 argument-hint: "<file-or-area>"
+
 ---
+
 Review this code for bugs, security issues, and performance problems.
 Focus on: $1
 Additional context: ${@:2}
@@ -320,26 +332,27 @@ Additional context: ${@:2}
 
 ### Argument Syntax
 
-| Syntax | Meaning |
-|--------|---------|
-| `$1`, `$2`, ... | Positional arguments |
-| `$@` or `$ARGUMENTS` | All arguments joined |
-| `${@:N}` | Arguments from Nth position |
-| `${@:N:L}` | L arguments starting at N |
+| Syntax               | Meaning                     |
+| -------------------- | --------------------------- |
+| `$1`, `$2`, ...      | Positional arguments        |
+| `$@` or `$ARGUMENTS` | All arguments joined        |
+| `${@:N}`             | Arguments from Nth position |
+| `${@:N:L}`           | L arguments starting at N   |
 
 ### Discovery Locations
 
-| Location | Notes |
-|----------|-------|
-| `~/.pi/agent/prompts/` | Global |
-| `.pi/prompts/` | Project |
-| Pi packages | Via `pi install` |
+| Location               | Notes            |
+| ---------------------- | ---------------- |
+| `~/.pi/agent/prompts/` | Global           |
+| `.pi/prompts/`         | Project          |
+| Pi packages            | Via `pi install` |
 
 Discovery is **non-recursive** — templates must be directly in the prompts directory.
 
 ### Invocation
 
 Type `/` then the filename (minus `.md`):
+
 ```
 /review src/auth.ts          # Expands review.md with $1 = "src/auth.ts"
 /component Button "onClick"  # Multiple arguments
@@ -373,12 +386,12 @@ export default function (pi: ExtensionAPI) {
 
 ### Discovery Locations
 
-| Location | Notes |
-|----------|-------|
-| `~/.pi/agent/extensions/*.ts` | Global |
-| `~/.pi/agent/extensions/*/index.ts` | Global (directory-based) |
-| `.pi/extensions/*.ts` | Project |
-| `.pi/extensions/*/index.ts` | Project (directory-based) |
+| Location                            | Notes                     |
+| ----------------------------------- | ------------------------- |
+| `~/.pi/agent/extensions/*.ts`       | Global                    |
+| `~/.pi/agent/extensions/*/index.ts` | Global (directory-based)  |
+| `.pi/extensions/*.ts`               | Project                   |
+| `.pi/extensions/*/index.ts`         | Project (directory-based) |
 
 ### Loading & Stacking
 
@@ -389,6 +402,7 @@ pi -e ./ext/footer.ts -e ./ext/subagents.ts -e ./ext/theme-cycler.ts
 ```
 
 Or configure in `settings.json`:
+
 ```json
 {
   "extensions": ["./extensions/my-ext.ts", "./extensions/"]
@@ -399,18 +413,18 @@ Extensions compose — event handlers run in load order, tools/commands register
 
 ### Core API Surface
 
-| Method | Purpose |
-|--------|---------|
-| `pi.on(event, handler)` | Subscribe to lifecycle events |
-| `pi.registerTool(def)` | Register LLM-callable tools |
-| `pi.registerCommand(name, opts)` | Register `/commands` |
-| `pi.registerShortcut(key, opts)` | Register keyboard shortcuts |
-| `pi.sendMessage(msg)` | Inject messages into session |
-| `pi.appendEntry(type, data)` | Persist extension state |
-| `pi.registerMessageRenderer(type, renderer)` | Custom message display |
-| `pi.registerProvider(name, config)` | Register model providers |
-| `pi.getActiveTools() / setActiveTools()` | Manage tool activation |
-| `pi.events` | Shared bus for inter-extension communication |
+| Method                                       | Purpose                                      |
+| -------------------------------------------- | -------------------------------------------- |
+| `pi.on(event, handler)`                      | Subscribe to lifecycle events                |
+| `pi.registerTool(def)`                       | Register LLM-callable tools                  |
+| `pi.registerCommand(name, opts)`             | Register `/commands`                         |
+| `pi.registerShortcut(key, opts)`             | Register keyboard shortcuts                  |
+| `pi.sendMessage(msg)`                        | Inject messages into session                 |
+| `pi.appendEntry(type, data)`                 | Persist extension state                      |
+| `pi.registerMessageRenderer(type, renderer)` | Custom message display                       |
+| `pi.registerProvider(name, config)`          | Register model providers                     |
+| `pi.getActiveTools() / setActiveTools()`     | Manage tool activation                       |
+| `pi.events`                                  | Shared bus for inter-extension communication |
 
 ### Hot Reload
 
@@ -427,57 +441,64 @@ Pi's hook system is implemented through extension events. It's **more granular**
 ### All Available Events
 
 #### Session Lifecycle
-| Event | When | Can Block? |
-|-------|------|------------|
-| `session_start` | Session starts/loads/reloads | No |
-| `session_shutdown` | Before teardown | No |
-| `session_before_switch` | Before `/new` or `/resume` | Yes |
-| `session_before_fork` | Before `/fork` or `/clone` | Yes |
-| `session_before_compact` | Before compaction | Can provide custom summary |
-| `session_compact` | On compaction | No |
-| `resources_discover` | After session_start | Can contribute resource paths |
+
+| Event                    | When                         | Can Block?                    |
+| ------------------------ | ---------------------------- | ----------------------------- |
+| `session_start`          | Session starts/loads/reloads | No                            |
+| `session_shutdown`       | Before teardown              | No                            |
+| `session_before_switch`  | Before `/new` or `/resume`   | Yes                           |
+| `session_before_fork`    | Before `/fork` or `/clone`   | Yes                           |
+| `session_before_compact` | Before compaction            | Can provide custom summary    |
+| `session_compact`        | On compaction                | No                            |
+| `resources_discover`     | After session_start          | Can contribute resource paths |
 
 #### Agent Lifecycle
-| Event | When | Can Block? |
-|-------|------|------------|
-| `before_agent_start` | After user submits, before LLM | Can inject messages, modify system prompt |
-| `agent_start` | Once per user prompt | No |
-| `agent_end` | After LLM finishes | No |
-| `turn_start` | Each LLM response + tool call cycle | No |
-| `turn_end` | After tools executed | No |
+
+| Event                | When                                | Can Block?                                |
+| -------------------- | ----------------------------------- | ----------------------------------------- |
+| `before_agent_start` | After user submits, before LLM      | Can inject messages, modify system prompt |
+| `agent_start`        | Once per user prompt                | No                                        |
+| `agent_end`          | After LLM finishes                  | No                                        |
+| `turn_start`         | Each LLM response + tool call cycle | No                                        |
+| `turn_end`           | After tools executed                | No                                        |
 
 #### Tool Execution
-| Event | When | Can Block? |
-|-------|------|------------|
-| `tool_execution_start` | Before tool runs | No |
-| `tool_execution_update` | During execution (streaming) | No |
-| `tool_execution_end` | After execution | No |
-| `tool_call` | After start, before execute | **Yes — can block** with `{ block: true, reason }`. Args are mutable. |
-| `tool_result` | After execute, before message | Can modify result (middleware chain) |
+
+| Event                   | When                          | Can Block?                                                            |
+| ----------------------- | ----------------------------- | --------------------------------------------------------------------- |
+| `tool_execution_start`  | Before tool runs              | No                                                                    |
+| `tool_execution_update` | During execution (streaming)  | No                                                                    |
+| `tool_execution_end`    | After execution               | No                                                                    |
+| `tool_call`             | After start, before execute   | **Yes — can block** with `{ block: true, reason }`. Args are mutable. |
+| `tool_result`           | After execute, before message | Can modify result (middleware chain)                                  |
 
 #### Messages
-| Event | When | Can Block? |
-|-------|------|------------|
-| `message_start` | Message lifecycle start | No |
-| `message_update` | Streaming updates | No |
-| `message_end` | Message lifecycle end | No |
+
+| Event            | When                    | Can Block? |
+| ---------------- | ----------------------- | ---------- |
+| `message_start`  | Message lifecycle start | No         |
+| `message_update` | Streaming updates       | No         |
+| `message_end`    | Message lifecycle end   | No         |
 
 #### User Input
-| Event | When | Can Block? |
-|-------|------|------------|
-| `input` | After command check, before expansion | Can transform or handle |
-| `user_bash` | On `!` or `!!` commands | Can intercept |
+
+| Event       | When                                  | Can Block?              |
+| ----------- | ------------------------------------- | ----------------------- |
+| `input`     | After command check, before expansion | Can transform or handle |
+| `user_bash` | On `!` or `!!` commands               | Can intercept           |
 
 #### Provider
-| Event | When | Can Block? |
-|-------|------|------------|
+
+| Event                     | When                | Can Block?          |
+| ------------------------- | ------------------- | ------------------- |
 | `before_provider_request` | Before HTTP request | Can replace payload |
-| `after_provider_response` | After HTTP response | No |
-| `model_select` | On model change | No |
+| `after_provider_response` | After HTTP response | No                  |
+| `model_select`            | On model change     | No                  |
 
 #### Context
-| Event | When | Can Block? |
-|-------|------|------------|
+
+| Event     | When                 | Can Block?                                   |
+| --------- | -------------------- | -------------------------------------------- |
 | `context` | Before each LLM call | Can filter/modify messages (non-destructive) |
 
 ### Example: Blocking Dangerous Commands (like Claude Code's PreToolUse hook)
@@ -488,11 +509,8 @@ export default function (pi: ExtensionAPI) {
     if (event.toolName === "bash") {
       const cmd = event.input?.command || "";
       const dangerous = ["rm -rf", "sudo", "DROP TABLE"];
-      if (dangerous.some(d => cmd.includes(d))) {
-        const ok = await ctx.ui.confirm(
-          "Dangerous Command",
-          `Allow: ${cmd}?`
-        );
+      if (dangerous.some((d) => cmd.includes(d))) {
+        const ok = await ctx.ui.confirm("Dangerous Command", `Allow: ${cmd}?`);
         if (!ok) return { block: true, reason: "Blocked by damage control" };
       }
     }
@@ -512,13 +530,13 @@ export default function (pi: ExtensionAPI) {
 
 ### Porting Claude Code Hooks
 
-| Claude Code Hook | Pi Equivalent |
-|-----------------|---------------|
-| `PreToolUse` | `tool_call` event (can block, mutate args) |
-| `PostToolUse` | `tool_result` event (can modify result) |
-| `Notification` | `agent_end` event |
-| `Stop` | `agent_end` event |
-| `SubagentStop` | No direct equivalent (subagents are custom) |
+| Claude Code Hook | Pi Equivalent                               |
+| ---------------- | ------------------------------------------- |
+| `PreToolUse`     | `tool_call` event (can block, mutate args)  |
+| `PostToolUse`    | `tool_result` event (can modify result)     |
+| `Notification`   | `agent_end` event                           |
+| `Stop`           | `agent_end` event                           |
+| `SubagentStop`   | No direct equivalent (subagents are custom) |
 
 **Key difference**: Claude Code hooks are shell scripts in `settings.json`. Pi hooks are TypeScript in extension files. More powerful, but requires writing TypeScript.
 
@@ -528,11 +546,12 @@ export default function (pi: ExtensionAPI) {
 
 **Confidence: Verified** (packages confirmed via npm and GitHub; runtime behavior needs validation)
 
-All four Claude Code features missing from Pi have mature, actively-maintained community packages. Install them — don't build from scratch.
+All five Claude Code features missing from Pi have mature, actively-maintained community packages or straightforward custom builds. Install what exists — build only what's simple enough to be better custom.
 
 ```bash
 pi install npm:pi-subagents
 pi install npm:pi-ask-user
+pi install npm:pi-todo-md
 # Web search: build custom Codex delegation extension (~15 lines) — see below
 # Plan mode: build custom extension (~80 lines) — see below
 ```
@@ -542,6 +561,7 @@ pi install npm:pi-ask-user
 964 stars · 38K downloads/wk · v0.18.1 (Apr 2026) · [GitHub](https://github.com/nicobailon/pi-subagents)
 
 Agents are markdown files with YAML frontmatter stored in `.pi/agents/`. Three execution modes:
+
 - **Single** — one agent, one task
 - **Chain** — sequential steps with `{task}`, `{previous}`, `{chain_dir}` template variables
 - **Parallel** — concurrent with optional git worktree isolation
@@ -578,7 +598,8 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.setStatus("plan-mode", "PLAN MODE");
         pi.sendMessage({
           role: "user",
-          content: "You are now in plan mode. Explore the codebase using read-only tools only. Write your plan, then I will approve before execution.",
+          content:
+            "You are now in plan mode. Explore the codebase using read-only tools only. Write your plan, then I will approve before execution.",
         });
       } else {
         ctx.ui.setStatus("plan-mode", "");
@@ -589,7 +610,11 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     if (!planMode) return;
     if (!readOnlyTools.includes(event.toolName)) {
-      return { block: true, reason: "Plan mode active — read-only tools only. Write your plan first." };
+      return {
+        block: true,
+        reason:
+          "Plan mode active — read-only tools only. Write your plan first.",
+      };
     }
   });
 }
@@ -631,7 +656,7 @@ export default function (pi: ExtensionAPI) {
       const escaped = params.query.replace(/"/g, '\\"');
       const result = execSync(
         `codex exec --search --full-auto "Search the web for: ${escaped}. Return only factual findings with source URLs. Do not write any code."`,
-        { timeout: 30000, encoding: "utf-8" }
+        { timeout: 30000, encoding: "utf-8" },
       );
       return { content: [{ type: "text", text: result }], details: {} };
     },
@@ -642,9 +667,25 @@ export default function (pi: ExtensionAPI) {
 **Tradeoffs:** ~3-8s latency per search (full Codex agent loop), consumes subscription tokens. If you hit quota limits, swap to MCP-direct (Brave Search or Perplexity MCP via `.mcp.json`) — Pi has native MCP support so it's just a config change, no extension needed.
 
 **Alternatives:**
+
 - `pi-web-access` (nicobailon, 378 stars) — feature-rich (video, PDF, GitHub cloning) but 32 open issues and macOS pain points
 - MCP-direct: Brave Search MCP, Perplexity MCP, or Exa MCP via `.mcp.json` — lowest latency, but requires separate API keys/credits
 - `badlogic/pi-skills/brave-search` (official, skill-only, requires Brave API key)
+
+### TODO Tracking — `pi-todo-md`
+
+712 downloads/wk · v0.4.0 (Apr 2026) · [npm](https://www.npmjs.com/package/pi-todo-md)
+
+Manages a repo-local `TODO.md` file via a structured `todo_md` tool. File-based approach — tasks are inspectable, diffable, and survive session crashes.
+
+**Key features:**
+- Stable task IDs with hidden HTML comments
+- Named sections, subtasks, priority levels, notes
+- Interactive `/todos [section]` browser
+- Injects compact active-task summary into agent turns (survives compaction)
+- Finds nearest `TODO.md` or creates at git root
+
+**Alternative:** `@juicesharp/rpiv-todo` (3.6K dl/wk) — closer to Claude Code's TodoWrite UX with overlay widget and 4-state task machine, but tasks are session-scoped (branch replay), not file-based. Higher adoption, less durable persistence. See [features/todo-tracking.md](features/todo-tracking.md) for full comparison.
 
 ### Extension Security Note
 
@@ -691,6 +732,7 @@ Use `Shift+Tab` to cycle thinking levels without switching models. Power users r
 ### Week 1: Message Queue (Steering vs Follow-up)
 
 More nuanced than Claude Code:
+
 - **Enter** while agent works: queue a **steering** message (delivered after current tool calls finish, before next LLM call)
 - **Alt+Enter**: queue a **follow-up** (delivered only after agent finishes all work)
 - **Escape**: abort and restore queued messages
@@ -714,6 +756,7 @@ Navigate your entire session history as a tree. Select any previous point and co
 ### Week 2-4: Extension Stacking
 
 Compose capabilities via CLI flags:
+
 ```bash
 pi -e ./ext/footer.ts -e ./ext/subagents.ts -e ./ext/damage-control.ts
 ```
@@ -732,6 +775,12 @@ Full programmatic control via JSONL protocol (14 commands, 12 event types). For 
 
 Extensions can intercept `session_before_compact` to replace default summarization. Mario Zechner himself says "all compaction implementations are not good" — auto-compaction suffices for now.
 
+### Later: Meta-Agent for Building Extensions
+
+A "Pi Pi" meta-agent that delegates research to domain-specific expert agents (extensions, themes, skills, TUI, config) in parallel, synthesizes findings, and writes complete implementations. This is how you efficiently extend Pi going forward — instead of manually reading docs for each extension you build, the meta-agent queries the right experts and produces working code.
+
+Reference implementation: IndyDevDan's `pi-vs-claude-code` repo (634-line extension). Adaptation notes: use local Pi docs (`etc/pi-docs/docs/`) instead of firecrawl fetches, start with 3 experts (ext/theme/skill), and consider using `pi-subagents` for the subprocess orchestration. See [features/meta-agent.md](features/meta-agent.md) for full architecture and porting strategy.
+
 ### Later: Mental Models / Per-Agent Context
 
 Persistent files where each agent stores accumulated knowledge across sessions. An advanced multi-agent pattern from IndyDevDan's content — not relevant for solo developers. Revisit when running agent teams.
@@ -740,23 +789,23 @@ Persistent files where each agent stores accumulated knowledge across sessions. 
 
 ## 10. Feature Matrix
 
-| Claude Code Feature | Pi Equivalent | Effort | Status |
-|---|---|---|---|
-| CLAUDE.md | AGENTS.md (+ CLAUDE.md fallback) | None | Native |
-| Skills | Skills (Agent Skills standard) | Low | Native |
-| Slash commands | Prompt templates | Low | Native |
-| Hooks (shell-based) | Extension events (TypeScript) | Medium | Native (richer) |
-| Permission system | YOLO default; `pi-permission-gate` | Low | **Install** |
-| AskUserQuestion | `pi-ask-user` (edlsh) | Low | **Install** |
-| Plan mode | Custom extension (~80 lines) | Low | **Build** |
-| Subagents (Agent tool) | `pi-subagents` (nicobailon) | Low | **Install** |
-| WebSearch | Codex CLI delegation (~15 lines) | Low | **Build** |
-| TodoWrite/TaskCreate | Extension or PLAN.md file | Medium | Build it |
-| MCP servers | Not supported; use skills/extensions | Varies | Not available |
-| Multi-agent teams | `pi-subagents` chains/parallel | Medium | **Install** + configure |
-| Status line | Footer customization (richer) | Low | Native |
-| Background agents | Not built in; use tmux | Low | Workaround |
-| Git checkpointing | Extension or session branching | Low | Partial native |
+| Claude Code Feature    | Pi Equivalent                        | Effort | Status                  |
+| ---------------------- | ------------------------------------ | ------ | ----------------------- |
+| CLAUDE.md              | AGENTS.md (+ CLAUDE.md fallback)     | None   | Native                  |
+| Skills                 | Skills (Agent Skills standard)       | Low    | Native                  |
+| Slash commands         | Prompt templates                     | Low    | Native                  |
+| Hooks (shell-based)    | Extension events (TypeScript)        | Medium | Native (richer)         |
+| Permission system      | YOLO default; `pi-permission-gate`   | Low    | **Install**             |
+| AskUserQuestion        | `pi-ask-user` (edlsh)                | Low    | **Install**             |
+| Plan mode              | Custom extension (~80 lines)         | Low    | **Build**               |
+| Subagents (Agent tool) | `pi-subagents` (nicobailon)          | Low    | **Install**             |
+| WebSearch              | Codex CLI delegation (~15 lines)     | Low    | **Build**               |
+| TodoWrite/TaskCreate   | `pi-todo-md` (file-based)            | Low    | **Install**             |
+| MCP servers            | Not supported; use skills/extensions | Varies | Not available           |
+| Multi-agent teams      | `pi-subagents` chains/parallel       | Medium | **Install** + configure |
+| Status line            | Footer customization (richer)        | Low    | Native                  |
+| Background agents      | Not built in; use tmux               | Low    | Workaround              |
+| Git checkpointing      | Extension or session branching       | Low    | Partial native          |
 
 ---
 
@@ -789,33 +838,33 @@ Persistent files where each agent stores accumulated knowledge across sessions. 
 
 ### Essential Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `Ctrl+C` | Clear editor |
-| `Ctrl+C` twice | Quit |
-| `Escape` | Cancel/abort |
-| `Escape` twice | Open `/tree` |
-| `Ctrl+L` | Model selector |
-| `Ctrl+P` | Cycle models |
-| `Shift+Tab` | Cycle thinking level |
-| `Ctrl+O` | Collapse/expand tool output |
-| `Ctrl+T` | Collapse/expand thinking |
-| `Alt+Enter` | Queue follow-up message |
-| `@` | File reference fuzzy search |
-| `!command` | Run bash, send output to LLM |
-| `!!command` | Run bash, don't send to LLM |
+| Key            | Action                       |
+| -------------- | ---------------------------- |
+| `Ctrl+C`       | Clear editor                 |
+| `Ctrl+C` twice | Quit                         |
+| `Escape`       | Cancel/abort                 |
+| `Escape` twice | Open `/tree`                 |
+| `Ctrl+L`       | Model selector               |
+| `Ctrl+P`       | Cycle models                 |
+| `Shift+Tab`    | Cycle thinking level         |
+| `Ctrl+O`       | Collapse/expand tool output  |
+| `Ctrl+T`       | Collapse/expand thinking     |
+| `Alt+Enter`    | Queue follow-up message      |
+| `@`            | File reference fuzzy search  |
+| `!command`     | Run bash, send output to LLM |
+| `!!command`    | Run bash, don't send to LLM  |
 
 ### Essential Commands
 
-| Command | Description |
-|---------|-------------|
-| `/model` | Switch models |
-| `/settings` | Settings UI |
-| `/tree` | Session tree navigator |
-| `/compact` | Manual compaction |
-| `/new` | New session |
-| `/resume` | Browse sessions |
-| `/fork` | Fork from previous message |
-| `/export` | Export to HTML |
-| `/reload` | Reload extensions/skills/prompts |
-| `/skill:name` | Load a skill |
+| Command       | Description                      |
+| ------------- | -------------------------------- |
+| `/model`      | Switch models                    |
+| `/settings`   | Settings UI                      |
+| `/tree`       | Session tree navigator           |
+| `/compact`    | Manual compaction                |
+| `/new`        | New session                      |
+| `/resume`     | Browse sessions                  |
+| `/fork`       | Fork from previous message       |
+| `/export`     | Export to HTML                   |
+| `/reload`     | Reload extensions/skills/prompts |
+| `/skill:name` | Load a skill                     |
