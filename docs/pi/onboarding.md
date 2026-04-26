@@ -805,6 +805,7 @@ Persistent files where each agent stores accumulated knowledge across sessions. 
 | Multi-agent teams      | `pi-subagents` chains/parallel       | Medium | **Install** + configure |
 | Status line            | Footer customization (richer)        | Low    | Native                  |
 | Background agents      | Not built in; use tmux               | Low    | Workaround              |
+| Large output handling   | Built-in: 50KB/2000-line truncation + temp file persistence | None | Native |
 | Git checkpointing      | Extension or session branching       | Low    | Partial native          |
 
 ---
