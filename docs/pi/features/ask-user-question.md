@@ -14,25 +14,70 @@ Key behaviors:
 - Confirmation (yes/no) for destructive or ambiguous actions
 - Non-blocking notification for status updates
 
-## Pi API Surface (Known)
+## Pi API Surface
 
-Pi's extension API provides these TUI dialog methods on `ctx.ui`:
+Pi's extension API provides TUI dialog methods on `ctx.ui`, but these are only available to *extensions* (event hooks, tool handlers), not to the LLM directly. The LLM needs an extension-registered tool to block and wait for user input.
+
+Available `ctx.ui` methods:
 - `ctx.ui.input(title, placeholder?)` — single-line text input
 - `ctx.ui.editor(title, prefilled?)` — multi-line editor
 - `ctx.ui.select(title, options[])` — selection from list
 - `ctx.ui.confirm(title, message)` — yes/no confirmation
 - `ctx.ui.notify(message, level)` — non-blocking notification
+- `ctx.ui.custom(...)` — full custom TUI components with keyboard input
+- `pi.sendUserMessage(message, timing)` — inject messages as if user typed them
 
-These can be called from within a custom tool's `execute` function.
+## Recommended: `pi-ask-user` (edlsh)
 
-## Research
+44 stars · v0.6.1 (Apr 2026) · [GitHub](https://github.com/edlsh/pi-ask-user)
 
-- [ ] Check if an existing Pi package provides this
-- [ ] Look at how IndyDevDan's extensions handle user interaction
-- [ ] Determine if this should be a standalone extension or bundled with others
+Registers an `ask_user` tool the LLM can invoke to block and wait for user input.
 
-## Implementation
+**Key features:**
+- Searchable single-select and multi-select option lists
+- Optional freeform responses and comments
+- Timeout for auto-dismiss
+- Split-pane details preview on wide terminals
+- Overlay dialog mode preserving conversation visibility
+- Bundled `ask-user` skill for decision-gating in high-stakes tasks
+- Graceful fallback when interactive UI unavailable
+- System prompt integration via `promptSnippet` and `promptGuidelines`
 
-_To be filled after research._
+**Example tool call:**
+```json
+{
+  "question": "Which deploy target?",
+  "context": "We are choosing a deploy target.",
+  "options": ["staging", {"title": "production", "description": "Customer-facing"}],
+  "allowMultiple": false,
+  "allowFreeform": true,
+  "allowComment": true
+}
+```
 
-## Status: Not Started
+**Install:**
+
+```bash
+pi install npm:pi-ask-user
+```
+
+**Known issues** (3 open):
+- Feature request for configurable display mode (overlay vs inline)
+- ask_user hidden when an image is displayed on screen
+
+## Alternative: Build Custom (~50 lines)
+
+The core pattern is minimal: `pi.registerTool()` → call `ctx.ui.select()` or `ctx.ui.input()` → return result. A basic implementation is ~50 lines of TypeScript. However, pi-ask-user's polish (searchable options, split-pane previews, overlay mode, decision-gating skill) would take meaningful effort to replicate.
+
+## Other Options Evaluated
+
+| Package | Stars | Notes |
+|---------|-------|-------|
+| `tomsej/pi-ext` (ask_user_question) | 34 | Part of 12-extension bundle, v0.1.0, less focused |
+| `jayshah5696/pi-agent-extensions` | 18 | Beta, adapted from mitsuhiko/agent-stuff, v0.1.0 |
+
+## Decision
+
+Install `pi-ask-user`. Low star count (44) but focused scope, clean API, polished UX, and minimal issues. Building custom only makes sense if you need something ultra-minimal.
+
+## Status: Researched — Install on Day 1
