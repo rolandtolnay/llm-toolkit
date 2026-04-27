@@ -138,8 +138,24 @@ if (guardWantsAsk) {
 }
 ```
 
+## Enhancement: Tool Hiding via `before_agent_start`
+
+Insight from oh-my-pi's architecture: blocking a tool at execution time wastes tokens — the model still sees the tool in its system prompt, plans to use it, generates a tool call, and only then gets blocked. Better to strip denied tools from the prompt entirely so the model never considers them.
+
+Pi's `before_agent_start` event fires before each model turn and can modify the system prompt. Combined with `pi.getActiveTools()` / `pi.setActiveTools()`, this removes denied tools from the model's awareness:
+
+```typescript
+pi.on("before_agent_start", async (event, ctx) => {
+  const denied = getDeniedTools(); // read from patterns.json or policy
+  const active = pi.getActiveTools().filter(t => !denied.includes(t.name));
+  pi.setActiveTools(active);
+});
+```
+
+This complements the `tool_call` blocking (which remains as a safety net) — the model doesn't waste tokens attempting calls that will be blocked. The community `pi-permission-system` (MasuRii) already implements this pattern.
+
 ## Decision
 
-Port via TypeScript shim that delegates to existing Python guard scripts. This preserves the battle-tested guard logic without rewriting it, and keeps the extension itself minimal (~30-40 lines).
+Port via TypeScript shim that delegates to existing Python guard scripts. This preserves the battle-tested guard logic without rewriting it, and keeps the extension itself minimal (~30-40 lines). Add tool hiding via `before_agent_start` to prevent wasted token attempts on denied tools.
 
 ## Status: Researched — Build on Day 1

@@ -111,8 +111,38 @@ Explicitly targets Claude Code parity. Growing fast, interesting differentiators
 | `@a5c-ai/babysitter-pi` | 26K | Orchestration package, less documentation |
 | oh-my-pi (can1357) | N/A | Full fork of pi-mono with subagents baked in, not installable as extension |
 
+## Enhancement: Custom Agent Definitions
+
+oh-my-pi ships 6 bundled agent types (explore, plan, designer, reviewer, task, quick_task) with tailored system prompts and tool restrictions. `pi-subagents` ships 9 builtins, but you can write custom definitions in `.pi/agents/` that are more targeted to your workflow.
+
+Worth creating early:
+
+| Agent | Tools | Purpose |
+|-------|-------|---------|
+| **reviewer** | read, grep, find, ast_search | Code review with structured findings (P0-P3 priority). Read-only — cannot modify files. |
+| **explorer** | read, grep, find, bash (read-only) | Codebase exploration for answering questions. Returns concise summaries. |
+
+These are markdown files with YAML frontmatter — no code. Example:
+
+```markdown
+---
+name: reviewer
+description: Code review with structured priority findings
+tools: [read, grep, find]
+model: pi/smol
+---
+
+Review the code changes. Report findings using this format:
+- **P0 (critical)**: Security vulnerabilities, data loss risks
+- **P1 (high)**: Bugs, incorrect logic
+- **P2 (medium)**: Performance issues, missing error handling
+- **P3 (nit)**: Style, naming, minor improvements
+
+End with a verdict: APPROVE, REQUEST_CHANGES, or COMMENT.
+```
+
 ## Decision
 
-Install `pi-subagents` (nicobailon). Clear ecosystem winner by adoption, maintenance, and feature completeness. Watch `@tintinweb/pi-subagents` for features like persistent memory and Claude Code parity that may be worth switching to later.
+Install `pi-subagents` (nicobailon). Clear ecosystem winner by adoption, maintenance, and feature completeness. Write custom agent definitions for reviewer and explorer in Week 2. Watch `@tintinweb/pi-subagents` for features like persistent memory and Claude Code parity that may be worth switching to later.
 
-## Status: Researched — Install on Day 1
+## Status: Researched — Install on Day 1, custom agents in Week 2

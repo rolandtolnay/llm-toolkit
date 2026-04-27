@@ -9,10 +9,12 @@ Claude Code's plan mode — a mode where the model analyzes the task and produce
 For complex or risky tasks, I want the model to think through its approach before making changes. This prevents wasted effort from wrong-direction implementations and gives me a chance to steer the approach before any files are modified.
 
 Key behaviors:
-- Toggle on/off (persist across turns or per-task)
+- Toggle on/off via `/plan` — visible in UI as a persistent status indicator, not a one-shot skill
 - Read-only tool access during planning (read, grep, find, ls — no write, edit, bash)
-- Plan presented for review before execution
-- User approves or redirects, then full tools unlock
+- Plan presented for review with structured resolution options:
+  - **Accept + continue**: unlock full tools and execute in the same context
+  - **Accept + reset context**: compact/clear the planning context and start execution fresh with only the plan — avoids polluting execution with exploratory reads
+  - **Decline + revise**: stay in plan mode, provide feedback for the model to revise
 
 ## Pi API Surface
 
@@ -28,14 +30,14 @@ Relevant extension capabilities for building plan mode:
 | `ctx.ui.setWidget()` | Display the plan persistently above/below editor |
 | `ctx.ui.confirm()` | Approval dialog before switching to execution |
 
-## Recommended: Custom Extension (~80 lines)
+## Recommended: Custom Extension (~120 lines)
 
-Build a small custom extension rather than installing a community package. The extension skeleton is straightforward and the community-validated approach.
+Build a harness-level extension with UI integration, tool enforcement, and structured plan resolution. This is not a skill — it needs to control the UI, block tools, and manage context.
 
-**Workflow:** `/plan` toggles on → agent explores read-only and produces a plan → user reviews → approves via confirm dialog → full tools unlock.
+**Workflow:** `/plan` activates → footer shows PLAN MODE → agent explores read-only → plan presented → user chooses accept/reset/revise via selection dialog → tools unlock or model revises.
 
 ```typescript
-// .pi/extensions/plan-mode.ts
+// ~/.pi/agent/extensions/plan-mode.ts
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
@@ -47,11 +49,12 @@ export default function (pi: ExtensionAPI) {
     async execute(_args, ctx) {
       planMode = !planMode;
       if (planMode) {
-        ctx.ui.setStatus("plan-mode", "PLAN MODE");
+        ctx.ui.setStatus("plan-mode", "📋 PLAN MODE");
         pi.sendMessage({
           role: "user",
           content:
-            "You are now in plan mode. Explore the codebase using read-only tools only. Write your plan, then I will approve before execution.",
+            "You are now in plan mode. Explore the codebase using read-only tools only. " +
+            "When your plan is complete, say PLAN READY and present it clearly.",
         });
       } else {
         ctx.ui.setStatus("plan-mode", "");
@@ -59,22 +62,63 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  // Block non-read-only tools during planning
   pi.on("tool_call", async (event, ctx) => {
     if (!planMode) return;
     if (!readOnlyTools.includes(event.toolName)) {
       return {
         block: true,
-        reason: "Plan mode active — read-only tools only. Write your plan first.",
+        reason: "Plan mode active — read-only tools only. Present your plan first.",
       };
+    }
+  });
+
+  // Watch for plan completion and present resolution options
+  pi.on("message", async (event, ctx) => {
+    if (!planMode) return;
+    if (event.role !== "assistant") return;
+    if (!event.content?.includes("PLAN READY")) return;
+
+    const choice = await ctx.ui.select("Plan Review", [
+      { title: "Accept — continue", description: "Unlock tools and execute in current context" },
+      { title: "Accept — fresh context", description: "Compact context, keep only the plan" },
+      { title: "Revise", description: "Stay in plan mode and provide feedback" },
+    ]);
+
+    if (choice === 0) {
+      // Accept + continue in same context
+      planMode = false;
+      ctx.ui.setStatus("plan-mode", "");
+      pi.sendMessage({ role: "user", content: "Plan approved. Execute it now." });
+    } else if (choice === 1) {
+      // Accept + reset context (compact with plan as focus)
+      planMode = false;
+      ctx.ui.setStatus("plan-mode", "");
+      // /compact with focus preserves only the plan in the compacted summary
+      pi.runCommand("compact", "Retain only the approved plan. Discard exploration context.");
+      pi.sendMessage({ role: "user", content: "Plan approved. Execute it now." });
+    } else {
+      // Decline — stay in plan mode, let user provide feedback
+      pi.sendMessage({
+        role: "user",
+        content: "Plan needs revision. I'll provide feedback — stay in plan mode.",
+      });
     }
   });
 }
 ```
 
-This is a starting skeleton. Extend with:
-- `ctx.ui.confirm()` for plan approval before unlocking full tools
-- `ctx.ui.setWidget()` to display the plan persistently
-- Auto-disable after approval (set `planMode = false` on confirm)
+### Why this needs to be an extension, not a skill
+
+| Requirement | Skill file | Extension |
+|-------------|-----------|-----------|
+| Footer status indicator (`PLAN MODE`) | No | `ctx.ui.setStatus()` |
+| Tool blocking (enforced read-only) | No | `tool_call` event with `{ block: true }` |
+| Structured resolution dialog | No | `ctx.ui.select()` with options |
+| Context reset on accept | No | `pi.runCommand("compact", ...)` |
+| Persistent toggle across turns | No | Extension state variable |
+
+The context reset is the key differentiator. After a planning phase that reads 20+ files, the execution context is polluted with exploratory reads that crowd out working memory. Compacting with the plan as focus gives the model a clean slate with only the approved plan — directly replicating Claude Code's "accept + reset" behavior.
 
 ## Alternative: Plan-First Skill File (No Extension)
 
@@ -116,6 +160,8 @@ The most sophisticated plan mode available — genuinely blocks destructive tool
 
 ## Decision
 
-Build custom extension (~80 lines) for enforced plan mode with tool blocking. Complement with a plan-first skill file for lighter-weight planning on simpler tasks. The `pi-subagents` planner agent provides a third option for delegated planning once subagents are installed.
+Build the custom extension (~120 lines). The UI toggle, enforced tool blocking, structured resolution dialog, and context reset are harness-level behaviors that a skill file cannot provide. The "accept + fresh context" option — compacting away exploratory reads to give the model a clean execution slate — is the highest-value feature and requires programmatic control.
+
+The `pi-subagents` planner agent remains useful as a complementary option: delegating planning to a separate agent context when you want total isolation rather than same-session compaction.
 
 ## Status: Researched — Build on Day 1
