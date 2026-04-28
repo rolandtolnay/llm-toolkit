@@ -1,11 +1,19 @@
 {
   "name": "llm-toolkit",
   "version": "1.0.0",
-  "description": "Curated commands, skills, and mental models for Claude Code",
+  "description": "Curated prompts, commands, skills, and mental models for coding agents",
+  "keywords": [
+    "pi-package"
+  ],
   "bin": {
     "llm-toolkit": "install.js"
   },
   "engines": {
     "node": ">=16.7.0"
+  },
+  "pi": {
+    "prompts": [
+      "./prompts"
+    ]
   }
 }
