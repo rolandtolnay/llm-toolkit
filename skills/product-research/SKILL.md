@@ -83,14 +83,21 @@ Spawn both with `Task` tool, `subagent_type: "research-subagent"`. Both receive 
 > Write to `02-criteria.md` with angle-file frontmatter.
 
 ### Availability subagent
-**Goal:** Identify the 3-4 best retail platforms for this category in RO (first) + EU (fallback).
+**Goal:** Map the retailer universe for this category in RO (first) + EU/import fallback, then identify the best starting platforms. Do not narrow discovery to 3-4 platforms too early.
 
 **Prompt skeleton:**
-> Find the 3-4 best retail platforms for buying [category] with delivery to Romania. Priority:
-> 1. Romanian retailers (eMAG, Altex, Dedeman, Flanco, Cel.ro, plus specialty stores — e.g. etbm.ro for lights, avstore for audio, coffeegear.ro for coffee)
-> 2. EU retailers shipping to RO (Amazon DE, Bol.nl, category-specific EU specialty) when RO coverage is thin
+> Build a retailer universe for buying [category] with delivery to Romania. Start with Romanian retailers, but do not stop at eMAG/Altex/Flanco. Include:
+> 1. Big-box / marketplace retailers (eMAG, Altex/Media Galaxy, Flanco, Cel.ro, Dedeman, etc.)
+> 2. Official brand stores or official local distributors when relevant (e.g. russellhobbs.ro, shop.tefal.ro, smeg.com.ro)
+> 3. Specialty/category retailers (e.g. etbm.ro for lights, avstore for audio, coffeegear.ro for coffee, KitchenShop/Conox-type kitchen specialty stores)
+> 4. Romanian price/discovery aggregators (Compari.ro, Price.ro, Pricy.ro/PriceFlux-like pages when available) as discovery surfaces for additional seller domains
+> 5. EU retailers shipping to RO (Amazon DE, Bol.nl, category-specific EU specialty) when Romanian coverage is thin or a globally strong model is unavailable domestically
 >
-> Per platform produce: name, base URL for this category, short note on strength for this category (selection breadth, pricing, warranty handling), any caveats (slow delivery, poor customer service for this category, etc.).
+> Produce two sections:
+> 1. `retailer_universe`: all valid seller/discovery domains found, grouped by seller type. For each: name, base/category URL, seller type, strength, caveats, and whether it should be used as primary, secondary, or verify-only.
+> 2. `availability_shortlist`: the 3-6 best starting platforms for Stage 3, chosen from the universe. This shortlist is a starting point, not a boundary; Stage 3 must still run model-level deal sweeps across the wider web.
+>
+> Add a `market_depth_judgment`: `broad`, `moderate`, or `thin`, with a short rationale. Use human judgment: if many Romanian sellers/categories are clearly present, keep the universe broad; if the category is genuinely sparse, document the dead ends and make import options explicit.
 >
 > Write to `03-availability.md` with angle-file frontmatter.
 
@@ -98,7 +105,7 @@ Wait for both to complete before proceeding. Check both files exist and have the
 
 ## Stage 3: Product phase — 3 subagents in parallel
 
-Each subagent receives: full interview handoff + ranked_criteria + myths_to_ignore + availability_shortlist. Spawn all three in parallel with `subagent_type: "research-subagent"`.
+Each subagent receives: full interview handoff + ranked_criteria + myths_to_ignore + retailer_universe + availability_shortlist + market_depth_judgment. Spawn all three in parallel with `subagent_type: "research-subagent"`.
 
 ### Owner voice subagent
 **Goal:** Real-world ownership signal.
@@ -125,12 +132,23 @@ Each subagent receives: full interview handoff + ranked_criteria + myths_to_igno
 > Write to `05-expert-voice.md`.
 
 ### Retailer voice subagent
-**Goal:** Current availability and price for candidate models.
+**Goal:** Current availability, pricing, and best reputable deal for candidate models.
 
 **Prompt skeleton:**
-> For [category], identify 5-8 candidate models via WebSearch (owner/expert subagents run in parallel — do not read their outputs). Use the availability shortlist provided. Run `research.py scrape` on product pages from each platform for the identified candidates.
+> For [category], identify 5-8 candidate models via WebSearch (owner/expert subagents run in parallel — do not read their outputs). Use the availability shortlist as a starting point, but use the wider retailer_universe and model-level web searches to avoid overindexing on eMAG/Altex/Flanco.
 >
-> Per candidate: availability per platform (in stock / out / not listed), current price (RON or EUR), warranty terms if visible, delivery window if visible.
+> For each candidate/model family, run a model-level deal sweep before concluding availability:
+> - Search exact model number/name + Romanian buying terms: `"<model>" pret Romania`, `"<model>" site:.ro`, `"<model>" [Romanian category term]`, and `"<model>" compari.ro OR price.ro OR pricy.ro`.
+> - Check official brand/local distributor stores when the brand has a Romanian presence.
+> - Use aggregators as discovery surfaces: follow seller domains they reveal; do not cite only the aggregator when a seller page can be found.
+> - Run `research.py scrape` or WebFetch on product pages where possible. If a site blocks scraping, record the dead end and use search-result snippets only as lower-confidence evidence.
+>
+> Per candidate: availability per seller (in stock / out / not listed / unverified), current price (RON or EUR), seller type, warranty/returns if visible, delivery window if visible, and the best reputable deal found.
+>
+> Add a `coverage_judgment` section. Use human judgment, not a hard seller count:
+> - If the category/model clearly appears across many Romanian sites, keep expanding beyond the shortlist until the main seller classes are represented and the best deal is plausibly found.
+> - If the category/model is genuinely limited, say which searches/sites were tried, why coverage appears thin, and whether EU/UK/US import options should be considered.
+> - Do not claim "only X options exist" unless broad searches, aggregators, official stores, and specialty sellers were checked or attempted.
 >
 > Write to `06-retailer-voice.md`.
 
@@ -200,11 +218,21 @@ contradictions_with_user_priorities:
   - user_priority: <what user said>
     research_finding: <counter-signal>
     sources: [url1, url2]
-availability_shortlist:
+retailer_universe:
   - platform: <name>
-    url: <base URL>
+    url: <base/category URL>
+    seller_type: big_box | marketplace | official_brand_store | specialty | aggregator | eu_import | other
+    use_as: primary | secondary | verify_only
     strength: <short note for this category>
     caveats: <optional>
+availability_shortlist:
+  - platform: <name>
+    url: <base/category URL>
+    strength: <short note for this category>
+    caveats: <optional>
+market_depth_judgment:
+  level: broad | moderate | thin
+  rationale: <why the market appears broad/moderate/thin and what import fallback, if any, should be considered>
 ```
 
 ## Product phase → Synthesis
@@ -218,6 +246,7 @@ No separate contract. Orchestrator reads `04-owner-voice.md`, `05-expert-voice.m
 - **Criteria subagent fails to produce ranked list** → fall back to user priorities; note the fallback in synthesis
 - **Unrealistic budget** (user says 1500, market starts at 3000) → no explicit warning; the market-reality line in synthesis does the educating naturally
 - **Tier with no strong candidate** → substitute tier name with use-case axis (e.g., "best for small spaces"), or omit tier entirely. Never invent.
+- **Thin retailer market** → document searched retailer classes and dead ends, then consider EU/UK/US import options as Yellow/Red availability rather than forcing a domestic recommendation
 - **Whole category is US-only** → flag in synthesis that no EU-available options exist at meaningful tiers; still produce what's available
 - **Verification fails for a recommendation** → tag `verification: manual`, keep recommendation in the output
 - **User's stated priorities fully align with research** → omit "what we learned vs your initial assumptions" subsection; don't pad
@@ -229,6 +258,8 @@ No separate contract. Orchestrator reads `04-owner-voice.md`, `05-expert-voice.m
 - Do NOT pad the considered-and-discarded section to hit 3 items. One well-justified discard beats three padded.
 - Do NOT write "no contradictions found" or "no myths to note" filler. Omit those subsections entirely when empty.
 - Do NOT use a generic interview question list. Generate per-category questions using the interview-calibration frame.
+- Do NOT treat eMAG/Altex/Flanco as the whole Romanian market. They are starting points, not boundaries.
+- Do NOT claim a model/category has only a few Romanian options unless broad web search, official brand stores, specialty sellers, and price aggregators were checked or attempted.
 </anti_patterns>
 
 <reference_index>
@@ -248,6 +279,8 @@ Ordered by skip risk (highest first).
 - [ ] Pipeline runs all 5 stages in order. Preliminary (Stage 2) completed before Product phase (Stage 3) spawned.
 - [ ] Interview questions generated per-category using the interview-calibration frame, not from a generic template.
 - [ ] Ranked criteria (not user priorities) used to score and order candidates in product phase.
+- [ ] Availability phase produces a retailer universe plus a shortlist; the shortlist is not treated as an exclusive boundary.
+- [ ] Retailer voice performs model-level deal sweeps for finalists/candidates, including official brand stores, specialty sellers, and Romanian price aggregators when available.
 - [ ] "What we learned vs your initial assumptions" subsection appears ONLY when 2+ quality sources contradict a user priority; omitted entirely otherwise.
 - [ ] Synthesis follows synthesis-template.md structure: master class + market reality line + 3 tiers × (primary + runner-up) + tradeoffs + considered-and-discarded.
 - [ ] Verification flags ambiguous recommendations with `verification: manual` — never rewrites them.
