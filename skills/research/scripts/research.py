@@ -111,6 +111,26 @@ DEFAULT_MAX_TOKENS = 5000
 
 LOG_DIR = Path.home() / ".cache" / "research" / "logs"
 
+RESEARCH_DIR = Path.home() / "Documents" / "Research"
+
+STOP_WORDS = frozenset({
+    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "by", "from", "is", "it", "as", "be", "was", "are",
+    "were", "been", "has", "have", "had", "do", "does", "did", "not",
+    "this", "that", "what", "how", "which", "who", "when", "where", "why",
+})
+
+FIELD_WEIGHTS = {
+    "tags": 0.40,
+    "title": 0.25,
+    "sub_question": 0.20,
+    "query": 0.20,
+    "index_bullets": 0.15,
+}
+
+COMPOUND_BONUS = 0.15
+MAX_COMPOUND_BONUS = 0.45
+
 # Approximate per-call cost in USD (0 = free or credit-based)
 COST_USD = {
     "ask": 0.02,
@@ -238,6 +258,7 @@ class ErrorCode(str, Enum):
     RATE_LIMITED = "RATE_LIMITED"
     NETWORK_ERROR = "NETWORK_ERROR"
     LIBRARY_NOT_FOUND = "LIBRARY_NOT_FOUND"
+    FILESYSTEM_ERROR = "FILESYSTEM_ERROR"
 
 
 class ResearchError(Exception):
@@ -414,6 +435,229 @@ def truncate_results(results: list[dict], max_tokens: int) -> tuple[list[dict], 
 
 def strip_think_tags(content: str) -> str:
     return re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+
+
+# ---------------------------------------------------------------------------
+# Prior research helpers
+# ---------------------------------------------------------------------------
+
+
+def _tokenize(text: str) -> list[str]:
+    """Lowercase, split, strip non-alnum, filter stop words."""
+    text = text.lower().replace("-", " ")
+    tokens = []
+    for word in text.split():
+        cleaned = re.sub(r"[^a-z0-9]", "", word)
+        if cleaned and cleaned not in STOP_WORDS:
+            tokens.append(cleaned)
+    return tokens
+
+
+def _read_frontmatter(path: Path) -> str:
+    """Read only the YAML frontmatter block from a file."""
+    lines = []
+    in_frontmatter = False
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                stripped = line.rstrip("\n")
+                if not in_frontmatter:
+                    if stripped == "---":
+                        in_frontmatter = True
+                    continue
+                if stripped == "---":
+                    break
+                lines.append(stripped)
+    except (OSError, UnicodeDecodeError):
+        return ""
+    return "\n".join(lines)
+
+
+def _parse_frontmatter(text: str) -> dict:
+    """Line-by-line YAML-like parser for angle file frontmatter."""
+    result: dict[str, Any] = {}
+    current_list_key: str | None = None
+    current_list: list[str] = []
+
+    for line in text.splitlines():
+        if line.startswith("  - ") and current_list_key:
+            current_list.append(line.strip("- ").strip())
+            continue
+        elif current_list_key:
+            result[current_list_key] = current_list
+            current_list_key = None
+            current_list = []
+
+        if ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip().strip('"')
+
+        if not value and key == "tags":
+            current_list_key = "tags"
+            current_list = []
+        elif value.startswith("[") and value.endswith("]"):
+            items = [item.strip().strip('"').strip("'") for item in value[1:-1].split(",")]
+            result[key] = [i for i in items if i]
+        elif not value:
+            current_list_key = key
+            current_list = []
+        else:
+            result[key] = value
+
+    if current_list_key:
+        result[current_list_key] = current_list
+
+    return result
+
+
+def _parse_index_entries(index_text: str) -> list[dict]:
+    """Split INDEX.md by ### headings and extract per-run metadata."""
+    entries = []
+    current: dict[str, Any] | None = None
+
+    for line in index_text.splitlines():
+        if line.startswith("### "):
+            if current:
+                entries.append(current)
+            title_line = line[4:].strip()
+            parts = title_line.rsplit(" — ", 1)
+            title = parts[0].strip()
+            date = parts[1].strip() if len(parts) > 1 else ""
+            current = {"title": title, "date": date, "tags": [], "bullets": "", "run_id": ""}
+        elif current is not None:
+            if line.startswith("**Tags:**"):
+                tag_text = line[len("**Tags:**"):].strip()
+                current["tags"] = [t.strip() for t in tag_text.split(",") if t.strip()]
+            elif line.startswith("- ["):
+                link_match = re.search(r"\]\(([^)]+)/", line)
+                if link_match and not current["run_id"]:
+                    current["run_id"] = link_match.group(1)
+                bullet_text = re.sub(r"^- \[[^\]]*\]\([^)]*\)\s*—?\s*", "", line)
+                current["bullets"] += " " + bullet_text
+
+    if current:
+        entries.append(current)
+    return entries
+
+
+def _parse_since(since: str | None) -> datetime | None:
+    """Parse duration string like 6m, 1y, 30d into cutoff datetime."""
+    if not since:
+        return None
+    match = re.match(r"^(\d+)([dmy])$", since.strip().lower())
+    if not match:
+        raise ResearchError(
+            ErrorCode.FILESYSTEM_ERROR,
+            f"Invalid --since format: '{since}'. Use Nd, Nm, or Ny (e.g. 30d, 6m, 1y).",
+        )
+    amount = int(match.group(1))
+    unit = match.group(2)
+    now = datetime.now(timezone.utc)
+    if unit == "d":
+        days = amount
+    elif unit == "m":
+        days = amount * 30
+    else:
+        days = amount * 365
+    from datetime import timedelta
+    return now - timedelta(days=days)
+
+
+def _collect_run_data(run_dir: Path) -> dict:
+    """Read frontmatter from all .md files in a run directory."""
+    all_tags: set[str] = set()
+    all_sub_questions: list[str] = []
+    query = ""
+    title = ""
+    synthesis_path = ""
+    angles: list[dict[str, str]] = []
+
+    if not run_dir.is_dir():
+        return {"all_tags": [], "all_sub_questions": "", "query": "", "title": "",
+                "synthesis_path": "", "angles": []}
+
+    for md_file in sorted(run_dir.glob("*.md")):
+        fm_text = _read_frontmatter(md_file)
+        if not fm_text:
+            continue
+        fm = _parse_frontmatter(fm_text)
+
+        if fm.get("tags"):
+            all_tags.update(fm["tags"])
+        if fm.get("sub_question"):
+            all_sub_questions.append(fm["sub_question"])
+        if fm.get("query") and not query:
+            query = fm["query"]
+        if fm.get("title") and not title:
+            title = fm["title"]
+
+        if md_file.name == "00-synthesis.md":
+            synthesis_path = str(md_file)
+        else:
+            role = fm.get("role", "")
+            if role == "angle" or md_file.name != "00-synthesis.md":
+                angles.append({"file": str(md_file), "title": fm.get("title", md_file.stem)})
+
+    return {
+        "all_tags": sorted(all_tags),
+        "all_sub_questions": " ".join(all_sub_questions),
+        "query": query,
+        "title": title,
+        "synthesis_path": synthesis_path,
+        "angles": angles,
+    }
+
+
+def _score_run(query_tokens_set: set[str], index_entry: dict, file_data: dict) -> dict:
+    """Score a run against query tokens using weighted field matching."""
+    if not query_tokens_set:
+        return {"score": 0.0, "matched_on": []}
+
+    num_query_tokens = len(query_tokens_set)
+    total_score = 0.0
+    matched_on: list[str] = []
+
+    field_sources = {
+        "tags": " ".join(file_data.get("all_tags") or index_entry.get("tags", [])),
+        "title": file_data.get("title") or index_entry.get("title", ""),
+        "sub_question": file_data.get("all_sub_questions", ""),
+        "query": file_data.get("query", ""),
+        "index_bullets": index_entry.get("bullets", ""),
+    }
+
+    for field_name, field_text in field_sources.items():
+        if not field_text:
+            continue
+        field_tokens = set(_tokenize(field_text))
+        matched = query_tokens_set & field_tokens
+        if matched:
+            field_score = len(matched) / num_query_tokens
+            weight = FIELD_WEIGHTS.get(field_name, 0.1)
+            total_score += field_score * weight
+            if field_name == "tags":
+                for tag in (file_data.get("all_tags") or index_entry.get("tags", [])):
+                    if matched & set(_tokenize(tag)):
+                        matched_on.append(f"tags:{tag}")
+            else:
+                matched_on.append(f"{field_name}:{','.join(sorted(matched))}")
+
+    # Compound tag bonus
+    compound_bonus_total = 0.0
+    tags = file_data.get("all_tags") or index_entry.get("tags", [])
+    for tag in tags:
+        if "-" not in tag:
+            continue
+        tag_tokens = set(_tokenize(tag))
+        if len(tag_tokens) >= 2 and tag_tokens.issubset(query_tokens_set):
+            compound_bonus_total += COMPOUND_BONUS
+            if f"tags:{tag}" not in matched_on:
+                matched_on.append(f"compound:{tag}")
+    compound_bonus_total = min(compound_bonus_total, MAX_COMPOUND_BONUS)
+    total_score += compound_bonus_total
+
+    return {"score": round(total_score, 4), "matched_on": matched_on}
 
 
 # ---------------------------------------------------------------------------
@@ -1242,6 +1486,87 @@ def audit(
         result["calls"] = entries
 
     emit(result)
+
+
+# ---------------------------------------------------------------------------
+# Prior research search
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def prior(
+    query: str = typer.Argument(..., help="Free-text query to match against prior research"),
+    since: Optional[str] = typer.Option(None, "--since", "-s", help="Date filter: 6m, 1y, 30d"),
+    limit: int = typer.Option(5, "--limit", "-l", help="Max results"),
+) -> None:
+    """Search prior research runs by relevance. Local only (free)."""
+    t0 = time.time()
+
+    try:
+        cutoff = _parse_since(since)
+    except ResearchError as e:
+        emit(output_error("prior", e))
+        raise typer.Exit(1)
+
+    index_path = RESEARCH_DIR / "INDEX.md"
+    if not RESEARCH_DIR.is_dir() or not index_path.is_file():
+        duration_ms = int((time.time() - t0) * 1000)
+        _log_call("prior", query, backend="local", duration_ms=duration_ms)
+        emit(output_success("prior", query, metadata={"backend": "local", "duration_ms": duration_ms}, results=[]))
+        return
+
+    index_text = index_path.read_text(encoding="utf-8")
+    index_entries = _parse_index_entries(index_text)
+
+    if cutoff:
+        filtered = []
+        for entry in index_entries:
+            try:
+                entry_date = datetime.strptime(entry["date"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                if entry_date >= cutoff:
+                    filtered.append(entry)
+            except (ValueError, KeyError):
+                filtered.append(entry)
+        index_entries = filtered
+
+    query_tokens = _tokenize(query)
+    query_tokens_set = set(query_tokens)
+
+    scored_runs: list[dict[str, Any]] = []
+    for entry in index_entries:
+        run_id = entry.get("run_id", "")
+        run_dir = RESEARCH_DIR / run_id if run_id else None
+        file_data = _collect_run_data(run_dir) if run_dir and run_dir.is_dir() else {
+            "all_tags": entry.get("tags", []),
+            "all_sub_questions": "",
+            "query": "",
+            "title": entry.get("title", ""),
+            "synthesis_path": "",
+            "angles": [],
+        }
+
+        score_result = _score_run(query_tokens_set, entry, file_data)
+        if score_result["score"] > 0:
+            scored_runs.append({
+                "run_id": run_id,
+                "title": entry.get("title", ""),
+                "date": entry.get("date", ""),
+                "score": score_result["score"],
+                "matched_on": score_result["matched_on"],
+                "synthesis": file_data.get("synthesis_path", ""),
+                "angles": file_data.get("angles", []),
+            })
+
+    scored_runs.sort(key=lambda r: r["score"], reverse=True)
+    results = scored_runs[:limit]
+
+    duration_ms = int((time.time() - t0) * 1000)
+    _log_call("prior", query, backend="local", duration_ms=duration_ms)
+    emit(output_success(
+        "prior", query,
+        metadata={"backend": "local", "duration_ms": duration_ms, "total_indexed": len(index_entries)},
+        results=results,
+    ))
 
 
 if __name__ == "__main__":

@@ -35,10 +35,11 @@ uv run <script> scrape <url>        [--no-cache]
 uv run <script> credits
 uv run <script> config
 uv run <script> audit              [--days N] [--session S] [--detail]
+uv run <script> prior "<query>"    [--since S] [--limit N]
 
 --site: a real domain name like stripe.com or pay.uk (NOT topics/phrases). Repeatable.
 --recency: preset window — hour | day | week | month | year. For custom ranges use --after/--before with YYYY-MM-DD dates.
-Cost: search ~$0.005 | ask/reason ~$0.02 | docs free | map/scrape 1 FC credit each
+Cost: search ~$0.005 | ask/reason ~$0.02 | docs free | map/scrape 1 FC credit each | prior free (local)
 
 Also available: WebSearch (free, broad), WebFetch (free, page summary)
 All CLI calls and WebSearch/WebFetch usage are logged to ~/.cache/research/logs/YYYY-MM-DD.jsonl
@@ -128,25 +129,27 @@ Short-form is supplementary — assign only when trends/viral dimension is clear
 
 ## STEP 2: CONSULT PRIOR RESEARCH
 
-Skip if `~/Documents/Research/INDEX.md` does not exist. Otherwise mandatory — prior research can answer your sub-questions outright or surface angles you missed.
+Skip if `~/Documents/Research/` does not exist. Otherwise mandatory.
 
-Each past run lives in its own directory with a short synthesis and one file per sub-agent ("angle file"). Angle files are the directly-comparable unit for matching against a new sub-question.
-
-1. Read `~/Documents/Research/INDEX.md` in full. Each run has a title line, a `**Tags:**` line, and one bullet per angle file + synthesis.
-2. For every current sub-question, identify candidate prior runs by:
-   - Keyword overlap with run titles or angle bullets,
-   - Tag overlap with run-level `**Tags:**` lines (grep-friendly).
-3. For each candidate, open the specific angle file first (not the whole synthesis) — angle files are shorter and more directly comparable. Open the synthesis only when a decision-level summary is what you need. Treat research older than ~6 months on fast-moving topics as context, not authority.
-4. Produce an explicit per-sub-question mapping before proceeding:
-   - SQ-A "X pricing tiers" → covered by `2026-03-12-x/02-pricing.md` → **DROP**
+1. Run `research.py prior "<your sub-questions as free text>"`.
+   Add `--since 6m` for fast-moving topics (frameworks, APIs, market data).
+2. If results returned (score > 0):
+   a. Read the top-scoring angle files (not the whole synthesis — angle files
+      are shorter and directly comparable to your sub-questions).
+   b. Read the synthesis only when you need a decision-level summary.
+   c. Treat research older than ~6 months on fast-moving topics as context, not authority.
+3. Produce an explicit per-sub-question mapping before proceeding:
+   - SQ-A "X pricing" → covered by `2026-03-12-x/02-pricing.md` → **DROP**
    - SQ-B "X rate limits" → partial: free tier only → **KEEP, narrow to paid**
    - SQ-C "X webhooks" → no prior coverage → **KEEP**
-   - SQ-D "X auth rotation" → new angle surfaced by `2026-03-12-x/03-auth.md` → **ADD**
+   - SQ-D "X auth rotation" → new angle from `2026-03-12-x/03-auth.md` → **ADD**
+4. If no results → state so and proceed to Step 3.
 5. Branch on the mapping:
-   - All sub-questions DROPPED → synthesize from prior files and return. Do not spawn subagents. Cite the prior files.
-   - Some KEPT/ADDED → spawn subagents only for those, and paste relevant prior angle-file excerpts into their prompts as verified context to extend rather than re-derive.
+   - All DROPPED → synthesize from prior files. No subagents. Cite prior files.
+   - Some KEPT/ADDED → spawn subagents only for those. Paste relevant prior
+     angle-file excerpts into prompts as verified context to extend.
 
-Without the explicit mapping, this step degenerates into a glance and both outcomes get missed.
+Without the explicit mapping, this step degenerates into a glance.
 
 ## STEP 3: SPAWN SUBAGENTS
 
@@ -272,7 +275,7 @@ Run `research config` to see resolved configuration (which keys are set, persist
 - [ ] Official tooling claims are verified against primary sources
 - [ ] Every research run includes at least one WebSearch call (broad discovery)
 - [ ] Standard/deep runs are persisted as per-run directories under `~/Documents/Research/` with angle files written by sub-agents, a decision-focused `00-synthesis.md` written by the orchestrator, and INDEX.md updated
-- [ ] Prior research consulted via INDEX.md (when it exists), with an explicit drop/keep/add mapping per sub-question before any subagent spawns — matching uses run-level `**Tags:**` lines and angle-file reads, not just titles
+- [ ] Prior research consulted via `research.py prior` (when ~/Documents/Research/ exists), with an explicit drop/keep/add mapping per sub-question before any subagent spawns
 - [ ] Quick lookups resolve without subagents when answer is clear
 - [ ] Graceful degradation when API keys are missing
 - [ ] YouTube search assigned to subagents where video content adds value

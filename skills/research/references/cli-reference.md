@@ -125,6 +125,45 @@ uv run ~/.claude/skills/research/scripts/research.py scrape https://ui.shadcn.co
 
 ---
 
+### `prior "<query>"` — Search prior research (free, local)
+
+Token-overlap search across all indexed research runs. Searches tags, titles, sub-questions, queries, and index bullets with weighted scoring and compound-tag bonuses.
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--since` / `-s` | none | Date filter: `30d`, `6m`, `1y` |
+| `--limit` / `-l` | 5 | Max results to return |
+
+**Output fields:** `results` (list of `{ run_id, title, date, score, matched_on, synthesis, angles }`)
+
+**Example:**
+```bash
+uv run ~/.claude/skills/research/scripts/research.py prior "tap to pay onboarding friction"
+```
+
+Output:
+```json
+{
+  "success": true,
+  "command": "prior",
+  "query": "tap to pay onboarding friction",
+  "results": [
+    {
+      "run_id": "2026-04-29-tap-to-pay-onboarding-deep-dive",
+      "title": "Tap-to-Pay Onboarding Deep Dive: Competitors, Friction, Sentiment & Unknowns",
+      "date": "2026-04-29",
+      "score": 0.8725,
+      "matched_on": ["tags:tap-to-pay-onboarding", "compound:tap-to-pay-onboarding", "title:tap,pay,onboarding,friction"],
+      "synthesis": "/Users/.../00-synthesis.md",
+      "angles": [{"file": "/Users/.../01-competitor-onboarding-ux-gotchas.md", "title": "..."}]
+    }
+  ],
+  "metadata": {"backend": "local", "duration_ms": 45, "total_indexed": 10}
+}
+```
+
+---
+
 ## YouTube CLI
 
 **CLI script:** `~/.claude/skills/research/scripts/youtube.py`
