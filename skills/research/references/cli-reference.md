@@ -127,14 +127,15 @@ uv run ~/.claude/skills/research/scripts/research.py scrape https://ui.shadcn.co
 
 ### `prior "<query>"` — Search prior research (free, local)
 
-Token-overlap search across all indexed research runs. Searches tags, titles, sub-questions, queries, and index bullets with weighted scoring and compound-tag bonuses.
+File-level token-overlap search across persisted research markdown files in the configured research directory (default: `~/Documents/Research/`; override with `RESEARCH_DIR`). Scans markdown frontmatter directly and enriches results with `INDEX.md` bullets when available. Searches tags, file titles, sub-questions, synthesis queries, run titles, and index bullets with normalized 0-1 scoring and compound-tag bonuses. `role: synthesis` files are included but slightly demoted so angle files remain the primary evidence layer.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--since` / `-s` | none | Date filter: `30d`, `6m`, `1y` |
 | `--limit` / `-l` | 5 | Max results to return |
+| `--min-score` | `0.15` | Minimum normalized relevance score. Use `0` for broad recall. |
 
-**Output fields:** `results` (list of `{ run_id, title, date, score, matched_on, synthesis, angles }`)
+**Output fields:** `results` (list of `{ file, title, role, run_id, run_title, date, sub_question, query, tags, confidence, sources, index_bullet, run_synthesis, score, matched_on }`)
 
 **Example:**
 ```bash
@@ -149,16 +150,24 @@ Output:
   "query": "tap to pay onboarding friction",
   "results": [
     {
+      "file": "/Users/.../2026-04-29-tap-to-pay-onboarding-deep-dive/01-competitor-onboarding-ux-gotchas.md",
+      "title": "Tap-to-pay competitor onboarding UX, gotchas, and developer pain points",
+      "role": "angle",
       "run_id": "2026-04-29-tap-to-pay-onboarding-deep-dive",
-      "title": "Tap-to-Pay Onboarding Deep Dive: Competitors, Friction, Sentiment & Unknowns",
+      "run_title": "Tap-to-Pay Onboarding Deep Dive: Competitors, Friction, Sentiment & Unknowns",
       "date": "2026-04-29",
-      "score": 0.8725,
-      "matched_on": ["tags:tap-to-pay-onboarding", "compound:tap-to-pay-onboarding", "title:tap,pay,onboarding,friction"],
-      "synthesis": "/Users/.../00-synthesis.md",
-      "angles": [{"file": "/Users/.../01-competitor-onboarding-ux-gotchas.md", "title": "..."}]
+      "sub_question": "What are the specific onboarding and setup flows of major tap-to-pay / SoftPOS competitors?",
+      "query": "",
+      "tags": ["tap-to-pay-onboarding", "softpos-ux"],
+      "confidence": "likely",
+      "sources": [{"url": "https://docs.stripe.com/terminal", "role": "primary"}],
+      "index_bullet": "SumUp/Square: minutes to first payment. Adyen/Worldline: days-weeks.",
+      "run_synthesis": "/Users/.../2026-04-29-tap-to-pay-onboarding-deep-dive/00-synthesis.md",
+      "score": 0.6401,
+      "matched_on": ["tags:tap-to-pay-onboarding", "title:onboarding,pay,tap", "sub_question:onboarding,pay,tap"]
     }
   ],
-  "metadata": {"backend": "local", "duration_ms": 45, "total_indexed": 10}
+  "metadata": {"backend": "local", "duration_ms": 45, "search_unit": "file", "total_files_indexed": 125, "min_score": 0.15}
 }
 ```
 
@@ -283,7 +292,7 @@ No flags. Returns remaining credits and plan info.
 
 No flags. Returns resolved API key status, persistence setting, and which env files were loaded.
 
-**Output fields:** `persistence` (bool), `keys` (object with bool per service), `env_files` (list of paths with status)
+**Output fields:** `persistence` (bool), `keys` (object with bool per service), `env_files` (list of paths with status), `research_dir`
 
 ---
 

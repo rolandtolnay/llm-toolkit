@@ -35,7 +35,7 @@ uv run <script> scrape <url>        [--no-cache]
 uv run <script> credits
 uv run <script> config
 uv run <script> audit              [--days N] [--session S] [--detail]
-uv run <script> prior "<query>"    [--since S] [--limit N]
+uv run <script> prior "<query>"    [--since S] [--limit N] [--min-score N]
 
 --site: a real domain name like stripe.com or pay.uk (NOT topics/phrases). Repeatable.
 --recency: preset window — hour | day | week | month | year. For custom ranges use --after/--before with YYYY-MM-DD dates.
@@ -129,15 +129,18 @@ Short-form is supplementary — assign only when trends/viral dimension is clear
 
 ## STEP 2: CONSULT PRIOR RESEARCH
 
-Skip if `~/Documents/Research/` does not exist. Otherwise mandatory.
+Skip if the configured research directory does not exist (default: `~/Documents/Research/`; override with `RESEARCH_DIR`). Otherwise mandatory.
 
-1. Run `research.py prior "<your sub-questions as free text>"`.
+1. Run `research.py prior "<sub-question>"` once per decomposed sub-question.
    Add `--since 6m` for fast-moving topics (frameworks, APIs, market data).
-2. If results returned (score > 0):
-   a. Read the top-scoring angle files (not the whole synthesis — angle files
-      are shorter and directly comparable to your sub-questions).
-   b. Read the synthesis only when you need a decision-level summary.
-   c. Treat research older than ~6 months on fast-moving topics as context, not authority.
+2. If results returned:
+   a. Read the top-scoring `role: angle` files first — they are shorter and
+      directly comparable to your sub-question.
+   b. Read matching `role: synthesis` files only when you need a decision-level
+      summary or the angle files point to broader run context.
+   c. Treat weak/default-threshold matches as leads, not coverage, until you read
+      the file. Use `--min-score 0` only when you intentionally want broad recall.
+   d. Treat research older than ~6 months on fast-moving topics as context, not authority.
 3. Produce an explicit per-sub-question mapping before proceeding:
    - SQ-A "X pricing" → covered by `2026-03-12-x/02-pricing.md` → **DROP**
    - SQ-B "X rate limits" → partial: free tier only → **KEEP, narrow to paid**
@@ -264,6 +267,7 @@ SCRAPECREATORS_API_KEY=...
 
 # Settings
 RESEARCH_NO_PERSIST=0    # Set to 1 to disable research output persistence
+RESEARCH_DIR=~/Documents/Research  # Optional override for persisted research
 ```
 
 Run `research config` to see resolved configuration (which keys are set, persistence status, which env files loaded).
@@ -274,8 +278,8 @@ Run `research config` to see resolved configuration (which keys are set, persist
 - [ ] Findings cite their sources
 - [ ] Official tooling claims are verified against primary sources
 - [ ] Every research run includes at least one WebSearch call (broad discovery)
-- [ ] Standard/deep runs are persisted as per-run directories under `~/Documents/Research/` with angle files written by sub-agents, a decision-focused `00-synthesis.md` written by the orchestrator, and INDEX.md updated
-- [ ] Prior research consulted via `research.py prior` (when ~/Documents/Research/ exists), with an explicit drop/keep/add mapping per sub-question before any subagent spawns
+- [ ] Standard/deep runs are persisted as per-run directories under the configured research directory (default: `~/Documents/Research/`) with angle files written by sub-agents, a decision-focused `00-synthesis.md` written by the orchestrator, and INDEX.md updated
+- [ ] Prior research consulted via `research.py prior` (when the configured research directory exists), with an explicit drop/keep/add mapping per sub-question before any subagent spawns
 - [ ] Quick lookups resolve without subagents when answer is clear
 - [ ] Graceful degradation when API keys are missing
 - [ ] YouTube search assigned to subagents where video content adds value

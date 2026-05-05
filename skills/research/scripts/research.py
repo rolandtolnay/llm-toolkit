@@ -5,6 +5,7 @@
 #     "typer",
 #     "diskcache",
 #     "firecrawl-py",
+#     "PyYAML",
 # ]
 # ///
 """
@@ -41,6 +42,7 @@ from typing import Any, Optional
 
 import httpx
 import typer
+import yaml
 
 # ---------------------------------------------------------------------------
 # Env file loading
@@ -111,7 +113,8 @@ DEFAULT_MAX_TOKENS = 5000
 
 LOG_DIR = Path.home() / ".cache" / "research" / "logs"
 
-RESEARCH_DIR = Path.home() / "Documents" / "Research"
+DEFAULT_RESEARCH_DIR = Path.home() / "Documents" / "Research"
+RESEARCH_DIR = Path(os.environ.get("RESEARCH_DIR", str(DEFAULT_RESEARCH_DIR))).expanduser()
 
 STOP_WORDS = frozenset({
     "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
@@ -120,16 +123,20 @@ STOP_WORDS = frozenset({
     "this", "that", "what", "how", "which", "who", "when", "where", "why",
 })
 
-FIELD_WEIGHTS = {
-    "tags": 0.40,
+FILE_FIELD_WEIGHTS = {
+    "tags": 0.30,
     "title": 0.25,
     "sub_question": 0.20,
     "query": 0.20,
-    "index_bullets": 0.15,
+    "index_bullet": 0.15,
+    "run_title": 0.10,
 }
 
-COMPOUND_BONUS = 0.15
-MAX_COMPOUND_BONUS = 0.45
+COMPOUND_BONUS = 0.08
+MAX_COMPOUND_BONUS = 0.16
+SYNTHESIS_SCORE_FACTOR = 0.75
+DEFAULT_PRIOR_MIN_SCORE = 0.15
+MAX_PRIOR_SOURCES = 5
 
 # Approximate per-call cost in USD (0 = free or credit-based)
 COST_USD = {
@@ -450,11 +457,13 @@ def _tokenize(text: str) -> list[str]:
         cleaned = re.sub(r"[^a-z0-9]", "", word)
         if cleaned and cleaned not in STOP_WORDS:
             tokens.append(cleaned)
+            if len(cleaned) > 3 and cleaned.endswith("s") and not cleaned.endswith("ss"):
+                tokens.append(cleaned[:-1])
     return tokens
 
 
 def _read_frontmatter(path: Path) -> str:
-    """Read only the YAML frontmatter block from a file."""
+    """Read only the YAML frontmatter block from a markdown file."""
     lines = []
     in_frontmatter = False
     try:
@@ -474,72 +483,74 @@ def _read_frontmatter(path: Path) -> str:
 
 
 def _parse_frontmatter(text: str) -> dict:
-    """Line-by-line YAML-like parser for angle file frontmatter."""
-    result: dict[str, Any] = {}
-    current_list_key: str | None = None
-    current_list: list[str] = []
-
-    for line in text.splitlines():
-        if line.startswith("  - ") and current_list_key:
-            current_list.append(line.strip("- ").strip())
-            continue
-        elif current_list_key:
-            result[current_list_key] = current_list
-            current_list_key = None
-            current_list = []
-
-        if ":" not in line:
-            continue
-        key, _, value = line.partition(":")
-        key = key.strip()
-        value = value.strip().strip('"')
-
-        if not value and key == "tags":
-            current_list_key = "tags"
-            current_list = []
-        elif value.startswith("[") and value.endswith("]"):
-            items = [item.strip().strip('"').strip("'") for item in value[1:-1].split(",")]
-            result[key] = [i for i in items if i]
-        elif not value:
-            current_list_key = key
-            current_list = []
-        else:
-            result[key] = value
-
-    if current_list_key:
-        result[current_list_key] = current_list
-
-    return result
+    """Parse YAML frontmatter into a dictionary. Returns {} on malformed YAML."""
+    if not text.strip():
+        return {}
+    try:
+        parsed = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
-def _parse_index_entries(index_text: str) -> list[dict]:
-    """Split INDEX.md by ### headings and extract per-run metadata."""
-    entries = []
+def _as_list(value: Any) -> list:
+    """Normalize scalar/list frontmatter values into a list."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _string_list(value: Any) -> list[str]:
+    """Normalize a scalar/list frontmatter value into non-empty strings."""
+    return [str(item).strip() for item in _as_list(value) if str(item).strip()]
+
+
+def _parse_index_entries(index_text: str) -> dict[str, dict]:
+    """Parse INDEX.md into run metadata keyed by run_id."""
+    entries: dict[str, dict] = {}
     current: dict[str, Any] | None = None
 
     for line in index_text.splitlines():
         if line.startswith("### "):
-            if current:
-                entries.append(current)
+            if current and current.get("run_id"):
+                entries[current["run_id"]] = current
             title_line = line[4:].strip()
             parts = title_line.rsplit(" — ", 1)
             title = parts[0].strip()
             date = parts[1].strip() if len(parts) > 1 else ""
-            current = {"title": title, "date": date, "tags": [], "bullets": "", "run_id": ""}
+            current = {"title": title, "date": date, "tags": [], "bullets": "", "run_id": "", "file_bullets": {}}
         elif current is not None:
             if line.startswith("**Tags:**"):
                 tag_text = line[len("**Tags:**"):].strip()
                 current["tags"] = [t.strip() for t in tag_text.split(",") if t.strip()]
             elif line.startswith("- ["):
-                link_match = re.search(r"\]\(([^)]+)/", line)
-                if link_match and not current["run_id"]:
-                    current["run_id"] = link_match.group(1)
-                bullet_text = re.sub(r"^- \[[^\]]*\]\([^)]*\)\s*—?\s*", "", line)
+                link_match = re.search(r"\]\(([^)]+)\)", line)
+                bullet_text = re.sub(r"^- \[[^\]]*\]\([^)]+\)\s*—?\s*", "", line).strip()
+                if link_match:
+                    rel_path = link_match.group(1).strip()
+                    parts = Path(rel_path).parts
+                    if parts and not current.get("run_id"):
+                        current["run_id"] = parts[0]
+                    if rel_path:
+                        current["file_bullets"][rel_path] = bullet_text
                 current["bullets"] += " " + bullet_text
 
-    if current:
-        entries.append(current)
+    if current and current.get("run_id"):
+        entries[current["run_id"]] = current
     return entries
+
+
+def _load_index_metadata(research_dir: Path) -> dict[str, dict]:
+    """Load optional INDEX.md metadata for run/file enrichment."""
+    index_path = research_dir / "INDEX.md"
+    if not index_path.is_file():
+        return {}
+    try:
+        return _parse_index_entries(index_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return {}
 
 
 def _parse_since(since: str | None) -> datetime | None:
@@ -565,99 +576,183 @@ def _parse_since(since: str | None) -> datetime | None:
     return now - timedelta(days=days)
 
 
-def _collect_run_data(run_dir: Path) -> dict:
-    """Read frontmatter from all .md files in a run directory."""
-    all_tags: set[str] = set()
-    all_sub_questions: list[str] = []
-    query = ""
-    title = ""
-    synthesis_path = ""
-    angles: list[dict[str, str]] = []
+def _resolve_research_dir(research_dir: Path | None = None) -> Path:
+    """Resolve the effective research directory for prior-search commands."""
+    if research_dir:
+        return research_dir.expanduser()
+    return RESEARCH_DIR
 
-    if not run_dir.is_dir():
-        return {"all_tags": [], "all_sub_questions": "", "query": "", "title": "",
-                "synthesis_path": "", "angles": []}
 
-    for md_file in sorted(run_dir.glob("*.md")):
-        fm_text = _read_frontmatter(md_file)
-        if not fm_text:
+def _iter_research_markdown_files(research_dir: Path) -> list[Path]:
+    """Return persisted research markdown files, excluding the global index and archives."""
+    if not research_dir.is_dir():
+        return []
+    files: list[Path] = []
+    for md_file in research_dir.glob("**/*.md"):
+        rel_parts = md_file.relative_to(research_dir).parts
+        if md_file.name == "INDEX.md":
             continue
-        fm = _parse_frontmatter(fm_text)
+        if any(part.startswith("_") for part in rel_parts):
+            continue
+        files.append(md_file)
+    return sorted(files)
 
-        if fm.get("tags"):
-            all_tags.update(fm["tags"])
-        if fm.get("sub_question"):
-            all_sub_questions.append(fm["sub_question"])
-        if fm.get("query") and not query:
-            query = fm["query"]
-        if fm.get("title") and not title:
-            title = fm["title"]
 
-        if md_file.name == "00-synthesis.md":
-            synthesis_path = str(md_file)
+def _frontmatter_date(value: Any, fallback: str = "") -> str:
+    """Normalize a frontmatter date value to YYYY-MM-DD when possible."""
+    if hasattr(value, "strftime"):
+        return value.strftime("%Y-%m-%d")
+    text = str(value or fallback or "").strip()
+    match = re.search(r"\d{4}-\d{2}-\d{2}", text)
+    return match.group(0) if match else text
+
+
+def _date_from_run_id(run_id: str) -> str:
+    match = re.match(r"^(\d{4}-\d{2}-\d{2})", run_id or "")
+    return match.group(1) if match else ""
+
+
+def _date_passes_cutoff(date_text: str, cutoff: datetime | None) -> bool:
+    if not cutoff or not date_text:
+        return True
+    try:
+        return datetime.strptime(date_text, "%Y-%m-%d").replace(tzinfo=timezone.utc) >= cutoff
+    except ValueError:
+        return True
+
+
+def _index_bullet_for_file(index_entry: dict, research_dir: Path, md_file: Path) -> str:
+    rel_path = md_file.relative_to(research_dir).as_posix()
+    return (index_entry.get("file_bullets") or {}).get(rel_path, "")
+
+
+def _cap_sources(sources: Any, limit: int = MAX_PRIOR_SOURCES) -> list[dict[str, str]]:
+    """Return up to N source entries, prioritizing primary sources."""
+    normalized: list[dict[str, str]] = []
+    for source in _as_list(sources):
+        if isinstance(source, dict):
+            url = str(source.get("url", "")).strip()
+            role = str(source.get("role", "")).strip()
         else:
-            role = fm.get("role", "")
-            if role == "angle" or md_file.name != "00-synthesis.md":
-                angles.append({"file": str(md_file), "title": fm.get("title", md_file.stem)})
+            url = str(source).strip()
+            role = ""
+        if url:
+            item = {"url": url}
+            if role:
+                item["role"] = role
+            normalized.append(item)
 
-    return {
-        "all_tags": sorted(all_tags),
-        "all_sub_questions": " ".join(all_sub_questions),
-        "query": query,
-        "title": title,
-        "synthesis_path": synthesis_path,
-        "angles": angles,
-    }
+    role_rank = {"primary": 0, "secondary": 1, "tertiary": 2}
+    normalized.sort(key=lambda s: role_rank.get(s.get("role", ""), 3))
+    return normalized[:limit]
 
 
-def _score_run(query_tokens_set: set[str], index_entry: dict, file_data: dict) -> dict:
-    """Score a run against query tokens using weighted field matching."""
+def _collect_prior_files(research_dir: Path, index_by_run: dict[str, dict], cutoff: datetime | None) -> list[dict[str, Any]]:
+    """Collect file-level prior research records from markdown frontmatter."""
+    records: list[dict[str, Any]] = []
+    synthesis_titles: dict[str, str] = {}
+    synthesis_paths: dict[str, str] = {}
+
+    markdown_files = _iter_research_markdown_files(research_dir)
+    frontmatters: dict[Path, dict] = {}
+    for md_file in markdown_files:
+        fm = _parse_frontmatter(_read_frontmatter(md_file))
+        if not fm:
+            continue
+        frontmatters[md_file] = fm
+        run_id = str(fm.get("run_id") or md_file.parent.name)
+        role = str(fm.get("role") or ("synthesis" if md_file.name == "00-synthesis.md" else "angle"))
+        if role == "synthesis":
+            synthesis_titles[run_id] = str(fm.get("title") or "")
+            synthesis_paths[run_id] = str(md_file)
+
+    for md_file, fm in frontmatters.items():
+        run_id = str(fm.get("run_id") or md_file.parent.name)
+        index_entry = index_by_run.get(run_id, {})
+        role = str(fm.get("role") or ("synthesis" if md_file.name == "00-synthesis.md" else "angle"))
+        date_text = _frontmatter_date(fm.get("date"), index_entry.get("date") or _date_from_run_id(run_id))
+        if not _date_passes_cutoff(date_text, cutoff):
+            continue
+
+        run_title = synthesis_titles.get(run_id) or index_entry.get("title") or run_id
+        tags = _string_list(fm.get("tags") or index_entry.get("tags"))
+        index_bullet = _index_bullet_for_file(index_entry, research_dir, md_file) if index_entry else ""
+
+        record: dict[str, Any] = {
+            "file": str(md_file),
+            "title": str(fm.get("title") or md_file.stem),
+            "role": role,
+            "run_id": run_id,
+            "run_title": run_title,
+            "date": date_text,
+            "sub_question": str(fm.get("sub_question") or ""),
+            "query": str(fm.get("query") or ""),
+            "tags": tags,
+            "confidence": str(fm.get("confidence") or ""),
+            "sources": _cap_sources(fm.get("sources")),
+            "index_bullet": index_bullet,
+            "run_synthesis": synthesis_paths.get(run_id, ""),
+        }
+        records.append(record)
+
+    return records
+
+
+def _score_prior_file(query_tokens_set: set[str], record: dict[str, Any]) -> dict:
+    """Score one prior research file against query tokens, normalized to 0-1."""
     if not query_tokens_set:
         return {"score": 0.0, "matched_on": []}
 
     num_query_tokens = len(query_tokens_set)
-    total_score = 0.0
+    raw_score = 0.0
+    max_score = 0.0
     matched_on: list[str] = []
 
     field_sources = {
-        "tags": " ".join(file_data.get("all_tags") or index_entry.get("tags", [])),
-        "title": file_data.get("title") or index_entry.get("title", ""),
-        "sub_question": file_data.get("all_sub_questions", ""),
-        "query": file_data.get("query", ""),
-        "index_bullets": index_entry.get("bullets", ""),
+        "tags": " ".join(record.get("tags", [])),
+        "title": record.get("title", ""),
+        "sub_question": record.get("sub_question", ""),
+        "query": record.get("query", ""),
+        "index_bullet": record.get("index_bullet", ""),
+        "run_title": record.get("run_title", ""),
     }
 
     for field_name, field_text in field_sources.items():
         if not field_text:
             continue
-        field_tokens = set(_tokenize(field_text))
+        weight = FILE_FIELD_WEIGHTS.get(field_name, 0.1)
+        max_score += weight
+        field_tokens = set(_tokenize(str(field_text)))
         matched = query_tokens_set & field_tokens
-        if matched:
-            field_score = len(matched) / num_query_tokens
-            weight = FIELD_WEIGHTS.get(field_name, 0.1)
-            total_score += field_score * weight
-            if field_name == "tags":
-                for tag in (file_data.get("all_tags") or index_entry.get("tags", [])):
-                    if matched & set(_tokenize(tag)):
-                        matched_on.append(f"tags:{tag}")
-            else:
-                matched_on.append(f"{field_name}:{','.join(sorted(matched))}")
-
-    # Compound tag bonus
-    compound_bonus_total = 0.0
-    tags = file_data.get("all_tags") or index_entry.get("tags", [])
-    for tag in tags:
-        if "-" not in tag:
+        if not matched:
             continue
+        raw_score += (len(matched) / num_query_tokens) * weight
+        if field_name == "tags":
+            for tag in record.get("tags", []):
+                if matched & set(_tokenize(tag)):
+                    matched_on.append(f"tags:{tag}")
+        else:
+            matched_on.append(f"{field_name}:{','.join(sorted(matched))}")
+
+    compound_bonus_total = 0.0
+    for tag in record.get("tags", []):
         tag_tokens = set(_tokenize(tag))
         if len(tag_tokens) >= 2 and tag_tokens.issubset(query_tokens_set):
             compound_bonus_total += COMPOUND_BONUS
             if f"tags:{tag}" not in matched_on:
                 matched_on.append(f"compound:{tag}")
     compound_bonus_total = min(compound_bonus_total, MAX_COMPOUND_BONUS)
-    total_score += compound_bonus_total
+    raw_score += compound_bonus_total
+    max_score += MAX_COMPOUND_BONUS
 
-    return {"score": round(total_score, 4), "matched_on": matched_on}
+    if max_score <= 0:
+        return {"score": 0.0, "matched_on": matched_on}
+
+    normalized = min(raw_score / max_score, 1.0)
+    if record.get("role") == "synthesis":
+        normalized *= SYNTHESIS_SCORE_FACTOR
+
+    return {"score": round(normalized, 4), "matched_on": matched_on}
 
 
 # ---------------------------------------------------------------------------
@@ -1336,6 +1431,7 @@ def config() -> None:
             "scrapecreators": bool(SCRAPECREATORS_API_KEY),
         },
         "env_files": env_files,
+        "research_dir": str(RESEARCH_DIR),
     })
 
 
@@ -1498,73 +1594,71 @@ def prior(
     query: str = typer.Argument(..., help="Free-text query to match against prior research"),
     since: Optional[str] = typer.Option(None, "--since", "-s", help="Date filter: 6m, 1y, 30d"),
     limit: int = typer.Option(5, "--limit", "-l", help="Max results"),
+    min_score: float = typer.Option(DEFAULT_PRIOR_MIN_SCORE, "--min-score", help="Minimum normalized relevance score (0-1)"),
+    research_dir: Optional[Path] = typer.Option(None, "--research-dir", help="Override research directory", hidden=True),
 ) -> None:
-    """Search prior research runs by relevance. Local only (free)."""
+    """Search prior research files by relevance. Local only (free)."""
     t0 = time.time()
 
     try:
         cutoff = _parse_since(since)
+        if min_score < 0 or min_score > 1:
+            raise ResearchError(
+                ErrorCode.FILESYSTEM_ERROR,
+                f"Invalid --min-score: {min_score}. Use a value between 0 and 1.",
+            )
     except ResearchError as e:
         emit(output_error("prior", e))
         raise typer.Exit(1)
 
-    index_path = RESEARCH_DIR / "INDEX.md"
-    if not RESEARCH_DIR.is_dir() or not index_path.is_file():
+    effective_research_dir = _resolve_research_dir(research_dir)
+    if not effective_research_dir.is_dir():
         duration_ms = int((time.time() - t0) * 1000)
         _log_call("prior", query, backend="local", duration_ms=duration_ms)
-        emit(output_success("prior", query, metadata={"backend": "local", "duration_ms": duration_ms}, results=[]))
+        emit(output_success(
+            "prior", query,
+            metadata={
+                "backend": "local",
+                "duration_ms": duration_ms,
+                "search_unit": "file",
+                "research_dir": str(effective_research_dir),
+                "total_files_indexed": 0,
+                "min_score": min_score,
+            },
+            results=[],
+        ))
         return
 
-    index_text = index_path.read_text(encoding="utf-8")
-    index_entries = _parse_index_entries(index_text)
+    index_by_run = _load_index_metadata(effective_research_dir)
+    query_tokens_set = set(_tokenize(query))
+    prior_files = _collect_prior_files(effective_research_dir, index_by_run, cutoff)
 
-    if cutoff:
-        filtered = []
-        for entry in index_entries:
-            try:
-                entry_date = datetime.strptime(entry["date"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                if entry_date >= cutoff:
-                    filtered.append(entry)
-            except (ValueError, KeyError):
-                filtered.append(entry)
-        index_entries = filtered
+    results: list[dict[str, Any]] = []
+    for record in prior_files:
+        score_result = _score_prior_file(query_tokens_set, record)
+        if score_result["score"] <= 0 or score_result["score"] < min_score:
+            continue
+        result = dict(record)
+        result["score"] = score_result["score"]
+        result["matched_on"] = score_result["matched_on"]
+        results.append(result)
 
-    query_tokens = _tokenize(query)
-    query_tokens_set = set(query_tokens)
-
-    scored_runs: list[dict[str, Any]] = []
-    for entry in index_entries:
-        run_id = entry.get("run_id", "")
-        run_dir = RESEARCH_DIR / run_id if run_id else None
-        file_data = _collect_run_data(run_dir) if run_dir and run_dir.is_dir() else {
-            "all_tags": entry.get("tags", []),
-            "all_sub_questions": "",
-            "query": "",
-            "title": entry.get("title", ""),
-            "synthesis_path": "",
-            "angles": [],
-        }
-
-        score_result = _score_run(query_tokens_set, entry, file_data)
-        if score_result["score"] > 0:
-            scored_runs.append({
-                "run_id": run_id,
-                "title": entry.get("title", ""),
-                "date": entry.get("date", ""),
-                "score": score_result["score"],
-                "matched_on": score_result["matched_on"],
-                "synthesis": file_data.get("synthesis_path", ""),
-                "angles": file_data.get("angles", []),
-            })
-
-    scored_runs.sort(key=lambda r: r["score"], reverse=True)
-    results = scored_runs[:limit]
+    results.sort(key=lambda r: (r["score"], 1 if r.get("role") == "angle" else 0, r.get("date", "")), reverse=True)
+    results = results[:limit]
 
     duration_ms = int((time.time() - t0) * 1000)
     _log_call("prior", query, backend="local", duration_ms=duration_ms)
     emit(output_success(
         "prior", query,
-        metadata={"backend": "local", "duration_ms": duration_ms, "total_indexed": len(index_entries)},
+        metadata={
+            "backend": "local",
+            "duration_ms": duration_ms,
+            "search_unit": "file",
+            "research_dir": str(effective_research_dir),
+            "total_files_indexed": len(prior_files),
+            "total_runs_indexed": len({r.get("run_id") for r in prior_files}),
+            "min_score": min_score,
+        },
         results=results,
     ))
 

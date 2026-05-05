@@ -1,6 +1,6 @@
 # Research Persistence Format
 
-STANDARD and DEEP research runs are persisted to `~/Documents/Research/`. Each run becomes a directory with one file per sub-agent plus a short orchestrator synthesis. QUICK lookups are NOT persisted.
+STANDARD and DEEP research runs are persisted to the configured research directory (default: `~/Documents/Research/`; override with `RESEARCH_DIR`). Each run becomes a directory with one file per sub-agent plus a short orchestrator synthesis. QUICK lookups are NOT persisted.
 
 **Opt-out:** Set `RESEARCH_NO_PERSIST=1` in an env file (see `<configuration>` in SKILL.md) or shell.
 
@@ -139,4 +139,4 @@ See angle files in this directory for full findings, source URLs, and verbatim q
 - One bullet per angle file plus one for the synthesis. Each bullet has a one-line finding, NOT a generic heading.
 - No within-file anchors — each bullet links to a dedicated file.
 
-Create `~/Documents/Research/` and `INDEX.md` if they don't exist.
+Create the configured research directory and `INDEX.md` if they don't exist.
