@@ -50,6 +50,14 @@ uv run ~/.claude/skills/linear/scripts/linear.py state $ARGUMENTS "In Progress"
 ```
 </step>
 
+<step name="ensure_branch">
+Check `git branch --show-current`. If on `main`, `develop`, `master`, a release
+branch, or any branch unrelated to this ticket — generate a feature branch name
+from the ticket ID and title, then check it out. If already on a branch that
+relates to this ticket, proceed silently. If ambiguous, confirm with the user
+before switching.
+</step>
+
 <step name="announce_workflow">
 Present the ticket summary, then announce the workflow:
 

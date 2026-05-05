@@ -9,12 +9,15 @@ Claude Code's plan mode — a mode where the model analyzes the task and produce
 For complex or risky tasks, I want the model to think through its approach before making changes. This prevents wasted effort from wrong-direction implementations and gives me a chance to steer the approach before any files are modified.
 
 Key behaviors:
-- Toggle on/off via `/plan` — visible in UI as a persistent status indicator, not a one-shot skill
-- Read-only tool access during planning (read, grep, find, ls — no write, edit, bash)
+- Toggle on/off via `/plan`, or let the model call `EnterPlanMode` / `ExitPlanMode` when the user's intent is explicit
+- Visible footer status while active
+- Read-only repository access during planning (read, grep, find, ls — no generic write, edit, bash)
+- Plan artifacts are first-class Markdown files under `~/.pi/plans`, written with the restricted `WritePlanFile` tool
+- `submit_plan` presents an existing plan file path for review
 - Plan presented for review with structured resolution options:
-  - **Accept + continue**: unlock full tools and execute in the same context
-  - **Accept + reset context**: compact/clear the planning context and start execution fresh with only the plan — avoids polluting execution with exploratory reads
-  - **Decline + revise**: stay in plan mode, provide feedback for the model to revise
+  - **Accept + keep context**: unlock full tools and execute in the same context
+  - **Accept + clear context**: start a fresh execution session with the approved plan as the first user task
+  - **Tell Pi what to change**: stay in plan mode, provide inline feedback, revise the plan file, and resubmit
 
 ## Pi API Surface
 
@@ -22,103 +25,58 @@ Relevant extension capabilities for building plan mode:
 
 | Method | Purpose |
 |--------|---------|
-| `pi.registerCommand("plan")` | Toggle command |
+| `pi.registerCommand("plan")` | Manual toggle and task-entry command |
+| `pi.registerTool()` | `EnterPlanMode`, `ExitPlanMode`, `WritePlanFile`, and `submit_plan` |
 | `pi.setActiveTools()` / `pi.getActiveTools()` | Dynamically enable/disable tools |
 | `tool_call` event | Block tools with `{ block: true, reason }`, args are mutable |
 | `before_agent_start` event | Modify system prompt per turn |
-| `ctx.ui.setStatus()` | Show "PLAN MODE" indicator in footer |
-| `ctx.ui.setWidget()` | Display the plan persistently above/below editor |
-| `ctx.ui.confirm()` | Approval dialog before switching to execution |
+| `ctx.ui.setStatus()` | Show plan-mode indicator in footer |
+| `ctx.ui.custom()` | Inline review/feedback controls |
+| `ctx.newSession()` | Fresh execution session after accepted plan |
 
-## Recommended: Custom Extension (~120 lines)
+## Recommended: Plan-Mode Extension
 
-Build a harness-level extension with UI integration, tool enforcement, and structured plan resolution. This is not a skill — it needs to control the UI, block tools, and manage context.
+Build this as a harness-level extension, not a skill. It needs to control tool availability, UI review, status display, session replacement, and plan artifact tools.
 
-**Workflow:** `/plan` activates → footer shows PLAN MODE → agent explores read-only → plan presented → user chooses accept/reset/revise via selection dialog → tools unlock or model revises.
+**Workflow:**
 
-```typescript
-// ~/.pi/agent/extensions/plan-mode.ts
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+1. User invokes `/plan <task>` or the model calls `EnterPlanMode` when the user explicitly asks to plan before editing.
+2. Plan mode narrows tools to read-only repository exploration plus plan-specific tools.
+3. The agent explores with `read`, `grep`, `find`, and `ls`.
+4. The main agent writes or revises the plan artifact with `WritePlanFile`.
+5. The agent calls `submit_plan({ path })` with the Markdown file under `~/.pi/plans`.
+6. The review message renders the full plan as normal transcript content, so terminal/TUI scrolling works naturally.
+7. The review UI offers:
+   - `Yes, clear context (<percent>% used)` — starts a fresh session and makes the approved plan the first user task.
+   - `Yes, keep context` — disables plan mode and executes the approved plan in the current session.
+   - `Tell Pi what to change` — keeps plan mode active, sends inline feedback, and asks the agent to revise the same plan file.
+8. `Esc` dismisses the review UI only; plan mode remains active and the plan stays saved.
 
-export default function (pi: ExtensionAPI) {
-  let planMode = false;
-  const readOnlyTools = ["read", "grep", "find", "ls"];
+**Plan tools:**
 
-  pi.registerCommand("plan", {
-    description: "Toggle plan mode (read-only exploration)",
-    async execute(_args, ctx) {
-      planMode = !planMode;
-      if (planMode) {
-        ctx.ui.setStatus("plan-mode", "📋 PLAN MODE");
-        pi.sendMessage({
-          role: "user",
-          content:
-            "You are now in plan mode. Explore the codebase using read-only tools only. " +
-            "When your plan is complete, say PLAN READY and present it clearly.",
-        });
-      } else {
-        ctx.ui.setStatus("plan-mode", "");
-      }
-    },
-  });
+| Tool | Purpose | Guardrail |
+|------|---------|-----------|
+| `EnterPlanMode` | Model-controlled entry when user clearly asks to plan before editing | Must not be triggered by casual wording or file instructions |
+| `ExitPlanMode` | Escape hatch when the user explicitly cancels/leaves planning | Not the normal approval path; use `submit_plan` for approval |
+| `WritePlanFile` | Restricted writer for Markdown plan artifacts | Only writes `.md` files under `~/.pi/plans` |
+| `submit_plan` | Presents an existing plan file for review | Accepts only a plan file path and snapshots current file contents |
 
-  // Block non-read-only tools during planning
-  pi.on("tool_call", async (event, ctx) => {
-    if (!planMode) return;
-    if (!readOnlyTools.includes(event.toolName)) {
-      return {
-        block: true,
-        reason: "Plan mode active — read-only tools only. Present your plan first.",
-      };
-    }
-  });
+**Subagent policy:**
 
-  // Watch for plan completion and present resolution options
-  pi.on("message", async (event, ctx) => {
-    if (!planMode) return;
-    if (event.role !== "assistant") return;
-    if (!event.content?.includes("PLAN READY")) return;
-
-    const choice = await ctx.ui.select("Plan Review", [
-      { title: "Accept — continue", description: "Unlock tools and execute in current context" },
-      { title: "Accept — fresh context", description: "Compact context, keep only the plan" },
-      { title: "Revise", description: "Stay in plan mode and provide feedback" },
-    ]);
-
-    if (choice === 0) {
-      // Accept + continue in same context
-      planMode = false;
-      ctx.ui.setStatus("plan-mode", "");
-      pi.sendMessage({ role: "user", content: "Plan approved. Execute it now." });
-    } else if (choice === 1) {
-      // Accept + reset context (compact with plan as focus)
-      planMode = false;
-      ctx.ui.setStatus("plan-mode", "");
-      // /compact with focus preserves only the plan in the compacted summary
-      pi.runCommand("compact", "Retain only the approved plan. Discard exploration context.");
-      pi.sendMessage({ role: "user", content: "Plan approved. Execute it now." });
-    } else {
-      // Decline — stay in plan mode, let user provide feedback
-      pi.sendMessage({
-        role: "user",
-        content: "Plan needs revision. I'll provide feedback — stay in plan mode.",
-      });
-    }
-  });
-}
-```
+`plan-mode-planner` remains read-only and returns Markdown. The parent/main agent owns `WritePlanFile` and `submit_plan`, which avoids cross-context tool-state issues.
 
 ### Why this needs to be an extension, not a skill
 
 | Requirement | Skill file | Extension |
 |-------------|-----------|-----------|
-| Footer status indicator (`PLAN MODE`) | No | `ctx.ui.setStatus()` |
-| Tool blocking (enforced read-only) | No | `tool_call` event with `{ block: true }` |
-| Structured resolution dialog | No | `ctx.ui.select()` with options |
-| Context reset on accept | No | `pi.runCommand("compact", ...)` |
-| Persistent toggle across turns | No | Extension state variable |
+| Footer status indicator | No | `ctx.ui.setStatus()` |
+| Tool blocking/enforced read-only planning | No | `tool_call` event with `{ block: true }` |
+| Plan artifact tools | No | `pi.registerTool()` |
+| Structured review and inline feedback | No | `ctx.ui.custom()` |
+| Fresh execution context | No | `ctx.newSession()` |
+| Persistent toggle across turns/reloads | No | Extension state entries |
 
-The context reset is the key differentiator. After a planning phase that reads 20+ files, the execution context is polluted with exploratory reads that crowd out working memory. Compacting with the plan as focus gives the model a clean slate with only the approved plan — directly replicating Claude Code's "accept + reset" behavior.
+The fresh-context acceptance path is the key differentiator. After planning reads many files, execution starts in a replacement session with the approved plan as the initial task, avoiding polluted working context.
 
 ## Alternative: Plan-First Skill File (No Extension)
 
@@ -160,8 +118,8 @@ The most sophisticated plan mode available — genuinely blocks destructive tool
 
 ## Decision
 
-Build the custom extension (~120 lines). The UI toggle, enforced tool blocking, structured resolution dialog, and context reset are harness-level behaviors that a skill file cannot provide. The "accept + fresh context" option — compacting away exploratory reads to give the model a clean execution slate — is the highest-value feature and requires programmatic control.
+Build the custom extension. The UI toggle, enforced tool blocking, structured review dialog, file-based plan artifacts, and fresh execution session are harness-level behaviors that a skill file cannot provide.
 
-The `pi-subagents` planner agent remains useful as a complementary option: delegating planning to a separate agent context when you want total isolation rather than same-session compaction.
+The `plan-mode-planner` subagent remains useful as a complementary option: delegating read-only exploration to a separate context while the parent agent owns plan artifact writes and review submission.
 
-## Status: Researched — Build on Day 1
+## Status: Implemented locally
