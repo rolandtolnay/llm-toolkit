@@ -19,10 +19,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -273,12 +275,14 @@ def _ytdlp_search(query: str, max_videos: int, after: str | None) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Transcript fetching (youtube-transcript-api)
+# Transcript fetching (youtube-transcript-api with yt-dlp fallback)
 # ---------------------------------------------------------------------------
 
+YTDLP_SUBTITLE_TIMEOUT = 60  # seconds
 
-def _fetch_transcript(video_id: str) -> str | None:
-    """Fetch transcript for a single video. Returns text or None."""
+
+def _fetch_transcript_api(video_id: str) -> tuple[str | None, str | None]:
+    """Fetch transcript via youtube-transcript-api. Returns (text, error)."""
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         from youtube_transcript_api.formatters import TextFormatter
@@ -299,21 +303,118 @@ def _fetch_transcript(video_id: str) -> str | None:
                 pass
 
         if transcript is None:
-            return None
+            return None, "no english transcript found in available tracks"
 
         formatter = TextFormatter()
-        return formatter.format_transcript(transcript.fetch())
+        return formatter.format_transcript(transcript.fetch()), None
     except Exception as exc:
-        _log_stderr(f"Transcript fetch failed for {video_id}: {exc}")
-        return None
+        return None, str(exc)
 
 
-def _fetch_transcripts(video_ids: list[str]) -> dict[str, str | None]:
-    """Fetch transcripts sequentially for the given video IDs."""
+def _fetch_transcript_ytdlp(video_id: str) -> tuple[str | None, str | None]:
+    """Fetch transcript via yt-dlp subtitle download. Returns (text, error)."""
+    if not shutil.which("yt-dlp"):
+        return None, "yt-dlp not installed"
+
+    tmpdir = tempfile.mkdtemp()
+    try:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        cmd = [
+            "yt-dlp",
+            "--ignore-config",
+            "--no-cookies-from-browser",
+            "--skip-download",
+            "--write-sub",
+            "--write-auto-sub",
+            "--sub-lang", "en",
+            "--sub-format", "json3",
+            "--no-warnings",
+            "-o", os.path.join(tmpdir, "sub"),
+            url,
+        ]
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=YTDLP_SUBTITLE_TIMEOUT,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            return None, stderr if stderr else "unknown yt-dlp error"
+
+        sub_files = list(Path(tmpdir).glob("*.json3"))
+        if not sub_files:
+            return None, "yt-dlp succeeded but no subtitle files written"
+
+        manual = [f for f in sub_files if ".auto." not in f.name]
+        chosen = manual[0] if manual else sub_files[0]
+
+        with open(chosen) as f:
+            data = json.load(f)
+
+        segments = []
+        for event in data.get("events", []):
+            segs = event.get("segs", [])
+            text = "".join(s.get("utf8", "") for s in segs).strip()
+            if text and text != "\n":
+                segments.append(text)
+
+        text = " ".join(segments)
+        text = re.sub(r"\s+", " ", text).strip()
+        return (text, None) if text else (None, "subtitle file contained no text")
+    except subprocess.TimeoutExpired:
+        return None, "yt-dlp subtitle download timed out"
+    except Exception as e:
+        return None, str(e)
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def _fetch_transcript(video_id: str) -> tuple[str | None, str | None]:
+    """Fetch transcript, trying youtube-transcript-api first then yt-dlp subtitle download.
+
+    Returns (text, error_reason). error_reason is None on success.
+    """
+    errors: list[str] = []
+
+    text, err = _fetch_transcript_api(video_id)
+    if text:
+        return text, None
+    if err:
+        errors.append(f"api: {err}")
+
+    _log_stderr(f"API transcript failed for {video_id}, trying yt-dlp subtitle download...")
+    text, err = _fetch_transcript_ytdlp(video_id)
+    if text:
+        return text, None
+    if err:
+        errors.append(f"yt-dlp: {err}")
+
+    combined = "; ".join(errors)
+    err_lower = combined.lower()
+    if "ip" in err_lower or "block" in err_lower or "too many" in err_lower or "429" in err_lower:
+        reason = f"ip_blocked ({combined})"
+    elif "disabled" in err_lower:
+        reason = f"transcripts_disabled ({combined})"
+    elif "no english transcript" in err_lower and "no subtitle" in err_lower:
+        reason = f"no_english_transcript ({combined})"
+    else:
+        reason = f"fetch_error ({combined})"
+
+    _log_stderr(f"Transcript fetch failed for {video_id}: {combined}")
+    return None, reason
+
+
+def _fetch_transcripts(video_ids: list[str]) -> tuple[dict[str, str | None], list[str]]:
+    """Fetch transcripts sequentially for the given video IDs.
+
+    Returns (transcripts_map, list_of_error_reasons).
+    """
     results: dict[str, str | None] = {}
+    errors: list[str] = []
     for vid in video_ids:
-        results[vid] = _fetch_transcript(vid)
-    return results
+        text, reason = _fetch_transcript(vid)
+        results[vid] = text
+        if reason:
+            errors.append(f"{vid}: {reason}")
+    return results, errors
 
 
 # ---------------------------------------------------------------------------
@@ -682,7 +783,30 @@ def search(
             video["selection_reason"] = selection_reasons[vid]
 
     # Fetch transcripts only for selected videos
-    transcripts = _fetch_transcripts(selected_ids)
+    transcripts, transcript_errors = _fetch_transcripts(selected_ids)
+    if transcript_errors:
+        for te in transcript_errors:
+            warnings.append(f"transcript_fetch_failed: {te}")
+
+    # Detect likely IP block: all selected videos failed
+    all_failed = selected_ids and all(
+        transcripts.get(vid) is None for vid in selected_ids
+    )
+    ip_block_suspected = all_failed and any("ip_blocked" in e for e in transcript_errors)
+
+    if all_failed and not ip_block_suspected:
+        # All failed but not clearly IP-blocked — still suspicious
+        if len(selected_ids) >= 2:
+            warnings.append(
+                f"all_transcripts_failed: 0/{len(selected_ids)} transcripts fetched — "
+                "possible IP block by YouTube (try a VPN)"
+            )
+
+    if ip_block_suspected:
+        warnings.append(
+            "youtube_ip_block: YouTube appears to be blocking transcript requests "
+            "from this IP. All transcript fetches failed. Use a VPN to confirm."
+        )
 
     # Attach transcripts to video dicts (internal field)
     for video in videos:
@@ -728,9 +852,24 @@ def search(
         1 for v in videos if v.get("transcript_available", False)
     )
 
+    # Determine overall success: false when we selected videos but got zero transcripts
+    overall_success = True
+    error_msg: str | None = None
+    if selected_ids and transcripts_fetched == 0:
+        overall_success = False
+        if ip_block_suspected:
+            error_msg = "YouTube is blocking transcript requests from this IP"
+        else:
+            error_msg = (
+                f"0/{len(selected_ids)} transcripts fetched — "
+                "possible IP block or transcripts unavailable"
+            )
+
     duration_ms = int((time.monotonic() - t0) * 1000)
     _log_call(
         query,
+        success=overall_success,
+        error=error_msg,
         duration_ms=duration_ms,
         videos_searched=len(videos),
         videos_selected=len(selected_ids),
@@ -740,7 +879,7 @@ def search(
 
     _emit(
         {
-            "success": True,
+            "success": overall_success,
             "command": "search",
             "query": query,
             "question": question,
@@ -757,6 +896,8 @@ def search(
             },
         }
     )
+    if error_msg:
+        _log_stderr(f"⚠ {error_msg}")
 
 
 if __name__ == "__main__":

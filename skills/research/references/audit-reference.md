@@ -6,7 +6,7 @@ Debugging and cost analysis for the research skill. This reference is for period
 
 ### `audit` — Analyze API usage and costs
 
-Reads JSONL logs from `~/.cache/research/logs/` and produces a usage summary. Logs are written automatically by every CLI call and by PostToolUse hooks for WebSearch/WebFetch.
+Reads JSONL logs from `~/.cache/research/logs/` and produces a usage summary. Logs are written automatically by every CLI call and directly by Pi's `web_search` / `web_fetch` tools.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
@@ -18,33 +18,33 @@ Reads JSONL logs from `~/.cache/research/logs/` and produces a usage summary. Lo
 - `summary`: `total_calls`, `unique_sessions`, `cache_hits`, `cache_hit_rate`, `failures`, `total_cost_usd`, `total_credits`, `total_duration_ms`
 - `by_tool`: per-tool breakdown with `count`, `pct`, `cost_usd`, `credits`, `cache_hits`, `failures`
 - `by_backend`: per-backend breakdown (`builtin`, `perplexity`, `context7`, `firecrawl`, `yt-dlp`) with `count`, `pct`, `cost_usd`, `credits`
-- `by_type`: `builtin` (WebSearch/WebFetch via hooks) vs `cli` (research.py commands)
+- `by_type`: `builtin` (`web_search` / `web_fetch`) vs `cli` (research.py commands)
 - `sessions`: per-session summary with `calls`, `cost_usd`, `credits`, `tools_used`
 - `calls` (only with `--detail`): full list of individual log entries
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/research.py audit --days 30
-uv run ~/.claude/skills/research/scripts/research.py audit --detail
+uv run ~/.pi/agent/skills/research/scripts/research.py audit --days 30
+uv run ~/.pi/agent/skills/research/scripts/research.py audit --detail
 ```
 
 ---
 
 ## Log format
 
-All CLI commands and WebSearch/WebFetch calls (via skill hooks) are logged to `~/.cache/research/logs/YYYY-MM-DD.jsonl`. Each line is a JSON object with:
+All CLI commands and Pi `web_search` / `web_fetch` calls are logged to `~/.cache/research/logs/YYYY-MM-DD.jsonl`. Each line is a JSON object with:
 
 | Field | Description |
 |-------|-------------|
 | `timestamp` | ISO 8601 UTC |
-| `session_id` | Claude Code session ID (from hooks or `CLAUDE_SESSION_ID` env) |
-| `type` | `cli` (research.py command) or `builtin` (WebSearch/WebFetch) |
-| `tool` | Tool name: `ask`, `search`, `reason`, `docs`, `map`, `scrape`, `youtube`, `WebSearch`, `WebFetch` |
+| `session_id` | Pi session ID for `web_search` / `web_fetch`; CLI calls use `CLAUDE_SESSION_ID` when present |
+| `type` | `cli` (research.py command) or `builtin` (`web_search` / `web_fetch`) |
+| `tool` | Tool name: `ask`, `search`, `reason`, `docs`, `map`, `scrape`, `youtube`, `web_search`, `web_fetch` |
 | `query` | The query string or URL |
 | `backend` | `perplexity`, `context7`, `firecrawl`, or `builtin` |
 | `model` | Perplexity model name (if applicable) |
 | `cache_hit` | Whether the result was served from cache |
-| `success` | Whether the call succeeded (CLI: from exception handling; builtin: inferred from response error patterns) |
+| `success` | Whether the call succeeded |
 | `url` | Request URL (builtin WebFetch only) |
 | `error` | Truncated error message, max 200 chars (builtin only, when `success` is false) |
 | `response_length` | Length of successful response body (builtin only, when `success` is true) |
@@ -63,7 +63,7 @@ Logs are retained for 30 days and automatically cleaned up on the first write of
 |--------|-----------|----------|
 | CLI calls (`ask`, `search`, `reason`, `docs`, `map`, `scrape`) | `research.py` logs after each call | Timing, cost, token usage, cache hits, errors |
 | YouTube search (`youtube`) | `youtube.py` logs after each call | Timing, videos searched/fetched/preprocessed |
-| WebSearch/WebFetch (main agent, QUICK mode) | PostToolUse hook in SKILL.md frontmatter | Query/URL, session ID |
-| WebSearch/WebFetch (subagents, STANDARD/DEEP) | PostToolUse hook in research-subagent.md frontmatter | Query/URL, session ID |
+| `web_search` / `web_fetch` (main agent, QUICK mode) | Direct logging in `~/.pi/agent/extensions/codex-search.ts` | Query/URL, Pi session ID, cache hits, duration, source |
+| `web_search` / `web_fetch` (subagents, STANDARD/DEEP) | Same direct logging; subagents load the web tools extension | Query/URL, Pi session ID, cache hits, duration, source |
 
-Hook failures surface on stderr (visible in verbose mode via `Ctrl+O`).
+Web-tool audit logging is best-effort and must never break tool execution.
