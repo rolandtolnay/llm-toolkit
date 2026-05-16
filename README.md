@@ -482,6 +482,10 @@ Apply consistent structure, tone, and formatting to README files. Pairs with [`/
 
 Fetches PR comments from GitHub, applies a fix-vs-ignore framework to each, resolves dismissed threads, and plans fixes. Deferred items log as tickets via the [Linear](#linear) skill. Use when addressing PR feedback or following up on code review.
 
+### `pr-qa-browser`
+
+Derives risk-focused browser QA stories from a dashboard-web PR, runs feasible Agent Browser checks, saves screenshots, and reports remaining manual follow-ups.
+
 ### `nano-banana-app-icon`
 
 Interactive iOS/Android app icon design with Nano Banana 2. Runs a discovery brief, writes a JSON prompt you paste into gemini.google.com, then critiques the resulting PNG and outputs a refinement prompt.
