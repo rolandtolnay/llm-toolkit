@@ -9,12 +9,7 @@ Probe the codebase for other locations where a discovery from this session — a
 <process>
 1. Articulate what was learned. Name the abstract pattern behind the fix: what assumption was wrong, what convention was misunderstood, what was duplicated with a subtle variation, or what reference implementation revealed a better approach.
 
-2. Search broadly for code that shares the same pattern or lineage. Look beyond the obvious — check code that:
-   - Was likely written at the same time or copy-pasted from the same source
-   - Makes the same assumption the bug relied on
-   - Interacts with the same API, convention, or data path
-   - Diverges from a reference implementation that informed the fix
-   Use parallel Explore agents when the search space spans multiple areas.
+2. Search for code with shared lineage — same author, same assumption, same seam. Use parallel Explore agents when the search space spans multiple areas.
 
 3. For each candidate, assess honestly whether the learning applies. The same pattern does not always mean the same bug. Explain your reasoning either way.
 
@@ -25,8 +20,6 @@ Probe the codebase for other locations where a discovery from this session — a
 </process>
 
 <success_criteria>
-1. The abstract pattern is explicitly stated before searching — not just "the bug we fixed" but the transferable principle
-2. Search covers non-obvious locations, not just the same file or directory
-3. Each candidate is individually assessed with reasoning
-4. Findings are not forced — "checked X, Y, Z and the pattern doesn't apply because..." is a good outcome
+1. Report a candidate only when you can name the specific mechanism it shares with the original issue
+2. "Checked X, Y, Z — pattern doesn't transfer because..." is a valid outcome; never pad findings
 </success_criteria>
