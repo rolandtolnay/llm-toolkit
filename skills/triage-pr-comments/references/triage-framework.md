@@ -27,6 +27,8 @@ Does the comment target a file/system within this PR's scope and ownership?
 
 **Ticket-scope check:** A fix can be technically sound *and* out of scope. Check the originating ticket's acceptance criteria (and parent epic's architectural decisions) to decide between **ACT** (aligns with a stated goal or AC), **DEFER** (valid but needs its own ticket), and **IGNORE** (ticket explicitly contradicts the suggestion).
 
+**ADR check:** If the project has ADRs (`docs/adr/`), check whether the suggestion contradicts a recorded decision. If it does, reference the ADR in your rationale — the decision was already made and should not be re-litigated during triage. If the friction is real enough to warrant reopening the ADR, note that explicitly.
+
 **Do NOT ignore** comments about architecture, patterns, or test coverage just because they aren't bugs. These are legitimate code review concerns — proceed to fix assessment.
 
 ### Likelihood: Can I determine P(bug) from static analysis?
@@ -94,6 +96,7 @@ These comments don't fit the P(bug) model — evaluate them on their own terms:
 | Reviewer identifies a pattern direction and new code violates it | Act — follow team direction, not legacy code |
 | Reviewer identifies a pattern direction and old code also violates it | Act on new code; consider fixing old code too if the change is small |
 | Test coverage request for code changed in this PR | Act — tests ship with the code they cover, never defer |
+| Suggestion contradicts a recorded ADR | Ignore — reference the ADR. Reopen only if friction warrants it |
 
 ## When to Investigate
 
