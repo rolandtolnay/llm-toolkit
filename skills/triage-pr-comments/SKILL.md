@@ -123,22 +123,31 @@ Read `references/github-api-reference.md` for reply and resolve commands. Run re
 
 Do NOT reply to or resolve ACT comments — those will be addressed by the implementation.
 
-## 8. Plan and implement
+## 8. Produce the ACT handoff
 
-Enter plan mode. Create an implementation plan for all ACT comments:
-- Group related changes by file
-- Order by priority
-- Include specific code changes with file paths and line references
-- Note dependencies between changes
-
-The plan must include a final reply-and-resolve step: for each implemented ACT comment, reply on the PR with what was done and resolve the thread. Include a comment resolution table:
+Present the remaining ACT + JUST FIX IT items as a structured handoff for downstream planning. This is the triage skill's final output — the user decides what skill or workflow handles implementation.
 
 ```
-| Comment ID | File | What was done | Thread to resolve |
-|------------|------|---------------|-------------------|
+## Implementation Handoff — PR #<number>
+
+### Changes to implement
+
+| # | Priority | Comment ID | File | Change |
+|---|----------|------------|------|--------|
+| 1 | P1 | 2953283704 | `DetailPage.vue:416` | Add CANCELLATION_REQUESTED to sidebarActionMap |
+
+### Post-implementation: reply and resolve
+
+After each change is implemented, reply on the PR comment with a brief description
+of what was done and resolve the thread. Use `references/github-api-reference.md`
+for the API commands.
+
+| Comment ID | File | Thread to resolve |
+|------------|------|-------------------|
+| 2953283704 | `DetailPage.vue:416` | Yes |
 ```
 
-After the user approves the plan, execute the implementation.
+Include the full "What this means" and "Change" text from each comment's analysis so the downstream planner has complete context without needing to re-read the triage.
 
 </process>
 
@@ -146,7 +155,7 @@ After the user approves the plan, execute the implementation.
 Supporting files in `references/`:
 - `triage-framework.md` — The 4-question triage model, decision matrix, and Core Equation. Read in step 3.
 - `comment-analysis-format.md` — Output template for per-comment analysis and summary tables. Read in step 3.
-- `github-api-reference.md` — gh CLI commands for fetching, replying to, and resolving PR comments. Read in steps 1, 7, and 8.
+- `github-api-reference.md` — gh CLI commands for fetching, replying to, and resolving PR comments. Read in steps 1 and 7.
 - `investigation-guide.md` — How to verify INVESTIGATE comments via agent-browser or manual user verification. Read in step 4.
 </reference_index>
 
@@ -158,6 +167,6 @@ Supporting files in `references/`:
 - [ ] Comments requiring investigation verified via agent-browser or escalated to user — never silently assumed
 - [ ] Ignored comments replied to on GitHub with reasoning and threads resolved
 - [ ] Deferred comments checked against existing Linear tickets before creating new ones
-- [ ] Implementation plan created in plan mode before code changes, with comment resolution table
+- [ ] ACT handoff produced with complete context (change descriptions, comment IDs, reply-and-resolve table) for downstream planning
 
 </success_criteria>
