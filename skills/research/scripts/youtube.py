@@ -3,16 +3,19 @@
 # dependencies = [
 #     "youtube-transcript-api",
 #     "typer",
+#     "requests",
+#     "diskcache",
 # ]
 # ///
 """
 YouTube CLI - Search YouTube and extract transcripts for research.
 
-Uses yt-dlp for search (no API key) and youtube-transcript-api for transcripts.
+Uses ScrapeCreators as the primary backend when SCRAPECREATORS_API_KEY is
+configured, with yt-dlp/youtube-transcript-api as the free fallback backend.
 Long transcripts are pre-processed via `claude -p` for directed extraction.
 
 Usage:
-    uv run youtube.py search "<query>" [--question Q] [--max-videos N] [--after YYYY-MM-DD] [--no-preprocess] [--no-select]
+    uv run youtube.py search "<query>" [--question Q] [--max-videos N] [--after this_month] [--no-preprocess] [--no-select]
 """
 
 from __future__ import annotations
@@ -29,16 +32,27 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 
+import requests
 import typer
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
+CACHE_DIR = Path.home() / ".cache" / "research"
+CACHE_TTL_YOUTUBE_SEARCH = 24 * 3600
+CACHE_TTL_YOUTUBE_TRANSCRIPT = 30 * 24 * 3600
+
 LOG_DIR = Path.home() / ".cache" / "research" / "logs"
 LOG_RETENTION_DAYS = 30
+
+SCRAPECREATORS_BASE_URL = "https://api.scrapecreators.com"
+YOUTUBE_SEARCH_PATH = "/v1/youtube/search"
+YOUTUBE_TRANSCRIPT_PATH = "/v1/youtube/video/transcript"
+SC_API_TIMEOUT = 30
+UPLOAD_DATE_FILTERS = {"today", "this_week", "this_month", "this_year"}
 
 WORD_THRESHOLD = 1500  # Transcripts above this get pre-processed
 MAX_PREPROCESS_WORKERS = 3  # Max concurrent claude --bare -p calls
@@ -85,6 +99,40 @@ Format as a concise bulleted list (8-15 bullets max). Lead with the most importa
 
 
 # ---------------------------------------------------------------------------
+# Env loading
+# ---------------------------------------------------------------------------
+
+_ENV_FILE_PATHS = [
+    Path.home() / ".claude" / "research" / ".env",
+    Path.cwd() / ".claude" / "research.env",
+]
+
+
+def _load_env_files() -> list[Path]:
+    """Load skill-specific env files into os.environ. Later files override."""
+    loaded: list[Path] = []
+    for p in _ENV_FILE_PATHS:
+        if p.is_file():
+            for line in p.read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                key, sep, value = line.partition("=")
+                if key and sep:
+                    value = value.strip()
+                    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                        value = value[1:-1]
+                    os.environ[key.strip()] = value
+            loaded.append(p)
+    return loaded
+
+
+_LOADED_ENV_FILES = _load_env_files()
+
+SCRAPECREATORS_API_KEY = os.environ.get("SCRAPECREATORS_API_KEY", "")
+
+
+# ---------------------------------------------------------------------------
 # Logging (matches research.py pattern)
 # ---------------------------------------------------------------------------
 
@@ -112,6 +160,9 @@ def _log_call(
     success: bool = True,
     duration_ms: int | None = None,
     error: str | None = None,
+    backend: str = "yt-dlp",
+    cache_hit: bool = False,
+    credits: int = 0,
     videos_searched: int = 0,
     videos_selected: int = 0,
     transcripts_fetched: int = 0,
@@ -129,14 +180,14 @@ def _log_call(
             "type": "cli",
             "tool": "youtube",
             "query": query,
-            "backend": "yt-dlp",
-            "cache_hit": False,
+            "backend": backend,
+            "cache_hit": cache_hit,
             "success": success,
         }
         if duration_ms is not None:
             entry["duration_ms"] = duration_ms
         entry["cost_usd"] = 0.0
-        entry["credits"] = 0
+        entry["credits"] = credits
         entry["videos_searched"] = videos_searched
         entry["videos_selected"] = videos_selected
         entry["transcripts_fetched"] = transcripts_fetched
@@ -179,18 +230,271 @@ def _log_stderr(msg: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Cache helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_cache():
+    """Get or create diskcache instance."""
+    import diskcache
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    return diskcache.Cache(str(CACHE_DIR))
+
+
+def _cache_key(command: str, *parts: Any) -> str:
+    """Build a YouTube cache key from command + relevant parts."""
+    import hashlib
+
+    normalized = []
+    for p in parts:
+        if p is None:
+            normalized.append("")
+        elif isinstance(p, list):
+            normalized.append("|".join(sorted(str(x) for x in p)))
+        else:
+            normalized.append(str(p))
+    raw = ":".join([command] + normalized)
+    h = hashlib.sha256(raw.encode()).hexdigest()[:16]
+    return f"youtube:{command}:{h}"
+
+
+def _cache_get(command: str, *parts: Any) -> Any | None:
+    """Return cached value or None."""
+    cache = _get_cache()
+    return cache.get(_cache_key(command, *parts))
+
+
+def _cache_set(command: str, *parts: Any, value: Any, ttl: int) -> None:
+    """Store value in cache with given TTL."""
+    cache = _get_cache()
+    cache.set(_cache_key(command, *parts), value, expire=ttl)
+
+
+# ---------------------------------------------------------------------------
+# ScrapeCreators adapters
+# ---------------------------------------------------------------------------
+
+
+def _sc_headers() -> dict[str, str]:
+    """Return ScrapeCreators auth headers."""
+    return {
+        "x-api-key": SCRAPECREATORS_API_KEY,
+        "Accept": "application/json",
+        "User-Agent": "research-skill/1.0 (Assistant Skill)",
+    }
+
+
+def _extract_result_items(data: Any) -> list[dict]:
+    """Extract result objects from known ScrapeCreators response shapes."""
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+    for key in ("videos", "results", "items", "data"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def _parse_iso_date(value: Any) -> str | None:
+    """Parse ISO-ish date/datetime values to YYYY-MM-DD."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    match = re.match(r"^(\d{4}-\d{2}-\d{2})", text)
+    if match:
+        return match.group(1)
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).date().isoformat()
+    except ValueError:
+        return None
+
+
+def _description_text(video: dict[str, Any]) -> str:
+    """Return the best description-like text from a ScrapeCreators video."""
+    for key in ("description", "descriptionSnippet", "shortDescription", "snippet"):
+        value = video.get(key)
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            parts = []
+            for part in value:
+                if isinstance(part, dict):
+                    parts.append(str(part.get("text") or part.get("simpleText") or ""))
+                else:
+                    parts.append(str(part))
+            text = " ".join(parts)
+            if text.strip():
+                return text
+        if isinstance(value, dict):
+            text = value.get("text") or value.get("simpleText")
+            if isinstance(text, str):
+                return text
+    return ""
+
+
+def _to_int(value: Any) -> int | None:
+    """Return an int for numeric ScrapeCreators fields when possible."""
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_sc_video(video: dict[str, Any]) -> dict[str, Any] | None:
+    """Normalize a ScrapeCreators search item to the existing YouTube shape."""
+    video_id = video.get("id") or video.get("videoId")
+    if not video_id:
+        return None
+
+    channel = video.get("channel") or {}
+    if isinstance(channel, dict):
+        channel_title = channel.get("title") or channel.get("name") or ""
+    else:
+        channel_title = str(channel) if channel else ""
+
+    upload_date = _parse_iso_date(video.get("publishedTime")) or _parse_iso_date(video.get("publishDate"))
+    url = video.get("url") or f"https://www.youtube.com/watch?v={video_id}"
+    description = _description_text(video)
+
+    return {
+        "video_id": video_id,
+        "title": video.get("title", "") or "",
+        "channel": channel_title,
+        "upload_date": upload_date,
+        "url": url,
+        "view_count": _to_int(video.get("viewCountInt")) or _to_int(video.get("view_count")) or 0,
+        "like_count": _to_int(video.get("likeCountInt")) or _to_int(video.get("like_count")) or 0,
+        "duration": _to_int(video.get("lengthSeconds")) or _to_int(video.get("duration")),
+        "description_preview": description[:200],
+    }
+
+
+def _scrapecreators_search(query: str, max_videos: int, upload_date: str | None) -> tuple[list[dict], bool, int, str | None]:
+    """Return (videos, cache_hit, credits_used, error_reason)."""
+    if not SCRAPECREATORS_API_KEY:
+        return [], False, 0, "missing_api_key"
+    if upload_date is not None and upload_date not in UPLOAD_DATE_FILTERS:
+        return [], False, 0, "invalid_upload_date"
+
+    cached = _cache_get("search", query, max_videos, upload_date)
+    if cached is not None:
+        return cached, True, 0, None
+
+    params = {
+        "query": query,
+        "type": "videos",
+        "sortBy": "relevance",
+        "includeExtras": "true",
+    }
+    if upload_date:
+        params["uploadDate"] = upload_date
+
+    try:
+        resp = requests.get(
+            f"{SCRAPECREATORS_BASE_URL}{YOUTUBE_SEARCH_PATH}",
+            params=params,
+            headers=_sc_headers(),
+            timeout=SC_API_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        return [], False, 1, f"api_error: {exc}"
+
+    videos: list[dict] = []
+    for item in _extract_result_items(data):
+        normalized = _normalize_sc_video(item)
+        if normalized is not None:
+            videos.append(normalized)
+        if len(videos) >= max_videos:
+            break
+
+    _cache_set("search", query, max_videos, upload_date, value=videos, ttl=CACHE_TTL_YOUTUBE_SEARCH)
+    return videos, False, 1, None
+
+
+def _normalize_sc_transcript(data: Any) -> str | None:
+    """Normalize ScrapeCreators transcript response to plain text."""
+    text: str | None = None
+    if isinstance(data, dict):
+        direct = data.get("transcript_only_text")
+        if isinstance(direct, str) and direct.strip():
+            text = direct
+        else:
+            segments = data.get("transcript") or data.get("segments") or []
+            if isinstance(segments, list):
+                parts = [str(seg.get("text", "")) for seg in segments if isinstance(seg, dict)]
+                text = " ".join(part for part in parts if part.strip())
+    elif isinstance(data, list):
+        parts = [str(seg.get("text", "")) for seg in data if isinstance(seg, dict)]
+        text = " ".join(part for part in parts if part.strip())
+
+    if not text:
+        return None
+    text = re.sub(r"\s+", " ", text).strip()
+    return text or None
+
+
+def _scrapecreators_fetch_transcript(video_url: str) -> tuple[str | None, bool, int, str | None]:
+    """Return (plain_text, cache_hit, credits_used, error_reason)."""
+    if not SCRAPECREATORS_API_KEY:
+        return None, False, 0, "missing_api_key"
+
+    cached = _cache_get("transcript", video_url, "en")
+    if cached is not None:
+        return cached, True, 0, None
+
+    try:
+        resp = requests.get(
+            f"{SCRAPECREATORS_BASE_URL}{YOUTUBE_TRANSCRIPT_PATH}",
+            params={"url": video_url, "language": "en"},
+            headers=_sc_headers(),
+            timeout=SC_API_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        return None, False, 1, f"api_error: {exc}"
+
+    text = _normalize_sc_transcript(data)
+    if not text:
+        return None, False, 1, "empty_transcript"
+
+    _cache_set("transcript", video_url, "en", value=text, ttl=CACHE_TTL_YOUTUBE_TRANSCRIPT)
+    return text, False, 1, None
+
+
+# ---------------------------------------------------------------------------
 # yt-dlp search
 # ---------------------------------------------------------------------------
 
 
-def _check_ytdlp() -> None:
-    """Fail fast if yt-dlp is not installed."""
-    if not shutil.which("yt-dlp"):
-        _emit_error(
-            "MISSING_DEPENDENCY",
-            "yt-dlp not found in PATH",
-            ["Install with: brew install yt-dlp", "Or: pip install yt-dlp"],
-        )
+def _has_ytdlp() -> bool:
+    """Return whether yt-dlp is installed."""
+    return bool(shutil.which("yt-dlp"))
+
+
+def _coarse_upload_date_cutoff(upload_date: str | None) -> str | None:
+    """Convert a coarse upload-date filter to a YYYY-MM-DD fallback cutoff."""
+    if not upload_date:
+        return None
+    from datetime import timedelta
+
+    today = datetime.now(timezone.utc).date()
+    days = {
+        "today": 0,
+        "this_week": 7,
+        "this_month": 31,
+        "this_year": 366,
+    }.get(upload_date)
+    if days is None:
+        return None
+    return (today - timedelta(days=days)).isoformat()
 
 
 def _ytdlp_search(query: str, max_videos: int, after: str | None) -> list[dict]:
@@ -263,9 +567,10 @@ def _ytdlp_search(query: str, max_videos: int, after: str | None) -> list[dict]:
             }
         )
 
-    # Soft date filter
-    if after:
-        recent = [i for i in items if i["upload_date"] and i["upload_date"] >= after]
+    # Soft date filter for the Free Fallback Backend.
+    cutoff = _coarse_upload_date_cutoff(after)
+    if cutoff:
+        recent = [i for i in items if i["upload_date"] and i["upload_date"] >= cutoff]
         if len(recent) >= 2:
             items = recent
 
@@ -389,7 +694,16 @@ def _fetch_transcript(video_id: str) -> tuple[str | None, str | None]:
 
     combined = "; ".join(errors)
     err_lower = combined.lower()
-    if "ip" in err_lower or "block" in err_lower or "too many" in err_lower or "429" in err_lower:
+    ip_block_markers = (
+        "ip blocked",
+        "ip address blocked",
+        "blocked by youtube",
+        "youtube blocked",
+        "too many requests",
+        "rate limit",
+        "429",
+    )
+    if any(marker in err_lower for marker in ip_block_markers):
         reason = f"ip_blocked ({combined})"
     elif "disabled" in err_lower:
         reason = f"transcripts_disabled ({combined})"
@@ -402,19 +716,61 @@ def _fetch_transcript(video_id: str) -> tuple[str | None, str | None]:
     return None, reason
 
 
-def _fetch_transcripts(video_ids: list[str]) -> tuple[dict[str, str | None], list[str]]:
-    """Fetch transcripts sequentially for the given video IDs.
+class TranscriptFetchResult(NamedTuple):
+    transcripts: dict[str, str | None]
+    errors: list[str]
+    backend: str
+    credits: int
+    cache_hit: bool
 
-    Returns (transcripts_map, list_of_error_reasons).
-    """
+
+def _fetch_transcripts_with_fallback(selected_videos: list[dict]) -> TranscriptFetchResult:
+    """Fetch selected transcripts through ScrapeCreators, then free fallback."""
     results: dict[str, str | None] = {}
     errors: list[str] = []
-    for vid in video_ids:
+    successful_backends: set[str] = set()
+    credits_used = 0
+    sc_attempted = False
+    sc_all_successes_cached = True
+
+    for video in selected_videos:
+        vid = video["video_id"]
+        url = video.get("url") or f"https://www.youtube.com/watch?v={vid}"
+        sc_error: str | None = None
+
+        if SCRAPECREATORS_API_KEY and url:
+            sc_attempted = True
+            text, cache_hit, credits, reason = _scrapecreators_fetch_transcript(url)
+            credits_used += credits
+            if text:
+                results[vid] = text
+                successful_backends.add("scrapecreators")
+                sc_all_successes_cached = sc_all_successes_cached and cache_hit
+                continue
+            sc_error = reason
+            if not cache_hit:
+                sc_all_successes_cached = False
+
         text, reason = _fetch_transcript(vid)
         results[vid] = text
-        if reason:
-            errors.append(f"{vid}: {reason}")
-    return results, errors
+        if text:
+            successful_backends.add("yt-dlp")
+            continue
+
+        detail = reason or "unknown transcript failure"
+        if sc_error and sc_error != "missing_api_key":
+            detail = f"{detail}; scrapecreators: {sc_error}"
+        errors.append(f"{vid}: {detail}")
+
+    if len(successful_backends) > 1:
+        backend_used = "mixed"
+    elif successful_backends:
+        backend_used = next(iter(successful_backends))
+    else:
+        backend_used = "scrapecreators" if sc_attempted else "yt-dlp"
+
+    cache_hit = sc_attempted and credits_used == 0 and sc_all_successes_cached
+    return TranscriptFetchResult(results, errors, backend_used, credits_used, cache_hit)
 
 
 # ---------------------------------------------------------------------------
@@ -692,6 +1048,48 @@ def _preprocess_transcripts_parallel(
 # CLI
 # ---------------------------------------------------------------------------
 
+
+def _combined_backend(search_backend: str, transcript_backend: str | None = None) -> str:
+    """Combine search/transcript backend names for run metadata."""
+    if transcript_backend is None:
+        return search_backend
+    backend_parts = {search_backend, transcript_backend}
+    if "mixed" in backend_parts or len(backend_parts) > 1:
+        return "mixed"
+    return search_backend
+
+
+def _run_cache_hit(
+    *,
+    search_backend: str,
+    search_cache_hit: bool,
+    transcript_result: TranscriptFetchResult | None,
+    credits_used: int,
+) -> bool:
+    """Return true when every paid ScrapeCreators call in this run hit cache."""
+    if credits_used != 0:
+        return False
+
+    used_scrapecreators = search_backend == "scrapecreators" or (
+        transcript_result is not None
+        and transcript_result.backend in {"scrapecreators", "mixed"}
+    )
+    if not used_scrapecreators:
+        return False
+
+    if search_backend == "scrapecreators" and not search_cache_hit:
+        return False
+
+    if (
+        transcript_result is not None
+        and transcript_result.backend in {"scrapecreators", "mixed"}
+        and not transcript_result.cache_hit
+    ):
+        return False
+
+    return True
+
+
 app = typer.Typer(
     name="youtube",
     help="YouTube search and transcript extraction for research",
@@ -714,7 +1112,9 @@ def search(
         10, "--max-videos", "-v", help="Max videos to search"
     ),
     after: Optional[str] = typer.Option(
-        None, "--after", help="Only videos after date (YYYY-MM-DD)"
+        None,
+        "--after",
+        help="Upload-date filter: today, this_week, this_month, this_year",
     ),
     no_preprocess: bool = typer.Option(
         False, "--no-preprocess", help="Skip claude extraction, return raw transcripts"
@@ -724,15 +1124,62 @@ def search(
     ),
 ) -> None:
     """Search YouTube, fetch transcripts, and optionally pre-process via claude."""
-    _check_ytdlp()
+    if after is not None and after not in UPLOAD_DATE_FILTERS:
+        allowed = ", ".join(sorted(UPLOAD_DATE_FILTERS))
+        raise typer.BadParameter(f"--after must be one of: {allowed}")
+
     t0 = time.monotonic()
     warnings: list[str] = []
+    credits_used = 0
+    search_cache_hit = False
 
-    # Search
-    videos = _ytdlp_search(query, max_videos, after)
+    # Search: Primary Backend first, then Free Fallback Backend when primary is unavailable/fails.
+    videos, search_cache_hit, search_credits, sc_search_error = _scrapecreators_search(
+        query, max_videos, after
+    )
+    credits_used += search_credits
+
+    if sc_search_error is None:
+        search_backend = "scrapecreators"
+    else:
+        if not _has_ytdlp():
+            if sc_search_error == "missing_api_key":
+                _emit_error(
+                    "NO_SEARCH_BACKEND",
+                    "SCRAPECREATORS_API_KEY is not configured and yt-dlp was not found in PATH",
+                    [
+                        "Set SCRAPECREATORS_API_KEY in ~/.claude/research/.env",
+                        "Or install yt-dlp with: brew install yt-dlp",
+                    ],
+                )
+            _emit_error(
+                "NO_SEARCH_BACKEND",
+                f"ScrapeCreators YouTube search failed ({sc_search_error}) and yt-dlp was not found in PATH",
+                [
+                    "Check SCRAPECREATORS_API_KEY and network access",
+                    "Or install yt-dlp with: brew install yt-dlp",
+                ],
+            )
+        videos = _ytdlp_search(query, max_videos, after)
+        search_backend = "yt-dlp"
+
     if not videos:
+        backend = _combined_backend(search_backend)
         duration_ms = int((time.monotonic() - t0) * 1000)
-        _log_call(query, duration_ms=duration_ms, videos_searched=0)
+        run_cache_hit = _run_cache_hit(
+            search_backend=search_backend,
+            search_cache_hit=search_cache_hit,
+            transcript_result=None,
+            credits_used=credits_used,
+        )
+        _log_call(
+            query,
+            duration_ms=duration_ms,
+            backend=backend,
+            cache_hit=run_cache_hit,
+            credits=credits_used,
+            videos_searched=0,
+        )
         _emit(
             {
                 "success": True,
@@ -741,14 +1188,14 @@ def search(
                 "question": question,
                 "videos": [],
                 "metadata": {
-                    "backend": "yt-dlp",
+                    "backend": backend,
                     "videos_searched": 0,
                     "videos_selected": 0,
                     "transcripts_fetched": 0,
                     "transcripts_preprocessed": 0,
                     "selection_method": "all",
                     "warnings": [],
-                    "cache_hit": False,
+                    "cache_hit": run_cache_hit,
                 },
             }
         )
@@ -782,20 +1229,24 @@ def search(
         if vid in selection_reasons:
             video["selection_reason"] = selection_reasons[vid]
 
-    # Fetch transcripts only for selected videos
-    transcripts, transcript_errors = _fetch_transcripts(selected_ids)
-    if transcript_errors:
-        for te in transcript_errors:
+    selected_videos = [v for v in videos if v["selected"]]
+
+    # Fetch transcripts only for selected videos, with ScrapeCreators first per video.
+    transcript_result = _fetch_transcripts_with_fallback(selected_videos)
+    transcripts = transcript_result.transcripts
+    credits_used += transcript_result.credits
+    if transcript_result.errors:
+        for te in transcript_result.errors:
             warnings.append(f"transcript_fetch_failed: {te}")
 
-    # Detect likely IP block: all selected videos failed
+    # Detect likely IP block: all selected videos failed through the Free Fallback Backend.
     all_failed = selected_ids and all(
         transcripts.get(vid) is None for vid in selected_ids
     )
-    ip_block_suspected = all_failed and any("ip_blocked" in e for e in transcript_errors)
+    ip_block_suspected = all_failed and any("ip_blocked" in e for e in transcript_result.errors)
 
     if all_failed and not ip_block_suspected:
-        # All failed but not clearly IP-blocked — still suspicious
+        # All failed but not clearly IP-blocked — still suspicious.
         if len(selected_ids) >= 2:
             warnings.append(
                 f"all_transcripts_failed: 0/{len(selected_ids)} transcripts fetched — "
@@ -813,14 +1264,11 @@ def search(
         vid = video["video_id"]
         if vid in transcripts:
             video["_transcript"] = transcripts[vid]
-        elif not video["selected"]:
-            pass  # Not selected, no transcript expected
-        else:
+        elif video["selected"]:
             video["transcript_available"] = False
 
     # Pre-process or pass raw (only for selected videos)
     preprocessed_count = 0
-    selected_videos = [v for v in videos if v["selected"]]
     unselected_videos = [v for v in videos if not v["selected"]]
 
     if not no_preprocess and question:
@@ -852,7 +1300,7 @@ def search(
         1 for v in videos if v.get("transcript_available", False)
     )
 
-    # Determine overall success: false when we selected videos but got zero transcripts
+    # Determine overall success: false when we selected videos but got zero transcripts.
     overall_success = True
     error_msg: str | None = None
     if selected_ids and transcripts_fetched == 0:
@@ -865,12 +1313,26 @@ def search(
                 "possible IP block or transcripts unavailable"
             )
 
+    backend = _combined_backend(
+        search_backend,
+        transcript_result.backend if selected_ids else None,
+    )
+    run_cache_hit = _run_cache_hit(
+        search_backend=search_backend,
+        search_cache_hit=search_cache_hit,
+        transcript_result=transcript_result if selected_ids else None,
+        credits_used=credits_used,
+    )
+
     duration_ms = int((time.monotonic() - t0) * 1000)
     _log_call(
         query,
         success=overall_success,
         error=error_msg,
         duration_ms=duration_ms,
+        backend=backend,
+        cache_hit=run_cache_hit,
+        credits=credits_used,
         videos_searched=len(videos),
         videos_selected=len(selected_ids),
         transcripts_fetched=transcripts_fetched,
@@ -885,14 +1347,14 @@ def search(
             "question": question,
             "videos": videos,
             "metadata": {
-                "backend": "yt-dlp",
+                "backend": backend,
                 "videos_searched": len(videos),
                 "videos_selected": len(selected_ids),
                 "transcripts_fetched": transcripts_fetched,
                 "transcripts_preprocessed": preprocessed_count,
                 "selection_method": selection_method,
                 "warnings": warnings,
-                "cache_hit": False,
+                "cache_hit": run_cache_hit,
             },
         }
     )
