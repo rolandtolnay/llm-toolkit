@@ -9,7 +9,7 @@ Probe the codebase for other locations where a discovery from this session — a
 <process>
 1. Articulate what was learned. Name the abstract pattern behind the fix: what assumption was wrong, what convention was misunderstood, what was duplicated with a subtle variation, or what reference implementation revealed a better approach.
 
-2. Search for code with shared lineage — same author, same assumption, same seam. Use parallel Explore agents when the search space spans multiple areas.
+2. Search for code with shared lineage — same author, same assumption, same seam. Use subagents when the search space spans multiple areas.
 
 3. For each candidate, assess honestly whether the learning applies. The same pattern does not always mean the same bug. Explain your reasoning either way.
 
