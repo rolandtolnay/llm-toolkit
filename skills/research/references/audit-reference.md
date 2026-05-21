@@ -17,7 +17,7 @@ Reads JSONL logs from `~/.cache/research/logs/` and produces a usage summary. Lo
 **Output fields:**
 - `summary`: `total_calls`, `unique_sessions`, `cache_hits`, `cache_hit_rate`, `failures`, `total_cost_usd`, `total_credits`, `total_duration_ms`
 - `by_tool`: per-tool breakdown with `count`, `pct`, `cost_usd`, `credits`, `cache_hits`, `failures`
-- `by_backend`: per-backend breakdown (`builtin`, `perplexity`, `context7`, `firecrawl`, `yt-dlp`) with `count`, `pct`, `cost_usd`, `credits`
+- `by_backend`: per-backend breakdown (`builtin`, `perplexity`, `context7`, `firecrawl`, `scrapecreators`, `yt-dlp`, `mixed`) with `count`, `pct`, `cost_usd`, `credits`
 - `by_type`: `builtin` (`web_search` / `web_fetch`) vs `cli` (research.py commands)
 - `sessions`: per-session summary with `calls`, `cost_usd`, `credits`, `tools_used`
 - `calls` (only with `--detail`): full list of individual log entries
@@ -41,7 +41,7 @@ All CLI commands and Pi `web_search` / `web_fetch` calls are logged to `~/.cache
 | `type` | `cli` (research.py command) or `builtin` (`web_search` / `web_fetch`) |
 | `tool` | Tool name: `ask`, `search`, `reason`, `docs`, `map`, `scrape`, `youtube`, `web_search`, `web_fetch` |
 | `query` | The query string or URL |
-| `backend` | `perplexity`, `context7`, `firecrawl`, or `builtin` |
+| `backend` | `perplexity`, `context7`, `firecrawl`, `scrapecreators`, `yt-dlp`, `mixed`, or `builtin` |
 | `model` | Perplexity model name (if applicable) |
 | `cache_hit` | Whether the result was served from cache |
 | `success` | Whether the call succeeded |
@@ -51,7 +51,7 @@ All CLI commands and Pi `web_search` / `web_fetch` calls are logged to `~/.cache
 | `duration_ms` | API call duration in milliseconds |
 | `usage` | Token usage from Perplexity (prompt_tokens, completion_tokens) |
 | `cost_usd` | Estimated cost (0 for free/cached calls) |
-| `credits` | Firecrawl credits consumed |
+| `credits` | Firecrawl credits consumed, plus approximate non-cached ScrapeCreators endpoint requests for YouTube |
 
 Logs are retained for 30 days and automatically cleaned up on the first write of each new day.
 
@@ -62,7 +62,7 @@ Logs are retained for 30 days and automatically cleaned up on the first write of
 | Source | Mechanism | Captures |
 |--------|-----------|----------|
 | CLI calls (`ask`, `search`, `reason`, `docs`, `map`, `scrape`) | `research.py` logs after each call | Timing, cost, token usage, cache hits, errors |
-| YouTube search (`youtube`) | `youtube.py` logs after each call | Timing, videos searched/fetched/preprocessed |
+| YouTube search (`youtube`) | `youtube.py` logs after each call | Timing, backend (`scrapecreators`, `yt-dlp`, or `mixed`), videos searched/fetched/preprocessed, cache hits, and approximate ScrapeCreators credits |
 | `web_search` / `web_fetch` (main agent, QUICK mode) | Direct logging in `~/.pi/agent/extensions/codex-search.ts` | Query/URL, Pi session ID, cache hits, duration, source |
 | `web_search` / `web_fetch` (subagents, STANDARD/DEEP) | Same direct logging; subagents load the web tools extension | Query/URL, Pi session ID, cache hits, duration, source |
 

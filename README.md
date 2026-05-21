@@ -25,7 +25,7 @@ Slash commands, auto-activating skills, and reference guides for Claude Code. Th
 
 Web research that scales from quick lookups to deep multi-source investigations. Decomposes a question into sub-questions, runs them in parallel across web search, library docs, Reddit, YouTube, and short-form video, then synthesizes a cited answer and saves it for later runs.
 
-- **Cost-conscious escalation** — starts with free tools (WebSearch, WebFetch, Context7 docs, YouTube via yt-dlp) and only spends API budget when free sources fall short
+- **Cost-conscious escalation** — starts with free tools (WebSearch, WebFetch, Context7 docs) and uses ScrapeCreators-backed sources such as Reddit, short-form video, and primary YouTube only when they add value; YouTube keeps a free yt-dlp fallback
 - **Parallel decomposition** — splits complex questions across subagents that investigate independently, with mandatory source diversity per subagent
 - **Source verification** — cross-references findings across primary, secondary, and tertiary sources, flags contradictions, and signals confidence (verified, likely, unverified)
 - **Compounding knowledge** — saves standard and deep runs to `~/Documents/Research/` with a scannable index, then consults that index before spending API budget on questions you've already researched
@@ -43,7 +43,7 @@ The skill mirrors how a careful person researches: split the question into angle
 |-------|---------|------------------|
 | Official release | WebSearch + WebFetch | SWE-bench Verified 87.6% (+6.8pp), CursorBench 70 vs 58; `budget_tokens` removed, `/ultrareview` added |
 | Reddit/HN reaction | `social reddit` + `research ask` + WebFetch | ~55% skeptical; tokenizer change inflates cost 1.0-1.35×; MRCR v2 @ 1M flagged 78.3% → 32.2% (Craig_VG, 226 upvotes) |
-| YouTube reviews | `youtube search` (free, yt-dlp) | CodeRabbit measures ~15% bug-finding recall gain; AI for Work's head-to-head shows 4.7 skipping mobile-responsive testing 4.6 did unprompted |
+| YouTube reviews | `youtube search` (ScrapeCreators primary, yt-dlp fallback) | CodeRabbit measures ~15% bug-finding recall gain; AI for Work's head-to-head shows 4.7 skipping mobile-responsive testing 4.6 did unprompted |
 
 Three sub-agents ran in parallel, each writing a findings file to `~/Documents/Research/2026-04-16-opus-4-7-community-reception/` alongside a `00-synthesis.md` verdict. Tagged in `INDEX.md` so future "Opus 4.7" questions reuse this run instead of re-spending API budget.
 
@@ -56,7 +56,7 @@ The skill loads keys from three sources in increasing precedence: your shell env
 | `PERPLEXITY_API_KEY` | [Perplexity](https://docs.perplexity.ai/) | Synthesized answers, web search, reasoning | Yes |
 | `CONTEXT7_API_KEY` | [Context7](https://context7.com/dashboard) | Version-aware library documentation | No |
 | `FIRECRAWL_API_KEY` | [Firecrawl](https://firecrawl.dev/) | Site mapping and full page scraping | No |
-| `SCRAPECREATORS_API_KEY` | [ScrapeCreators](https://scrapecreators.com/) | Reddit and short-form video search | No |
+| `SCRAPECREATORS_API_KEY` | [ScrapeCreators](https://scrapecreators.com/) | Reddit, short-form video, and primary YouTube research | No |
 
 Example `~/.claude/research/.env`:
 
@@ -67,7 +67,7 @@ FIRECRAWL_API_KEY=fc-...
 SCRAPECREATORS_API_KEY=...
 ```
 
-YouTube search additionally requires `yt-dlp` (`brew install yt-dlp` on macOS) — no API key.
+YouTube research uses ScrapeCreators first when `SCRAPECREATORS_API_KEY` is configured. Install `yt-dlp` (`brew install yt-dlp` on macOS) to enable the Free Fallback Backend when the key is missing or ScrapeCreators fails. ScrapeCreators YouTube search is cached for 24h, transcripts for 30d; `--after` accepts `today`, `this_week`, `this_month`, or `this_year`.
 
 Run `research config` to verify which keys are loaded and which env files were read.
 

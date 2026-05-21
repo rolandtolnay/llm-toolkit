@@ -46,10 +46,11 @@ All CLI calls and WebSearch/WebFetch usage are logged to ~/.cache/research/logs/
 
 YouTube script: `~/.claude/skills/research/scripts/youtube.py`
 
-uv run <yt-script> search "<query>" [--question Q] [--max-videos N] [--after YYYY-MM-DD] [--no-preprocess] [--no-select]
+uv run <yt-script> search "<query>" [--question Q] [--max-videos N] [--after today|this_week|this_month|this_year] [--no-preprocess] [--no-select]
 
-Cost: free (yt-dlp + youtube-transcript-api, no API keys). Pre-processing uses Claude subscription (claude -p).
-Requires: yt-dlp installed (brew install yt-dlp)
+Cost: ScrapeCreators PAYG when `SCRAPECREATORS_API_KEY` is configured (search cached 24h, transcripts 30d); otherwise free fallback via yt-dlp + youtube-transcript-api. Pre-processing uses Claude subscription (claude -p).
+Requires: SCRAPECREATORS_API_KEY for the Primary Backend; yt-dlp installed (brew install yt-dlp) for the Free Fallback Backend.
+Notes: `--after` only accepts `today`, `this_week`, `this_month`, `this_year`; `--max-videos` is a cap under ScrapeCreators first-page search; `metadata.backend` reports `scrapecreators`, `yt-dlp`, or `mixed`.
 
 Social script: `~/.claude/skills/research/scripts/social.py`
 
@@ -79,7 +80,7 @@ Examples: "best practices for X + Y", "evaluate X vs Y for our use case", "compr
 - 3-4 subagents in parallel.
 - Source diversity rule applies (2+ sources per subagent).
 
-**YouTube availability**: When yt-dlp is installed, subagents can search YouTube for video content. Assign YouTube to subagents when the sub-question involves tutorials, demos, conference talks, developer workflows, product reviews, or practitioner opinions. Skip YouTube for API specs, pricing lookups, legal/compliance questions, or purely factual reference queries.
+**YouTube availability**: When SCRAPECREATORS_API_KEY is configured, subagents can search YouTube through the Primary Backend; when yt-dlp is installed, the Free Fallback Backend remains available if the key is missing or ScrapeCreators fails. Assign YouTube to subagents when the sub-question involves tutorials, demos, conference talks, developer workflows, product reviews, or practitioner opinions. Skip YouTube for API specs, pricing lookups, legal/compliance questions, or purely factual reference queries.
 
 **Social availability**: When SCRAPECREATORS_API_KEY is configured, subagents can search Reddit (`social reddit`) and short-form video (`social shortform`). Assign Reddit when community opinions or real-world experiences add value. Assign shortform when trending/viral/consumer content is relevant. Skip for official docs, compliance questions, or purely factual lookups.
 </complexity_assessment>
@@ -106,7 +107,7 @@ Analyze the question and generate 2-4 specific sub-questions. For each, assign a
 
 **Source assignment** — for each sub-question, consider which sources add unique value:
 
-- **YouTube** (free): Would watching someone show, explain, or review this help?
+- **YouTube** (ScrapeCreators primary, free fallback): Would watching someone show, explain, or review this help?
   Tutorials, reviews, travel vlogs, cooking demos, talks, product walkthroughs, "what is X actually like?"
   Skip when: the answer is a fact, number, URL, or specification.
 - **Reddit** (ScrapeCreators): Would hearing what real people experienced or recommend help?
@@ -117,7 +118,7 @@ Analyze the question and generate 2-4 specific sub-questions. For each, assign a
   Skip when: depth or nuance matters more than recency.
 
 Priority: YouTube ≥ WebSearch > Reddit > short-form.
-YouTube and WebSearch are free — prefer them when they cover the sub-question.
+YouTube uses ScrapeCreators when configured and falls back to free yt-dlp when available; prefer it when video evidence covers the sub-question.
 Use Reddit when community perspective adds value beyond what WebSearch captures.
 Short-form is supplementary — assign only when trends/viral dimension is clearly relevant.
 
@@ -199,8 +200,8 @@ RULES:
 | Tier | Tools | When to use |
 |------|-------|-------------|
 | FREE | WebSearch, WebFetch, `research docs` | Always start here. Sufficient for well-documented topics. |
-| FREE | `youtube search` (yt-dlp, no API key) | Tutorials, demos, talks, practitioner workflows. Needs yt-dlp. |
-| FREE | `social reddit`, `social shortform` (ScrapeCreators PAYG) | Community opinions, trending content. Needs SCRAPECREATORS_API_KEY. |
+| PAYG/FREE | `youtube search` (ScrapeCreators primary, yt-dlp fallback) | Tutorials, demos, talks, practitioner workflows. Needs SCRAPECREATORS_API_KEY for primary backend or yt-dlp for fallback. |
+| PAYG | `social reddit`, `social shortform` (ScrapeCreators PAYG) | Community opinions, trending content. Needs SCRAPECREATORS_API_KEY. |
 | CHEAP | `research search` ($0.005), `research map` (1 FC credit), `research ask` (~$0.02) | When free sources lack depth or specificity. |
 | MEDIUM | `research reason` (~$0.02), `research scrape` (1 FC credit) | For complex comparisons, when you need the full page content. |
 

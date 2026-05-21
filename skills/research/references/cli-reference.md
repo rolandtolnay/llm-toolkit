@@ -179,19 +179,19 @@ Output:
 
 Run with: `uv run ~/.claude/skills/research/scripts/youtube.py <command> [options]`
 
-**Prerequisite:** `yt-dlp` must be installed (`brew install yt-dlp`). No API keys needed.
+**Prerequisite:** `SCRAPECREATORS_API_KEY` enables the Primary Backend. Install `yt-dlp` (`brew install yt-dlp`) to enable the Free Fallback Backend when the key is missing or ScrapeCreators fails.
 
 ---
 
-### `search "<query>"` — YouTube search + transcript extraction (free)
+### `search "<query>"` — YouTube search + transcript extraction
 
-Search YouTube via yt-dlp, fetch transcripts via youtube-transcript-api, and optionally pre-process long transcripts through `claude -p` for directed extraction.
+Search YouTube via ScrapeCreators when `SCRAPECREATORS_API_KEY` is configured, falling back to yt-dlp plus youtube-transcript-api when ScrapeCreators is unavailable or fails. Long transcripts can be pre-processed through `claude -p` for directed extraction. ScrapeCreators calls are cached by default: search for 24h and transcripts for 30d.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--question` / `-q` | none | Research sub-question for directed transcript extraction |
-| `--max-videos` / `-v` | `10` | Max videos to return from search |
-| `--after` | none | Only videos after date (YYYY-MM-DD) — soft filter, relaxes if too few results |
+| `--max-videos` / `-v` | `10` | Max videos to inspect/return; under ScrapeCreators this caps first-page normalized results, not a guarantee |
+| `--after` | none | Upload-date filter: `today`, `this_week`, `this_month`, `this_year` |
 | `--no-preprocess` | false | Skip claude extraction, return raw transcripts only |
 | `--no-select` | false | Skip LLM selection, use top videos by views |
 
@@ -207,11 +207,11 @@ Search YouTube via yt-dlp, fetch transcripts via youtube-transcript-api, and opt
   - `transcript_available` (bool)
   - `extraction` (string, if pre-processed) OR `raw_transcript` (string, if below threshold or `--no-preprocess`)
   - `word_count`, `preprocessed` (bool)
-- `metadata` — `backend`, `videos_searched`, `videos_selected`, `transcripts_fetched`, `transcripts_preprocessed`, `selection_method` (`llm` | `top_by_views` | `all`), `warnings`, `cache_hit`
+- `metadata` — `backend` (`scrapecreators` | `yt-dlp` | `mixed`), `videos_searched`, `videos_selected`, `transcripts_fetched`, `transcripts_preprocessed`, `selection_method` (`llm` | `top_by_views` | `all`), `warnings`, `cache_hit`
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/youtube.py search "SwiftUI navigation patterns 2026" --question "What navigation patterns are recommended for complex SwiftUI apps?" --max-videos 10 --after 2026-01-01
+uv run ~/.claude/skills/research/scripts/youtube.py search "SwiftUI navigation patterns 2026" --question "What navigation patterns are recommended for complex SwiftUI apps?" --max-videos 10 --after this_year
 ```
 
 ---
@@ -301,8 +301,9 @@ No flags. Returns resolved API key status, persistence setting, and which env fi
 - `--site`: a real domain name like `stripe.com` or `pay.uk` (NOT topics/phrases). Repeatable.
 - `--recency`: preset window — `hour` | `day` | `week` | `month` | `year`. For custom ranges use `--after`/`--before` with YYYY-MM-DD dates.
 - Also available as built-in tools: **WebSearch** (free, broad) and **WebFetch** (free, page summary).
-- YouTube search requires `yt-dlp` installed locally (`brew install yt-dlp`). No API keys needed.
+- YouTube search uses ScrapeCreators as the Primary Backend when `SCRAPECREATORS_API_KEY` is configured; install `yt-dlp` locally (`brew install yt-dlp`) for the Free Fallback Backend.
+- YouTube `--after` accepts only `today`, `this_week`, `this_month`, or `this_year`; exact `YYYY-MM-DD` values are rejected.
 - YouTube video selection uses `claude -p` (Opus, Claude subscription). Pass `--no-select` to skip.
 - YouTube transcript pre-processing uses `claude -p --model sonnet` (Claude subscription, no API key). Pass `--no-preprocess` to skip.
-- Social search requires `SCRAPECREATORS_API_KEY` set in `~/.claude/research/.env`
+- Social search, short-form search, and primary YouTube research use `SCRAPECREATORS_API_KEY` set in `~/.claude/research/.env`
 - Reddit condensing uses `claude -p --model sonnet` (Claude subscription). Only triggers when `--question` provided and content exceeds 2500 words.
