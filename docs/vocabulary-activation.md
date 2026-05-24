@@ -41,7 +41,6 @@ Scan this to jog your memory — the full entry has usage guidance and examples.
 | **seam** | where can I inject behavior without editing surrounding code? |
 | **deep module** | complex inside, simple interface — is this abstraction earning its keep? |
 | **conceptual integrity** | does this fit the system's one voice, or introduce a second way? |
-| **idiomatic** | match existing patterns, not textbook patterns |
 | **essential vs. accidental complexity** | is the difficulty from the problem or the solution? |
 | **leaky abstraction** | callers need to know what's behind the interface to use it |
 | **surface area** | how much is exposed? minimize what's public |
@@ -59,6 +58,7 @@ Scan this to jog your memory — the full entry has usage guidance and examples.
 |------|-----------|
 | **solution horizon** | tactical / pragmatic / strategic — show all investment levels |
 | **pragmatic** | good enough, ship it, don't over-engineer |
+| **idiomatic** | match existing patterns, not textbook patterns |
 | **first principles** | reason from fundamentals, not conventions |
 | **pareto (80/20)** | what 20% of effort delivers 80% of value? |
 | **tracer bullet** | thin end-to-end slice proving the architecture works |
@@ -177,15 +177,6 @@ The system speaks with one voice — consistent patterns, naming, and mental mod
 
 **Example:** "Half our services use event-driven communication through Kafka and the other half use synchronous REST calls. We're adding a new service — does it matter which pattern we pick, or has the system already lost conceptual integrity and we should just use whatever fits this service best?"
 
-### Idiomatic
-A solution that follows the established patterns, conventions, and style of the codebase (or language/framework). "Idiomatic" keeps the answer grounded in how this project actually works, not how a textbook says it should work.
-
-**Use when:** You want the solution to look like it belongs here, not just be technically correct.
-
-**Don't say:** "what's the right way to do this?", "what's best practice?", "how should I write this?"
-
-**Example:** "What's the idiomatic way to handle errors in this Go codebase? I see some files using sentinel errors and others using custom error types — which pattern does this project actually follow?"
-
 ### Essential vs. accidental complexity
 Complexity inherent to the problem vs. complexity introduced by the solution — another Brooks distinction. Before you try to simplify something, this helps you figure out which parts are genuinely hard and which are artifacts of how the solution was built.
 
@@ -274,6 +265,15 @@ Favor the solution that works and ships over the one that's theoretically optima
 **Don't say:** "keep it simple", "don't over-think it", "what's the quickest way?", "just make it work"
 
 **Example:** "I need to deduplicate incoming webhook events but we only get ~100 per hour. Give me the pragmatic approach — I don't want a distributed idempotency framework, I want the simplest thing that works."
+
+### Idiomatic
+A solution that follows the established patterns, conventions, and style of the codebase (or language/framework). "Idiomatic" keeps the answer grounded in how this project actually works, not how a textbook says it should work.
+
+**Use when:** You want the solution to look like it belongs here, not just be technically correct.
+
+**Don't say:** "what's the right way to do this?", "what's best practice?", "how should I write this?"
+
+**Example:** "What's the idiomatic way to handle errors in this Go codebase? I see some files using sentinel errors and others using custom error types — which pattern does this project actually follow?"
 
 ### First principles
 Derive the answer from fundamentals rather than pattern-matching from conventions or prior examples. The opposite of "idiomatic" — you're asking the LLM to reason from scratch rather than copy what's already there.
