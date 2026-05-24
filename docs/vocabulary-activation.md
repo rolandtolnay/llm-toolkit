@@ -124,7 +124,7 @@ Time-boxed investigation to reduce uncertainty. Produces findings, not productio
 
 **Avoid:** "look into this", "can you research this?", "figure out if we can do X", "how would we do X?"
 
-**Example:** "Spike on whether we can replace our Elasticsearch cluster with Postgres full-text search for our current query patterns. I need findings, not a migration plan."
+**Example:** "Our mobile app needs offline support but nobody on the team has built a sync engine. Spike on this — half-day investigation covering what conflict resolution strategies exist, which ones fit our data model, and what we still won't know until we prototype. Don't build anything."
 
 ### Sanity check
 Quick verification that something is reasonable — not a deep review, not a full analysis. Activates lightweight "does this pass the smell test?" mode.
@@ -146,7 +146,7 @@ A place where behavior can be altered without editing surrounding code (Feathers
 
 **Avoid:** "where should I put this?", "how do I add this without breaking things?", "where's a good place to hook into?"
 
-**Example:** "I need to add rate limiting to our payment processing flow without rewriting the controller. Where's the seam — where can I inject this behavior without touching the existing payment logic?"
+**Example:** "We need to add audit logging to every mutation in our GraphQL API, but the resolvers are spread across 30 files. Where's the seam — is there a single point in the execution pipeline where we can intercept all mutations without modifying individual resolvers?"
 
 ### Deep module
 A module that hides significant complexity behind a simple interface (Ousterhout). Activates interface-vs-implementation reasoning.
@@ -155,7 +155,7 @@ A module that hides significant complexity behind a simple interface (Ousterhout
 
 **Avoid:** "is this abstraction good?", "is this class doing too much?", "should I split this up?"
 
-**Example:** "Our `NotificationService` has 15 public methods and callers need to understand retry logic, channel routing, and template rendering to use it. Is this a deep module or just a thin wrapper that leaks everything?"
+**Example:** "We're debating whether to merge our `EmailService`, `SMSService`, and `PushService` into a single `NotificationService` with one `send()` method. Would that be a deep module that simplifies things for callers, or are the channels different enough that a unified interface would just hide complexity callers still need to manage?"
 
 ### Conceptual integrity
 The system speaks with one voice — consistent patterns, naming, and mental model throughout (Brooks).
@@ -164,7 +164,7 @@ The system speaks with one voice — consistent patterns, naming, and mental mod
 
 **Avoid:** "is this consistent?", "does this fit the codebase?", "this feels different from the rest"
 
-**Example:** "The rest of our codebase uses repository pattern for data access, but this new module uses inline SQL queries with a query builder. Does this break conceptual integrity, and should I refactor it to match?"
+**Example:** "Half our services use event-driven communication through Kafka and the other half use synchronous REST calls. We're adding a new service — does it matter which pattern we pick, or has the system already lost conceptual integrity and we should just use whatever fits this service best?"
 
 ### Idiomatic
 A solution that follows the established patterns, conventions, and style of the existing codebase (or language/framework). Prevents the LLM from introducing a "correct but foreign" approach.
@@ -182,7 +182,7 @@ Complexity inherent to the problem vs. complexity introduced by the solution (Br
 
 **Avoid:** "why is this so complicated?", "can we simplify this?", "is this over-engineered?"
 
-**Example:** "This billing calculation is 400 lines with nested conditionals for proration, tax regions, and plan tiers. How much of this complexity is essential to billing rules vs. accidental complexity from how we structured the code?"
+**Example:** "Our deployment pipeline takes 45 minutes and involves 12 steps across three tools. Before we try to simplify it, help me separate essential vs. accidental complexity — which steps exist because our architecture genuinely requires them (multi-region, canary, database migrations) and which are artifacts of how we stitched the pipeline together over time?"
 
 ### Leaky abstraction
 When implementation details bleed through the interface (Spolsky). The caller has to understand what's behind the abstraction to use it correctly.
@@ -253,7 +253,7 @@ Tactical (patch it now), pragmatic (fix it properly), strategic (redesign the ar
 
 **Avoid:** "how should we fix this?", "what are our options?", "give me a few approaches"
 
-**Example:** "Our search is slow on large result sets. Show me the solution horizon: what's the tactical patch to ship today, the pragmatic fix for next sprint, and the strategic redesign if we invest a full quarter?"
+**Example:** "Our API response times spike to 3 seconds during peak hours because of N+1 queries in the order listing endpoint. Show me the solution horizon: what's the tactical fix I can ship this afternoon, the pragmatic refactor for next sprint, and the strategic approach if we invest in redesigning the data access layer?"
 
 ### Pragmatic
 Favor the solution that works and ships over the one that's theoretically optimal. Accept trade-offs, minimize investment, tolerate imperfection.
@@ -280,7 +280,7 @@ Identify the 20% of effort that delivers 80% of the value. Activates scope-cutti
 
 **Avoid:** "what's most important?", "what should we prioritize?", "what's the MVP?"
 
-**Example:** "We have 20 feature requests for the admin panel. Apply the Pareto principle — which 4-5 features would satisfy 80% of the admin users' daily workflows?"
+**Example:** "We have 15 tickets for improving the onboarding flow — email verification, SSO, invite links, progressive profiling, role selection, and more. Apply the Pareto principle — which 3-4 changes would eliminate 80% of the drop-off we're seeing between signup and first meaningful action?"
 
 ### Tracer bullet
 A thin end-to-end implementation that touches every layer, proving the architecture works before filling in details (Hunt & Thomas).
@@ -316,7 +316,7 @@ Incrementally replace a legacy system by building the new one around it, routing
 
 **Avoid:** "how do we migrate gradually?", "can we do this incrementally?", "how do we avoid a big rewrite?"
 
-**Example:** "We need to migrate from our monolith's auth module to a dedicated auth service. Design a strangler fig approach — how do we route requests incrementally so we can migrate endpoint by endpoint without a flag day cutover?"
+**Example:** "Our billing system is a 10-year-old Rails monolith that handles invoicing, payment processing, and subscription management. We want to extract payment processing into a new service. Design a strangler fig — how do we start routing payment calls to the new service while the monolith still handles invoicing, without any downtime or data inconsistency?"
 
 ---
 
@@ -329,7 +329,7 @@ Exhaustively enumerate every branching choice in a design, resolving each one be
 
 **Avoid:** "think through all the cases", "what am I missing?", "are there edge cases?", "what about the unhappy path?"
 
-**Example:** "We're designing the retry logic for failed payments. Walk every path of the decision tree: what if the charge fails vs. times out vs. returns unknown? What if the user cancels mid-retry? What if the webhook arrives before the retry completes?"
+**Example:** "We're designing the user deletion flow for GDPR compliance. Walk every path of the decision tree: what if they have active subscriptions? Pending orders? Shared team resources? Connected OAuth apps? Referral credits owed to others? Resolve each branch before moving to the next — I don't want a happy-path design that misses half the real cases."
 
 ### Stress-test
 Challenge a design against edge cases, failure modes, and adversarial inputs. Activates "what breaks if..." reasoning.
@@ -418,4 +418,4 @@ Make the LLM narrate its understanding step by step rather than jump to a soluti
 
 **Avoid:** "explain this to me", "walk me through the code", "how does this work?", "think step by step"
 
-**Example:** "Before you suggest a fix, rubber duck this for me: walk through what happens step by step when a user hits 'checkout' with an expired coupon code. I want to make sure we both understand the current flow before changing anything."
+**Example:** "We have a race condition where two concurrent checkout requests can both succeed for the last item in stock. Before you suggest a fix, rubber duck this for me — narrate exactly what you think happens between the stock check and the decrement, including where locks are or aren't held. I want to verify you've got the right mental model before we pick a solution."
