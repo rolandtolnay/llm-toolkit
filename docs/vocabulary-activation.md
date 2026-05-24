@@ -20,6 +20,74 @@ Everything below is the full reference, organised by category.
 
 ---
 
+## Quick Reference
+
+Scan this to jog your memory — click through to the full entry for usage guidance and examples.
+
+### Analysis & Evaluation
+| Term | One-liner |
+|------|-----------|
+| **impact analysis** | what does this change affect across the system? |
+| **blast radius** | what specifically breaks when I touch this? |
+| **trade-off analysis** | compare options against named criteria |
+| **spike** | time-boxed investigation — findings, not code |
+| **sanity check** | quick gut-check, not a deep review |
+
+### Architecture & Design
+| Term | One-liner |
+|------|-----------|
+| **seam** | where can I inject behavior without editing surrounding code? |
+| **deep module** | complex inside, simple interface — is this abstraction earning its keep? |
+| **conceptual integrity** | does this fit the system's one voice, or introduce a second way? |
+| **idiomatic** | match existing patterns, not textbook patterns |
+| **essential vs. accidental complexity** | is the difficulty from the problem or the solution? |
+| **leaky abstraction** | callers need to know what's behind the interface to use it |
+| **surface area** | how much is exposed? minimize what's public |
+| **escape hatch** | can users break out when the happy path doesn't apply? |
+| **invariant** | what specific rule is being violated? |
+
+### Debugging & Diagnosis
+| Term | One-liner |
+|------|-----------|
+| **minimise the reproducer** | strip to the smallest input that still triggers the bug |
+| **bisect** | binary search for where behavior changed |
+
+### Planning & Scoping
+| Term | One-liner |
+|------|-----------|
+| **solution horizon** | tactical / pragmatic / strategic — show all investment levels |
+| **pragmatic** | good enough, ship it, don't over-engineer |
+| **first principles** | reason from fundamentals, not conventions |
+| **pareto (80/20)** | what 20% of effort delivers 80% of value? |
+| **tracer bullet** | thin end-to-end slice proving the architecture works |
+| **walking skeleton** | minimal deployable version exercising the full stack |
+| **one-way / two-way door** | how hard is this to reverse? |
+| **strangler fig** | incrementally replace, don't big-bang rewrite |
+
+### Interrogation & Challenge
+| Term | One-liner |
+|------|-----------|
+| **walk every path** | enumerate every branch in the decision tree |
+| **stress-test** | what breaks under edge cases and failure modes? |
+| **steel-man** | strongest version of the counter-argument |
+| **devil's advocate** | actively poke holes in my reasoning |
+
+### Code Quality
+| Term | One-liner |
+|------|-----------|
+| **change propagation** | how far does this change ripple? |
+| **shotgun surgery** | one logical change, edits scattered across many files |
+| **feature envy** | this method uses another module's data more than its own |
+
+### Output Shaping
+| Term | One-liner |
+|------|-----------|
+| **enumerate** | give me all of them, not a sample |
+| **distill** | compress to essentials — extract signal, discard noise |
+| **rubber duck** | narrate understanding step by step before solving |
+
+---
+
 ## Analysis & Evaluation
 
 ### Impact analysis
@@ -269,6 +337,13 @@ Forces exhaustive listing rather than a selective sample. "Enumerate all X" vs "
 **Use when:** You need every instance, option, or case — not a representative sample.
 
 **Example:** "Enumerate every environment variable this service reads, including defaults and optional ones. I'm writing the deployment docs and need the complete list, not just the critical ones."
+
+### Distill
+Compress something complex into a smaller, simpler form that preserves the essential behavior or information. The opposite of "enumerate" — instead of listing everything, extract only what matters.
+
+**Use when:** You have a large, noisy input (spec, conversation, logs, architecture doc) and want the LLM to extract the core signal rather than summarize or paraphrase the whole thing.
+
+**Example:** "Distill this 20-page architecture doc into the 5 rules an engineer needs to know before writing code in this repo. I don't want a summary — I want the load-bearing constraints that actually shape daily decisions."
 
 ### Rubber duck
 Make the LLM narrate its understanding step by step rather than jump to a solution. Forces the explanation to come before the answer.
