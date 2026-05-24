@@ -126,7 +126,7 @@ Time-boxed investigation to reduce uncertainty. A spike produces findings, not p
 
 **Don't say:** "look into this", "can you research this?", "figure out if we can do X", "how would we do X?"
 
-**Example:** "Our mobile app needs offline support but nobody on the team has built a sync engine. Spike on this — half-day investigation covering what conflict resolution strategies exist, which ones fit our data model, and what we still won't know until we prototype. Don't build anything."
+**Example:** "Our mobile app needs offline support but nobody on the team has built a sync engine. Spike on this — what conflict resolution strategies exist, which ones fit our data model, and what will we still not know until we prototype? Don't build anything."
 
 ### Sanity check
 Quick verification that something is reasonable — not a deep review, not a full analysis. Think "does this pass the smell test?" You'll get a paragraph, not an essay.
