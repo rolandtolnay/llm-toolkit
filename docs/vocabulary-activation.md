@@ -32,6 +32,7 @@ Scan this to jog your memory — click through to the full entry for usage guida
 | **trade-off analysis** | compare options against named criteria |
 | **spike** | time-boxed investigation — findings, not code |
 | **sanity check** | quick gut-check, not a deep review |
+| **audit** | check every item against defined criteria — pass/fail, not vibes |
 
 ### Architecture & Design
 | Term | One-liner |
@@ -134,6 +135,15 @@ Quick verification that something is reasonable — not a deep review, not a ful
 **Avoid:** "does this look right?", "can you review this?", "what do you think of this approach?", "any issues with this?"
 
 **Example:** "Sanity check: I'm planning to store JWT refresh tokens in an HttpOnly cookie and access tokens in memory. Does this approach hold up, or am I missing something obvious?"
+
+### Audit
+Systematically examine every item against defined criteria, producing a pass/fail inventory. Unlike "review" (subjective, selective) or "sanity check" (quick gut-feel), an audit is exhaustive and criterion-based — nothing gets skipped, nothing is evaluated on vibes.
+
+**Use when:** You want completeness and accountability — every item checked, every gap surfaced. "Audit X against Y" prevents the LLM from spot-checking the obvious and calling it done.
+
+**Avoid:** "review this for me", "check this over", "look through this for issues", "are there any problems?"
+
+**Example:** "Audit every API endpoint against our error handling contract: does each one return structured error responses with a code, message, and request ID? Give me a pass/fail for each endpoint, not just the ones that look wrong."
 
 ---
 
