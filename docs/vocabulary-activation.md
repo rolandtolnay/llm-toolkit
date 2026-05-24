@@ -4,17 +4,18 @@ Specific terms that reliably steer LLMs toward structured, precise output. Use t
 
 ## Daily drivers
 
-Seven terms that cover ~80% of daily LLM steering. Start here.
+Eight terms that cover ~80% of daily LLM steering. Start here.
 
 | Term | What it steers |
 |------|---------------|
+| **pragmatic** | "good enough, don't over-engineer" |
 | **idiomatic** | "match existing patterns, not textbook patterns" |
 | **sanity check** | "quick gut-check, not a deep review" |
-| **pragmatic** | "good enough, don't over-engineer" |
-| **enumerate** | "give me all of them, not a sample" |
+| **first principles** | "reason from fundamentals, not conventions" |
+| **pareto (80/20)** | "what 20% of effort delivers 80% of value?" |
 | **impact analysis** | "what does this change affect across the system?" |
-| **invariant** | "what specific rule is broken?" |
 | **trade-off analysis** | "compare options, don't just recommend one" |
+| **audit** | "check every item against defined criteria — pass/fail, not vibes" |
 
 Everything below is the full reference, organised by category.
 
