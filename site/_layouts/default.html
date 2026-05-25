@@ -311,9 +311,9 @@ body {
   color: var(--ds-accent);        /* accent — Example */
 }
 
-/* Example row: accent rail marks the take-away without competing with the term title */
+/* Example row: dim accent rail hints at the take-away without competing with the term title */
 .content h3 + p + p + p + p:has(> strong:first-child) {
-  border-left-color: var(--ds-accent);
+  border-left-color: oklch(0.45 0.04 var(--ds-accent-h));
   padding-bottom: 12px;
 }
 
