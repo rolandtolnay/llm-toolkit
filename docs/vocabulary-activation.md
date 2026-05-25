@@ -26,6 +26,7 @@ Everything below is the full reference, organised by category.
 Scan this to jog your memory — the full entry has usage guidance and examples.
 
 ### Analysis & evaluation
+
 | Term | One-liner |
 |------|-----------|
 | **impact analysis** | what does this change affect across the system? |
@@ -36,6 +37,7 @@ Scan this to jog your memory — the full entry has usage guidance and examples.
 | **audit** | check every item against defined criteria — pass/fail, not vibes |
 
 ### Architecture & design
+
 | Term | One-liner |
 |------|-----------|
 | **seam** | where can I inject behavior without editing surrounding code? |
@@ -48,12 +50,14 @@ Scan this to jog your memory — the full entry has usage guidance and examples.
 | **invariant** | what specific rule is being violated? |
 
 ### Debugging & diagnosis
+
 | Term | One-liner |
 |------|-----------|
 | **minimise the reproducer** | strip to the smallest input that still triggers the bug |
 | **bisect** | binary search for where behavior changed |
 
 ### Planning & scoping
+
 | Term | One-liner |
 |------|-----------|
 | **solution horizon** | tactical / pragmatic / strategic — show all investment levels |
@@ -67,6 +71,7 @@ Scan this to jog your memory — the full entry has usage guidance and examples.
 | **strangler fig** | incrementally replace, don't big-bang rewrite |
 
 ### Interrogation & challenge
+
 | Term | One-liner |
 |------|-----------|
 | **walk every path** | enumerate every branch in the decision tree |
@@ -75,6 +80,7 @@ Scan this to jog your memory — the full entry has usage guidance and examples.
 | **devil's advocate** | actively poke holes in my reasoning |
 
 ### Code quality
+
 | Term | One-liner |
 |------|-----------|
 | **change propagation** | how far does this change ripple? |
@@ -82,6 +88,7 @@ Scan this to jog your memory — the full entry has usage guidance and examples.
 | **feature envy** | this method uses another module's data more than its own |
 
 ### Output shaping
+
 | Term | One-liner |
 |------|-----------|
 | **enumerate** | give me all of them, not a sample |
