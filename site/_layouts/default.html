@@ -262,6 +262,83 @@ body {
   margin-bottom: 0;
 }
 
+/* ── Term card: rail + 2-column meta rows ─────────────────── */
+/* "Term" h3 = one followed by description-p, then labeled-p with strong */
+
+.content h3:has(+ p + p > strong:first-child) {
+  border-top: none;
+  border-left: 2px solid var(--ds-line);
+  padding: 24px 0 4px 24px;
+  margin: 40px 0 0;
+}
+
+.content h3:has(+ p + p > strong:first-child) + p {
+  border-left: 2px solid var(--ds-line);
+  padding: 4px 0 14px 24px;
+  margin: 0;
+}
+
+/* The three labeled meta paragraphs (Use when / Don't say / Example) */
+.content h3 + p + p:has(> strong:first-child),
+.content h3 + p + p + p:has(> strong:first-child),
+.content h3 + p + p + p + p:has(> strong:first-child) {
+  position: relative;
+  border-left: 2px solid var(--ds-line);
+  padding: 8px 0 8px 136px;
+  margin: 0;
+  min-height: 1.7em;
+  font-size: 14.5px;
+}
+
+.content h3 + p + p > strong:first-child,
+.content h3 + p + p + p > strong:first-child,
+.content h3 + p + p + p + p > strong:first-child {
+  position: absolute;
+  left: 24px;
+  top: 11px;
+  width: 100px;
+  margin-right: 0;
+}
+
+/* Color-coded labels */
+.content h3 + p + p > strong:first-child {
+  color: oklch(0.74 0.12 145);   /* green — Use when */
+}
+.content h3 + p + p + p > strong:first-child {
+  color: oklch(0.72 0.13 25);    /* coral — Don't say */
+}
+.content h3 + p + p + p + p > strong:first-child {
+  color: var(--ds-accent);        /* accent — Example */
+}
+
+/* Example row: subtle tint + accent rail, slight emphasis as the take-away */
+.content h3 + p + p + p + p:has(> strong:first-child) {
+  background: var(--ds-accent-faint);
+  border-left-color: var(--ds-accent);
+  padding-top: 12px;
+  padding-bottom: 16px;
+  border-radius: 0 var(--ds-r-sm) var(--ds-r-sm) 0;
+}
+
+@media (max-width: 640px) {
+  .content h3:has(+ p + p > strong:first-child),
+  .content h3:has(+ p + p > strong:first-child) + p {
+    padding-left: 16px;
+  }
+  .content h3 + p + p:has(> strong:first-child),
+  .content h3 + p + p + p:has(> strong:first-child),
+  .content h3 + p + p + p + p:has(> strong:first-child) {
+    padding: 26px 0 10px 16px;
+  }
+  .content h3 + p + p > strong:first-child,
+  .content h3 + p + p + p > strong:first-child,
+  .content h3 + p + p + p + p > strong:first-child {
+    left: 16px;
+    top: 6px;
+    width: auto;
+  }
+}
+
 .content em {
   font-style: italic;
   color: var(--ds-fg-muted);
@@ -312,8 +389,7 @@ body {
 .content code {
   font-family: var(--ds-font-mono);
   font-size: 0.88em;
-  background: var(--ds-panel);
-  border: 1px solid var(--ds-line-soft);
+  background: var(--ds-panel-2);
   border-radius: 4px;
   padding: 2px 6px;
   color: var(--ds-fg);
