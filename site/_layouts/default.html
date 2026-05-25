@@ -174,19 +174,22 @@ body {
 }
 
 .content h1 + p {
-  color: var(--ds-fg-muted);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--ds-fg);
   margin-top: 0;
   margin-bottom: 32px;
 }
 
 .content h2 {
   font-family: var(--ds-font-mono);
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   line-height: 1;
-  color: var(--ds-fg-dim);
+  color: var(--ds-fg-muted);
   margin: 56px 0 24px;
   padding-top: 32px;
   border-top: 1px solid var(--ds-line);
@@ -221,6 +224,17 @@ body {
   border-top: none;
   padding-top: 0;
   margin-top: 28px;
+}
+
+/* Quick-reference category headings: smaller and quieter than term H3s */
+.content h3:has(+ table) {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ds-fg-muted);
+  margin: 32px 0 8px;
+  padding-top: 0;
+  border-top: none;
 }
 
 .content h3 + p {
