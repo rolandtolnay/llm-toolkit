@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{ page.title | default: site.title }}</title>
+<meta name="description" content="{{ page.description | default: site.description }}" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+/* ── Design tokens (from Dark Workspace Kit) ─────────────── */
+:root {
+  --ds-stage:        oklch(0.13 0.005 70);
+  --ds-window:       oklch(0.165 0.006 70);
+  --ds-panel:        oklch(0.185 0.006 70);
+  --ds-panel-2:      oklch(0.21 0.007 70);
+
+  --ds-line:         oklch(0.255 0.008 70);
+  --ds-line-soft:    oklch(0.225 0.007 70);
+  --ds-line-strong:  oklch(0.32 0.01 70);
+
+  --ds-fg:           oklch(0.95 0.008 80);
+  --ds-fg-muted:     oklch(0.76 0.012 75);
+  --ds-fg-dim:       oklch(0.62 0.014 75);
+  --ds-fg-faint:     oklch(0.52 0.014 75);
+
+  --ds-accent-h:     78;
+  --ds-accent:       oklch(0.78 0.14 var(--ds-accent-h));
+  --ds-accent-soft:  oklch(0.78 0.14 var(--ds-accent-h) / 0.18);
+  --ds-accent-faint: oklch(0.78 0.14 var(--ds-accent-h) / 0.08);
+
+  --ds-r-sm: 6px;
+  --ds-r-md: 10px;
+  --ds-r-lg: 14px;
+
+  --ds-shadow-sm:  0 1px 2px rgba(0,0,0,0.35);
+  --ds-window-shadow: 0 30px 90px rgba(0,0,0,0.55);
+
+  --ds-font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ds-font-mono: "Geist Mono", ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+
+  --ds-glow-color: oklch(0.78 0.14 var(--ds-accent-h) / 0.55);
+}
+
+/* ── Reset ────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--ds-stage);
+  color: var(--ds-fg);
+  font-family: var(--ds-font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+}
+
+::selection { background: var(--ds-accent-soft); color: var(--ds-fg); }
+
+/* ── Stage + glow ─────────────────────────────────────────── */
+.stage {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.glow {
+  position: fixed;
+  left: 50%;
+  bottom: -180px;
+  transform: translateX(-50%);
+  width: min(1400px, 95vw);
+  height: 520px;
+  background: radial-gradient(50% 60% at 50% 100%, var(--ds-glow-color) 0%, transparent 75%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Window shell ─────────────────────────────────────────── */
+.window {
+  position: relative;
+  z-index: 1;
+  background: var(--ds-window);
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-r-lg);
+  box-shadow: var(--ds-window-shadow);
+  overflow: hidden;
+  width: min(860px, calc(100vw - 48px));
+  margin: 40px 24px 80px;
+}
+
+.window::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, oklch(1 0 0 / 0.04) 30%, oklch(1 0 0 / 0.04) 70%, transparent);
+  pointer-events: none;
+}
+
+/* ── Chrome (top bar) ─────────────────────────────────────── */
+.chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--ds-line-soft);
+}
+
+.chrome-left {
+  font-family: var(--ds-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ds-fg-muted);
+  font-weight: 500;
+}
+
+.chrome-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chrome-right a {
+  font-family: var(--ds-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ds-fg-faint);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: var(--ds-r-sm);
+  transition: color 180ms, background 180ms;
+}
+
+.chrome-right a:hover {
+  color: var(--ds-fg-muted);
+  background: var(--ds-panel);
+}
+
+/* ── Content area ─────────────────────────────────────────── */
+.content {
+  padding: 40px 48px 64px;
+}
+
+@media (max-width: 640px) {
+  .window {
+    margin: 16px 12px 60px;
+    width: calc(100vw - 24px);
+    border-radius: var(--ds-r-md);
+  }
+  .content { padding: 28px 20px 48px; }
+  .chrome { padding: 10px 16px; }
+}
+
+/* ── Markdown typography ──────────────────────────────────── */
+.content h1 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 8px;
+  color: var(--ds-fg);
+}
+
+.content h1 + p {
+  color: var(--ds-fg-muted);
+  margin-top: 0;
+  margin-bottom: 32px;
+}
+
+.content h2 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  margin: 48px 0 20px;
+  color: var(--ds-fg);
+}
+
+.content h3 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 36px 0 12px;
+  color: var(--ds-fg);
+}
+
+.content h4, .content h5 {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 28px 0 8px;
+  color: var(--ds-fg);
+}
+
+.content p {
+  margin: 0 0 16px;
+  color: var(--ds-fg-muted);
+  line-height: 1.65;
+}
+
+.content strong {
+  color: var(--ds-fg);
+  font-weight: 600;
+}
+
+.content em {
+  font-style: italic;
+  color: var(--ds-fg-muted);
+}
+
+.content a {
+  color: var(--ds-accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 180ms;
+}
+
+.content a:hover {
+  border-bottom-color: var(--ds-accent);
+}
+
+/* ── Lists ────────────────────────────────────────────────── */
+.content ul, .content ol {
+  margin: 0 0 16px;
+  padding-left: 24px;
+  color: var(--ds-fg-muted);
+}
+
+.content li {
+  margin-bottom: 6px;
+  line-height: 1.55;
+}
+
+.content li strong {
+  color: var(--ds-fg);
+}
+
+/* ── Horizontal rule ──────────────────────────────────────── */
+.content hr {
+  border: none;
+  height: 1px;
+  background: var(--ds-line-soft);
+  margin: 40px 0;
+}
+
+/* ── Code (inline + block) ────────────────────────────────── */
+.content code {
+  font-family: var(--ds-font-mono);
+  font-size: 0.88em;
+  background: var(--ds-panel);
+  border: 1px solid var(--ds-line-soft);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--ds-fg);
+}
+
+.content pre {
+  background: var(--ds-panel);
+  border: 1px solid var(--ds-line-soft);
+  border-radius: var(--ds-r-sm);
+  padding: 16px 20px;
+  margin: 0 0 16px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ds-line-strong) transparent;
+}
+
+.content pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* ── Blockquotes ──────────────────────────────────────────── */
+.content blockquote {
+  margin: 0 0 16px;
+  padding: 12px 20px;
+  border-left: 2px solid var(--ds-accent);
+  background: var(--ds-accent-faint);
+  border-radius: 0 var(--ds-r-sm) var(--ds-r-sm) 0;
+  color: var(--ds-fg-muted);
+}
+
+.content blockquote p {
+  margin: 0;
+}
+
+/* ── Tables ───────────────────────────────────────────────── */
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 20px;
+  font-size: 14px;
+}
+
+.content thead th {
+  font-family: var(--ds-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ds-fg-dim);
+  font-weight: 500;
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ds-line);
+  white-space: nowrap;
+}
+
+.content tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ds-line-soft);
+  color: var(--ds-fg-muted);
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.content tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.content tbody tr:hover {
+  background: var(--ds-accent-faint);
+}
+
+.content tbody td strong {
+  color: var(--ds-fg);
+  font-weight: 600;
+}
+
+/* ── Footer ───────────────────────────────────────────────── */
+.footer {
+  text-align: center;
+  padding: 20px;
+  font-family: var(--ds-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ds-fg-faint);
+}
+
+.footer a {
+  color: var(--ds-fg-dim);
+  text-decoration: none;
+  transition: color 180ms;
+}
+
+.footer a:hover {
+  color: var(--ds-accent);
+}
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="glow"></div>
+
+  <div class="window">
+    <div class="chrome">
+      <span class="chrome-left">{{ site.title }}</span>
+      <div class="chrome-right">
+        <a href="{{ '/' | relative_url }}">Home</a>
+        <a href="https://github.com/rolandtolnay">GitHub</a>
+      </div>
+    </div>
+
+    <main class="content">
+      {{ content }}
+    </main>
+  </div>
+
+  <div class="footer">
+    By <a href="https://github.com/rolandtolnay">Roland Tolnay</a>
+  </div>
+</div>
+
+</body>
+</html>
