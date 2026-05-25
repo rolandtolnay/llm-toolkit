@@ -311,13 +311,10 @@ body {
   color: var(--ds-accent);        /* accent — Example */
 }
 
-/* Example row: subtle tint + accent rail, slight emphasis as the take-away */
+/* Example row: accent rail marks the take-away without competing with the term title */
 .content h3 + p + p + p + p:has(> strong:first-child) {
-  background: var(--ds-accent-faint);
   border-left-color: var(--ds-accent);
-  padding-top: 12px;
-  padding-bottom: 16px;
-  border-radius: 0 var(--ds-r-sm) var(--ds-r-sm) 0;
+  padding-bottom: 12px;
 }
 
 @media (max-width: 640px) {
