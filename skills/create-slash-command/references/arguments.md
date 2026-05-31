@@ -179,7 +179,7 @@ description: Fix issue following coding standards (usage: /fix-issue <issue-numb
 
 # Better - if using argument-hint field
 description: Fix issue following coding standards
-argument-hint: <issue-number> [priority]
+argument-hint: "<issue-number> [priority]"
 ```
 
 ## Empty Arguments

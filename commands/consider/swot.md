@@ -1,6 +1,6 @@
 ---
 description: Map strengths, weaknesses, opportunities, and threats
-argument-hint: [subject or leave blank for current context]
+argument-hint: "[subject or leave blank for current context]"
 ---
 
 <objective>

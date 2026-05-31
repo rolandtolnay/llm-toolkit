@@ -1,6 +1,6 @@
 ---
 description: Analyze what you give up by choosing this option
-argument-hint: [choice or leave blank for current context]
+argument-hint: "[choice or leave blank for current context]"
 ---
 
 <objective>

@@ -122,7 +122,7 @@ Shown in the `/help` command list.
 **Optional** — Shows expected arguments in `/help`
 
 ```yaml
-argument-hint: <issue-number> [priority]
+argument-hint: "<issue-number> [priority]"
 ```
 
 Use `<required>` and `[optional]` conventions.

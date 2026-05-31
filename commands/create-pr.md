@@ -1,6 +1,6 @@
 ---
 description: Create a pull request with a context-rich summary derived from code changes and conversation context
-argument-hint: [commit instructions or additional context]
+argument-hint: "[commit instructions or additional context]"
 ---
 
 <objective>

@@ -1,6 +1,6 @@
 ---
 description: Drill to root cause by asking why repeatedly
-argument-hint: [problem or leave blank for current context]
+argument-hint: "[problem or leave blank for current context]"
 ---
 
 <objective>

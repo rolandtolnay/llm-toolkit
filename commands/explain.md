@@ -1,6 +1,6 @@
 ---
 description: Explain the current issue, options, or behavior so I can make a confident decision
-argument-hint: [topic or leave blank for current context]
+argument-hint: "[topic or leave blank for current context]"
 ---
 
 Explain $ARGUMENTS (or the current discussion topic if no arguments provided) so the user can make a confident, informed decision.

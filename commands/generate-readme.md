@@ -1,6 +1,6 @@
 ---
 description: Generate a high-quality README for a public GitHub project
-argument-hint: [project-path]
+argument-hint: "[project-path]"
 ---
 
 <objective>

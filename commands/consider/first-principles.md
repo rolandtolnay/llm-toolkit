@@ -1,6 +1,6 @@
 ---
 description: Break down to fundamentals and rebuild from base truths
-argument-hint: [problem or leave blank for current context]
+argument-hint: "[problem or leave blank for current context]"
 ---
 
 <objective>

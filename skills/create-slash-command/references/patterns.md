@@ -140,7 +140,7 @@ Review code for security vulnerabilities and suggest fixes.
 ```markdown
 ---
 description: Optimize specific file
-argument-hint: [file-path]
+argument-hint: "[file-path]"
 ---
 
 <objective>
@@ -175,7 +175,7 @@ References the specified file.
 ```markdown
 ---
 description: Find and fix issue following workflow
-argument-hint: [issue-number]
+argument-hint: "[issue-number]"
 ---
 
 <objective>
@@ -205,7 +205,7 @@ Find and fix issue #$ARGUMENTS following project workflow.
 ```markdown
 ---
 description: Review PR with priority and assignment
-argument-hint: <pr-number> <priority> <assignee>
+argument-hint: "<pr-number> <priority> <assignee>"
 ---
 
 <objective>
@@ -270,7 +270,7 @@ Uses `@` prefix to reference specific files.
 ```markdown
 ---
 description: Review specific file
-argument-hint: [file-path]
+argument-hint: "[file-path]"
 ---
 
 <objective>
@@ -302,7 +302,7 @@ File path comes from argument.
 ```markdown
 ---
 description: Compare two files
-argument-hint: <file1> <file2>
+argument-hint: "<file1> <file2>"
 ---
 
 <objective>
@@ -365,7 +365,7 @@ Tool restriction ensures Claude only uses SequentialThinking.
 ---
 description: Plan implementation strategy
 allowed-tools: SequentialThinking
-argument-hint: [task description]
+argument-hint: "[task description]"
 ---
 
 <objective>
@@ -465,7 +465,7 @@ Test results: ! `npm test`
 ```markdown
 ---
 description: Complete feature development workflow
-argument-hint: [feature description]
+argument-hint: "[feature description]"
 ---
 
 <objective>
@@ -523,7 +523,7 @@ Before completing:
 ```markdown
 ---
 description: Analyze and fix performance issues
-argument-hint: [file-path]
+argument-hint: "[file-path]"
 ---
 
 <objective>
@@ -593,7 +593,7 @@ Prevents running non-git bash commands.
 ---
 allowed-tools: [Read, Grep, Glob]
 description: Analyze codebase
-argument-hint: [search pattern]
+argument-hint: "[search pattern]"
 ---
 
 <objective>

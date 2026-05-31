@@ -1,6 +1,6 @@
 ---
 description: Solve problems backwards - what would guarantee failure?
-argument-hint: [goal or leave blank for current context]
+argument-hint: "[goal or leave blank for current context]"
 ---
 
 <objective>

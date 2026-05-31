@@ -1,6 +1,6 @@
 ---
 description: Recommend the best mental framework for your problem
-argument-hint: [describe your situation or problem]
+argument-hint: "[describe your situation or problem]"
 ---
 
 <objective>

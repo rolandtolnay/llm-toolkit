@@ -1,6 +1,6 @@
 ---
 description: Find simplest explanation that fits all the facts
-argument-hint: [situation or leave blank for current context]
+argument-hint: "[situation or leave blank for current context]"
 ---
 
 <objective>
