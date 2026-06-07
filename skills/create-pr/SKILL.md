@@ -67,7 +67,7 @@ Stop gathering once you can state why the change exists. If the why can't be rec
 [Checklist of how to verify the change works.]
 ```
 
-**Humanize the draft.** Draft the description in your own voice first — don't read the humanizer before writing. Once the draft above exists, invoke the `humanizer` skill and revise the description against it, including its anti-AI audit pass. The order matters: revising concrete text produces cleaner prose than writing from the rules cold, which comes out stiff and self-conscious. Preserve the structure, facts, and ticket links — only the wording changes. Carry the revised description into Confirm.
+**Humanize the draft.** Draft the description in your own voice first — don't read the humanizer before writing. Once the draft above exists, read `~/.pi/agent/skills/humanizer/SKILL.md` and follow it to revise the description, including its anti-AI audit pass. The order matters: revising concrete text produces cleaner prose than writing from the rules cold, which comes out stiff and self-conscious. Preserve the structure, facts, and ticket links — only the wording changes. Carry the revised description into Confirm.
 
 **Confirm.** Show the complete PR title and body in chat for the user to confirm or edit. Apply any changes they ask for.
 
