@@ -313,16 +313,43 @@ def load_config(config_path: Path | None = None) -> LinearConfig:
 def _load_config_optional(config_path: Path | None = None) -> LinearConfig | None:
     """Load .linear.json if present, returning None when no file exists.
 
-    A genuinely absent file (MISSING_CONFIG) is treated as "no config". A present
-    but malformed file (INVALID_CONFIG) still raises — the user clearly intended
-    to use config, so surfacing the error is more helpful than silently ignoring it.
+    A genuinely absent file is treated as "no config". A present but malformed
+    file still raises — the user clearly intended to use config, so surfacing the
+    error is more helpful than silently ignoring it.
+
+    Unlike load_config(), this accepts defaults-only files without teamId. That
+    lets higher-precedence team sources (--team, LINEAR_TEAM, or an issue's team)
+    combine with non-team defaults.
     """
+    if config_path is None:
+        config_path = find_config_file()
+
+    if config_path is None or not config_path.exists():
+        return None
+
     try:
-        return load_config(config_path)
-    except LinearError as e:
-        if e.code == ErrorCode.MISSING_CONFIG:
-            return None
-        raise
+        with open(config_path) as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise LinearError(
+            code=ErrorCode.INVALID_CONFIG,
+            message=f"Invalid JSON in .linear.json: {e}",
+            suggestions=["Check .linear.json for syntax errors"],
+        )
+
+    if not isinstance(data, dict):
+        raise LinearError(
+            code=ErrorCode.INVALID_CONFIG,
+            message=".linear.json must contain a JSON object",
+            suggestions=['Use format: {"teamId": "uuid"}'],
+        )
+
+    return LinearConfig(
+        team_id=data.get("teamId", ""),
+        project_id=data.get("projectId"),
+        default_priority=data.get("defaultPriority", 3),
+        default_labels=data.get("defaultLabels", []),
+    )
 
 
 def resolve_config(
@@ -336,7 +363,7 @@ def resolve_config(
     Precedence (first hit wins):
       1. team_arg (--team flag, key or UUID)
       2. LINEAR_TEAM env var (key or UUID)
-      3. issue_team_id (the issue/parent's own team — for update/break)
+      3. issue_team_id (the issue/parent's own team — for update/create --parent)
       4. .linear.json teamId
       5. single-team auto-detect (exactly one team in the workspace)
 
@@ -355,7 +382,7 @@ def resolve_config(
         team_id = client.find_team_by_ref(ref)["id"]
     elif issue_team_id:
         team_id = issue_team_id
-    elif file_config is not None:
+    elif file_config is not None and file_config.team_id:
         team_id = file_config.team_id
     else:
         teams = client.get_teams()
@@ -379,7 +406,7 @@ def resolve_config(
 
     if file_config is None:
         return LinearConfig(team_id=team_id)
-    if file_config.team_id == team_id:
+    if file_config.team_id and file_config.team_id == team_id:
         return file_config
     return LinearConfig(
         team_id=team_id,
@@ -2882,19 +2909,57 @@ def create(
 
     try:
         client = LinearClient()
-        config = resolve_config(client, team)
 
-        # Resolve project name to ID if provided
+        # If creating a sub-issue, fetch the parent first so the child uses the
+        # parent's team and UUID. Linear sub-issues are tied to the parent team.
+        parent_issue = None
+        parent_uuid = None
+        parent_team_id = None
+        if parent:
+            parent_issue = client.get_issue(parent)
+            parent_uuid = parent_issue.get("id")
+            parent_team_id = parent_issue.get("team", {}).get("id")
+            if not parent_uuid:
+                raise LinearError(
+                    code=ErrorCode.API_ERROR,
+                    message=f"Could not resolve parent issue UUID for {parent}",
+                )
+            if not parent_team_id:
+                raise LinearError(
+                    code=ErrorCode.API_ERROR,
+                    message=f"Could not determine team for parent issue {parent}",
+                )
+
+        config = resolve_config(client, team, issue_team_id=parent_team_id)
+
+        if parent_team_id and config.team_id != parent_team_id:
+            raise LinearError(
+                code=ErrorCode.INVALID_INPUT,
+                message="Sub-issues must be created in the parent issue's team",
+                suggestions=["Remove --team/LINEAR_TEAM or choose the parent issue's team"],
+            )
+
+        # Resolve project name to ID if provided; otherwise inherit the parent's
+        # project before falling back to any config default.
         project_id = None
         if project:
             project_info = client.find_project_by_name(project, config.team_id)
             project_id = project_info["id"]
+        elif parent_issue and not no_project:
+            parent_project = parent_issue.get("project")
+            if parent_project:
+                project_id = parent_project.get("id")
 
-        # Resolve label names to IDs
+        # Resolve label names to IDs; otherwise inherit parent labels before
+        # falling back to configured default labels.
         label_ids = None
         if label:
             label_ids = client.resolve_label_names(label, config.team_id)
-        elif config.default_labels:
+        elif parent_issue:
+            parent_labels = parent_issue.get("labels", {}).get("nodes", [])
+            if parent_labels:
+                label_ids = [l["id"] for l in parent_labels]
+        if label_ids is None and not label and config.default_labels:
             label_ids = client.resolve_label_names(config.default_labels, config.team_id)
 
         # Resolve assignee name/email to ID
@@ -2919,7 +2984,7 @@ def create(
             description=description,
             priority=priority,
             estimate=estimate,
-            parent_id=parent,
+            parent_id=parent_uuid,
             project_id=project_id,
             no_project=no_project,
             label_ids=label_ids,
@@ -3103,16 +3168,22 @@ def update(
 
         def resolve_team_id() -> str:
             if "team_id" not in _cache:
-                if team:
-                    _cache["team_id"] = client.find_team_by_ref(team)["id"]
-                else:
-                    tid = get_current_issue().get("team", {}).get("id")
-                    if not tid:
+                issue_team_id = None
+                # Only fetch the issue for its team when higher-precedence sources
+                # are absent. Label removal/milestone logic may still fetch it for
+                # other fields, but project/cycle resolution can use --team/env alone.
+                if not (team or os.environ.get("LINEAR_TEAM")):
+                    issue_team_id = get_current_issue().get("team", {}).get("id")
+                    if not issue_team_id:
                         raise LinearError(
                             code=ErrorCode.API_ERROR,
                             message=f"Could not determine team for issue {issue_id}",
                         )
-                    _cache["team_id"] = tid
+                _cache["team_id"] = resolve_config(
+                    client,
+                    team,
+                    issue_team_id=issue_team_id,
+                ).team_id
             return _cache["team_id"]
 
         # Resolve parent identifier to UUID if provided
@@ -4950,14 +5021,19 @@ def list_cmd(
     try:
         client = LinearClient()
 
-        # Determine team ID
-        team_id = team
-        if not team_id:
+        # Determine team ID when explicitly configured. Plain `list` can remain
+        # workspace-wide, but filters such as named states/cycles require a team
+        # and resolve it lazily below so single-team workspaces still work.
+        team_id = None
+        if team or os.environ.get("LINEAR_TEAM"):
+            team_id = resolve_config(client, team).team_id
+        else:
             try:
                 config = load_config()
                 team_id = config.team_id
             except LinearError:
-                # No config, proceed without team filter
+                # No config, proceed without team filter unless a later filter
+                # needs team context.
                 pass
 
         # Handle --mine flag
@@ -5035,7 +5111,9 @@ def list_cmd(
             # Check if it's a type alias
             if state_lower in STATE_TYPE_ALIASES:
                 state_type = STATE_TYPE_ALIASES[state_lower]
-            elif team_id:
+            else:
+                if not team_id:
+                    team_id = resolve_config(client, team).team_id
                 # Try to find by name
                 try:
                     state_info = client.find_state_by_name(team_id, state)
@@ -5049,15 +5127,6 @@ def list_cmd(
                             "Type shortcuts: backlog, todo, started, done, canceled",
                         ],
                     )
-            else:
-                raise LinearError(
-                    code=ErrorCode.STATE_NOT_FOUND,
-                    message=f"Cannot resolve state '{state}' without team context",
-                    suggestions=[
-                        "Use type shortcuts: backlog, todo, started, done, canceled",
-                        "Or specify --team or create .linear.json",
-                    ],
-                )
 
         # Handle label filter
         label_ids = None
@@ -5067,6 +5136,8 @@ def list_cmd(
         # Handle cycle filter
         cycle_id = None
         if cycle:
+            if not team_id:
+                team_id = resolve_config(client, team).team_id
             resolved_cycle = client.resolve_cycle(cycle, team_id)
             cycle_id = resolved_cycle["id"]
 

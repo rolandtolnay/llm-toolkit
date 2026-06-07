@@ -96,7 +96,7 @@ Filters combine with AND logic.
 **Label handling:**
 - `--label "name"` — Apply label by name (repeatable for multiple labels)
 - `--no-labels` — Remove all labels (update) or skip parent inheritance (break)
-- On `create`: if no `--label`, applies `defaultLabels` from `.linear.json`
+- On `create`: if no `--label` and no parent labels are inherited, applies `defaultLabels` from `.linear.json`
 - On `update`: `--label` replaces all existing labels
 - On `break`: sub-issues inherit parent labels by default
 </cli_reference>
@@ -117,17 +117,19 @@ Filters combine with AND logic.
 - `projectId` — Optional. Default project for new issues. Can be overridden with `--project` or `--no-project`.
 - `defaultLabels` — Optional. Label names auto-applied on `create` when `--label` is not specified.
 
-**Team resolution.** When a write command (`create`/`update`/`break`) needs a team, it resolves in this order and stops at the first hit:
+**Team resolution.** When `create` or `update` needs a team for creation or for resolving team-scoped names (`--label`, `--project`, `--cycle`), it resolves in this order and stops at the first hit:
 
-1. `--team <key-or-uuid>` flag (on `create`/`update`) — accepts a team **key** like `ENG` or a raw UUID
+1. `--team <key-or-uuid>` flag — accepts a team **key** like `ENG` or a raw UUID
 2. `LINEAR_TEAM` env var (key or UUID)
-3. the issue's / parent's own team — `update` and `break` derive the team from the target issue, so they need **no config and no `--team`**
+3. the issue's / parent's own team — `update` and `create --parent` derive this from the target/parent issue, so they need **no config and no `--team`** for those flows
 4. `.linear.json` `teamId`
 5. single-team auto-detect — if the workspace has exactly one team, it is used automatically
 
-A **single-team workspace needs no config at all** — every command auto-detects the only team. In a multi-team workspace, `create` needs one of `--team` / `LINEAR_TEAM` / `.linear.json` (or it errors listing the available team keys).
+`break` always creates sub-issues in the parent issue's team because Linear ties sub-issues to their parent team. It needs no config and ignores unrelated team defaults; use the parent's own project/labels or explicit `--project`/`--label` overrides that resolve within the parent team.
 
-When `.linear.json` is present but the team is overridden to a *different* team (via `--team`/`LINEAR_TEAM`), the file's `defaultPriority`/`defaultLabels` still apply but its `projectId` is dropped (it is scoped to the file's team).
+A **single-team workspace needs no config at all** for commands that use this resolver (`create`, `update` name resolution, and `list` filters that require a team such as named states/cycles). Standalone `list` can remain workspace-wide without a team. In a multi-team workspace, standalone `create` needs one of `--team` / `LINEAR_TEAM` / `.linear.json` (or it errors listing the available team keys).
+
+When `.linear.json` is present but the team is overridden to a *different* team (via `--team`/`LINEAR_TEAM`/parent issue), the file's `defaultPriority`/`defaultLabels` still apply but its `projectId` is dropped (it is scoped to the file's team). A defaults-only `.linear.json` without `teamId` is allowed when a higher-precedence team source selects the team.
 
 **API key:** Set `LINEAR_API_KEY` in project's `.claude/settings.local.json` (git-ignored by default):
 
@@ -280,7 +282,7 @@ Parse JSON response and present result:
    - Otherwise, match against available labels by category (e.g., platform, area, type)
    - Pre-select labels that clearly apply (confirm in step 4)
    - If the ticket's domain suggests a label that doesn't exist → include a "Create label: [suggested name]" option in step 4
-   - `defaultLabels` from `.linear.json` still apply as baseline — inferred labels are additive
+   - `defaultLabels` from `.linear.json` apply when no explicit or inherited labels are used; if you pass `--label`, include every desired label
 
 3. **Infer priority and estimate** from the description:
 
@@ -411,7 +413,7 @@ User provides the sub-issues in conversation. Do NOT propose or generate sub-iss
 **Handle errors gracefully:**
 
 - **MISSING_API_KEY:** Explain how to set LINEAR_API_KEY in project `.claude/settings.local.json`
-- **MISSING_CONFIG:** Only seen in a multi-team workspace with no team selected. Tell the user to pass `--team KEY`, set `LINEAR_TEAM`, or create `.linear.json`; single-team workspaces auto-detect and never hit this. The error lists the available team keys.
+- **MISSING_CONFIG:** For resolver-backed flows, this means a multi-team workspace has no team selected. Tell the user to pass `--team KEY`, set `LINEAR_TEAM`, or create `.linear.json`; the error lists the available team keys. Some management commands still require `.linear.json` directly and will say so.
 - **TEAM_NOT_FOUND:** The `--team`/`LINEAR_TEAM` ref matched no team. List the available team keys from the error suggestions.
 - **ISSUE_NOT_FOUND:** Suggest checking the identifier
 - **STATE_NOT_FOUND:** List available states from `states` command

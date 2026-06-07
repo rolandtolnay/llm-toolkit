@@ -36,8 +36,8 @@ def parent_issue(team=None):
         "url": "https://linear.app/x/issue/ABC-123",
         "state": {"name": "Todo"},
         "team": team or {"id": "team-eng-uuid", "key": "ENG", "name": "Engineering"},
-        "labels": {"nodes": []},
-        "project": None,
+        "labels": {"nodes": [{"id": "label-parent-uuid", "name": "parent-label"}]},
+        "project": {"id": "proj-parent-uuid", "name": "Parent Project"},
     }
 
 
@@ -75,6 +75,63 @@ def route(query, variables, *, teams, calls):
         return {"issue": parent_issue()}
     if "teams {" in query:
         return {"teams": {"nodes": teams, "pageInfo": {"hasNextPage": False}}}
+    if "labels" in query and "team(id: $teamId)" in query:
+        team_id = (variables or {}).get("teamId")
+        team = next(t for t in teams if t["id"] == team_id)
+        return {
+            "team": {
+                **team,
+                "labels": {
+                    "nodes": [{"id": f"label-{team['key'].lower()}-uuid", "name": "backend"}],
+                    "pageInfo": {"hasNextPage": False},
+                },
+            }
+        }
+    if "cycles(" in query:
+        return {
+            "team": {
+                "cycles": {
+                    "nodes": [
+                        {
+                            "id": "cycle-active-uuid",
+                            "number": 12,
+                            "name": "Active Cycle",
+                            "startsAt": "2026-06-01",
+                            "endsAt": "2026-06-14",
+                            "completedAt": None,
+                            "progress": 0.5,
+                            "isActive": True,
+                            "isNext": False,
+                            "isPast": False,
+                            "isFuture": False,
+                            "issues": {"pageInfo": {"hasNextPage": False}, "nodes": []},
+                        }
+                    ]
+                }
+            }
+        }
+    if "issues(filter:" in query:
+        return {
+            "issues": {
+                "nodes": [
+                    {
+                        "id": "issue-uuid",
+                        "identifier": "ABC-123",
+                        "title": "Parent title",
+                        "priority": 3,
+                        "estimate": None,
+                        "state": {"id": "state-uuid", "name": "Todo", "type": "unstarted"},
+                        "assignee": None,
+                        "creator": None,
+                        "project": None,
+                        "projectMilestone": None,
+                        "cycle": {"id": "cycle-active-uuid", "number": 12, "name": "Active Cycle"},
+                        "labels": {"nodes": []},
+                        "team": {"id": "team-ops-uuid", "key": "OPS", "name": "Operations"},
+                    }
+                ]
+            }
+        }
     raise AssertionError(f"unexpected query: {query[:60]!r}")
 
 
@@ -204,6 +261,24 @@ def test_resolve_config_multi_team_no_selection_raises_missing_config(monkeypatc
     assert any("ENG" in s and "OPS" in s for s in exc.value.suggestions)
 
 
+def test_resolve_config_accepts_defaults_only_file_with_flag(monkeypatch, tmp_path):
+    module = load_linear_module()
+    config_path = tmp_path / ".linear.json"
+    config_path.write_text(
+        json.dumps({"defaultPriority": 1, "defaultLabels": ["backend"]})
+    )
+    monkeypatch.delenv("LINEAR_TEAM", raising=False)
+    monkeypatch.setattr(module, "find_config_file", lambda: config_path)
+    client = make_client(module)
+
+    config = module.resolve_config(client, "ENG")
+
+    assert config.team_id == "team-eng-uuid"
+    assert config.project_id is None
+    assert config.default_priority == 1
+    assert config.default_labels == ["backend"]
+
+
 # ---------------------------------------------------------------------------
 # config-merge rule
 # ---------------------------------------------------------------------------
@@ -268,6 +343,63 @@ def test_update_priority_needs_no_config_and_issues_no_team_query(monkeypatch):
     # no teams query.
     assert len(calls) == 1
     assert "issueUpdate" in calls[0][0]
+
+
+def test_update_label_uses_linear_team_env_for_name_resolution(monkeypatch):
+    module = load_linear_module()
+    calls = install_cli_request(monkeypatch, module)
+    monkeypatch.setenv("LINEAR_TEAM", "OPS")
+
+    result = CliRunner().invoke(module.app, ["update", "ABC-123", "--label", "backend"])
+
+    assert result.exit_code == 0, result.stdout
+    data = json.loads(result.stdout)
+    assert data["success"] is True
+
+    label_queries = [(q, v) for q, v in calls if "labels" in q and "team(id: $teamId)" in q]
+    assert len(label_queries) == 1
+    assert label_queries[0][1]["teamId"] == "team-ops-uuid"
+
+    update_input = next(v["input"] for q, v in calls if "issueUpdate" in q)
+    assert update_input["labelIds"] == ["label-ops-uuid"]
+
+
+def test_list_cycle_uses_linear_team_env_for_cycle_resolution(monkeypatch):
+    module = load_linear_module()
+    calls = install_cli_request(monkeypatch, module)
+    monkeypatch.setenv("LINEAR_TEAM", "OPS")
+
+    result = CliRunner().invoke(module.app, ["list", "--cycle", "active", "--verbose"])
+
+    assert result.exit_code == 0, result.stdout
+    data = json.loads(result.stdout)
+    assert data["success"] is True
+    assert data["metadata"]["count"] == 1
+
+    cycle_call = next(v for q, v in calls if "cycles(" in q)
+    assert cycle_call["teamId"] == "team-ops-uuid"
+
+    issues_call = next(v for q, v in calls if "issues(filter:" in q)
+    assert issues_call["filter"]["team"]["id"]["eq"] == "team-ops-uuid"
+    assert issues_call["filter"]["cycle"]["id"]["eq"] == "cycle-active-uuid"
+
+
+def test_create_parent_derives_team_uuid_project_and_labels_without_config(monkeypatch):
+    module = load_linear_module()
+    calls = install_cli_request(monkeypatch, module)
+
+    result = CliRunner().invoke(module.app, ["create", "sub task", "--parent", "ABC-123"])
+
+    assert result.exit_code == 0, result.stdout
+    data = json.loads(result.stdout)
+    assert data["success"] is True
+
+    create_input = next(v["input"] for q, v in calls if "issueCreate" in q)
+    assert create_input["teamId"] == "team-eng-uuid"
+    assert create_input["parentId"] == "issue-uuid"
+    assert create_input["projectId"] == "proj-parent-uuid"
+    assert create_input["labelIds"] == ["label-parent-uuid"]
+    assert all("teams {" not in q for q, _ in calls)
 
 
 def test_break_derives_team_from_parent_without_config(monkeypatch):
