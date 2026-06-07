@@ -78,6 +78,7 @@ class ErrorCode(str, Enum):
     ISSUE_NOT_FOUND = "ISSUE_NOT_FOUND"
     STATE_NOT_FOUND = "STATE_NOT_FOUND"
     PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND"
+    TEAM_NOT_FOUND = "TEAM_NOT_FOUND"
     API_ERROR = "API_ERROR"
     RATE_LIMITED = "RATE_LIMITED"
     NETWORK_ERROR = "NETWORK_ERROR"
@@ -306,6 +307,85 @@ def load_config(config_path: Path | None = None) -> LinearConfig:
         project_id=data.get("projectId"),
         default_priority=data.get("defaultPriority", 3),
         default_labels=data.get("defaultLabels", []),
+    )
+
+
+def _load_config_optional(config_path: Path | None = None) -> LinearConfig | None:
+    """Load .linear.json if present, returning None when no file exists.
+
+    A genuinely absent file (MISSING_CONFIG) is treated as "no config". A present
+    but malformed file (INVALID_CONFIG) still raises — the user clearly intended
+    to use config, so surfacing the error is more helpful than silently ignoring it.
+    """
+    try:
+        return load_config(config_path)
+    except LinearError as e:
+        if e.code == ErrorCode.MISSING_CONFIG:
+            return None
+        raise
+
+
+def resolve_config(
+    client: "LinearClient",
+    team_arg: str | None = None,
+    *,
+    issue_team_id: str | None = None,
+) -> LinearConfig:
+    """Resolve a LinearConfig, sourcing the team via a precedence chain.
+
+    Precedence (first hit wins):
+      1. team_arg (--team flag, key or UUID)
+      2. LINEAR_TEAM env var (key or UUID)
+      3. issue_team_id (the issue/parent's own team — for update/break)
+      4. .linear.json teamId
+      5. single-team auto-detect (exactly one team in the workspace)
+
+    Raises MISSING_CONFIG when none resolve and the workspace has more than one team.
+
+    Config-merge rule: when .linear.json exists and the resolved team matches its
+    teamId, the file is returned as-is (keeps projectId/defaultPriority/defaultLabels).
+    When the team was overridden to a *different* team, defaultPriority/defaultLabels
+    are kept (labels resolve by name later) but projectId is dropped (it is a
+    team-scoped UUID that won't match a different team).
+    """
+    file_config = _load_config_optional()
+
+    ref = team_arg or os.environ.get("LINEAR_TEAM") or None
+    if ref:
+        team_id = client.find_team_by_ref(ref)["id"]
+    elif issue_team_id:
+        team_id = issue_team_id
+    elif file_config is not None:
+        team_id = file_config.team_id
+    else:
+        teams = client.get_teams()
+        if len(teams) == 1:
+            team_id = teams[0]["id"]
+        else:
+            keys = ", ".join(sorted(t.get("key", "") for t in teams if t.get("key")))
+            suggestions = []
+            if keys:
+                suggestions.append(f"Available team keys: {keys}")
+            suggestions += [
+                "Specify a team: --team KEY",
+                "Or set LINEAR_TEAM=KEY in your environment",
+                'Or create .linear.json with {"teamId": "..."}',
+            ]
+            raise LinearError(
+                code=ErrorCode.MISSING_CONFIG,
+                message="No team specified and the workspace has more than one team",
+                suggestions=suggestions,
+            )
+
+    if file_config is None:
+        return LinearConfig(team_id=team_id)
+    if file_config.team_id == team_id:
+        return file_config
+    return LinearConfig(
+        team_id=team_id,
+        project_id=None,  # file projectId is scoped to the file's team
+        default_priority=file_config.default_priority,
+        default_labels=list(file_config.default_labels or []),
     )
 
 
@@ -587,6 +667,19 @@ query {
           name
         }
       }
+    }
+  }
+}
+"""
+
+QUERY_TEAMS = """
+query {
+  teams {
+    pageInfo { hasNextPage }
+    nodes {
+      id
+      key
+      name
     }
   }
 }
@@ -1357,6 +1450,43 @@ class LinearClient:
         raise LinearError(
             code=ErrorCode.PROJECT_NOT_FOUND,
             message=f"Project '{project_name}' not found",
+            suggestions=suggestions,
+        )
+
+    def get_teams(self) -> list[dict[str, Any]]:
+        """Get all teams in the workspace as [{id, key, name}]."""
+        data = self._request(QUERY_TEAMS)
+        conn = data.get("teams", {})
+        self._mark_truncation("teams", conn)
+        return conn.get("nodes", [])
+
+    def find_team_by_ref(self, ref: str) -> dict[str, Any]:
+        """Resolve a team by key (case-insensitive), exact id, or partial name."""
+        teams = self.get_teams()
+        ref_lower = ref.lower()
+
+        # Exact key match (case-insensitive)
+        for team in teams:
+            if team.get("key", "").lower() == ref_lower:
+                return team
+
+        # Exact id match
+        for team in teams:
+            if team.get("id") == ref:
+                return team
+
+        # Partial name match
+        for team in teams:
+            if ref_lower in team.get("name", "").lower():
+                return team
+
+        available = ", ".join(sorted(t.get("key", "") for t in teams if t.get("key")))
+        suggestions = [f"Available team keys: {available}"] if available else []
+        if self.is_truncated("teams"):
+            suggestions.append("Note: team list was truncated — more teams may exist")
+        raise LinearError(
+            code=ErrorCode.TEAM_NOT_FOUND,
+            message=f"Team '{ref}' not found",
             suggestions=suggestions,
         )
 
@@ -2269,18 +2399,32 @@ class LinearClient:
 
     def create_sub_issues(
         self,
-        config: LinearConfig,
         parent_id: str,
         issues: list[dict[str, Any]],
         project_id: str | None = None,
         no_project: bool = False,
         label_ids: list[str] | None = None,
         no_labels: bool = False,
+        parent: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Create multiple sub-issues under a parent."""
-        # Get parent issue to extract its UUID and project
-        parent = self.get_issue(parent_id)
+        """Create multiple sub-issues under a parent.
+
+        The sub-issues inherit the parent's team (Linear ties a sub-issue to its
+        parent's team), so no .linear.json is required. Pass an already-fetched
+        ``parent`` dict to avoid a redundant get_issue call.
+        """
+        # Get parent issue to extract its UUID, team, and project
+        if parent is None:
+            parent = self.get_issue(parent_id)
         parent_uuid = parent.get("id")
+
+        parent_team_id = parent.get("team", {}).get("id")
+        if not parent_team_id:
+            raise LinearError(
+                code=ErrorCode.API_ERROR,
+                message=f"Could not determine team for parent issue {parent_id}",
+            )
+        config = LinearConfig(team_id=parent_team_id)
 
         # Inherit parent's project if not explicitly specified
         if not no_project and not project_id:
@@ -2714,6 +2858,11 @@ def create(
         "--cycle",
         help='Cycle number or "active" (assigns after creation)',
     ),
+    team: Optional[str] = typer.Option(
+        None,
+        "--team",
+        help="Team key or UUID (overrides .linear.json)",
+    ),
 ) -> None:
     """Create a new issue.
 
@@ -2727,12 +2876,13 @@ def create(
         linear.py create "Fix login" --assignee roland@example.com
         linear.py create "Fix login" --assignee @me
         linear.py create "Sprint task" --cycle active
+        linear.py create "Backend task" --team ENG
     """
     command = "create"
 
     try:
-        config = load_config()
         client = LinearClient()
+        config = resolve_config(client, team)
 
         # Resolve project name to ID if provided
         project_id = None
@@ -2909,6 +3059,12 @@ def update(
         "--no-cycle",
         help="Remove from cycle",
     ),
+    team: Optional[str] = typer.Option(
+        None,
+        "--team",
+        help="Team key or UUID for resolving --label/--project/--cycle names "
+        "(defaults to the issue's own team)",
+    ),
 ) -> None:
     """Update an existing issue.
 
@@ -2929,12 +3085,35 @@ def update(
         linear.py update ABC-123 --no-milestone
         linear.py update ABC-123 --cycle active
         linear.py update ABC-123 --no-cycle
+        linear.py update ABC-123 --label mobile --team ENG
     """
     command = "update"
 
     try:
         client = LinearClient()
-        config = load_config()
+
+        # The team is only needed to resolve --label/--project/--cycle *names*.
+        # Fetch the issue (and derive its team) lazily and at most once.
+        _cache: dict[str, Any] = {}
+
+        def get_current_issue() -> dict[str, Any]:
+            if "issue" not in _cache:
+                _cache["issue"] = client.get_issue(issue_id)
+            return _cache["issue"]
+
+        def resolve_team_id() -> str:
+            if "team_id" not in _cache:
+                if team:
+                    _cache["team_id"] = client.find_team_by_ref(team)["id"]
+                else:
+                    tid = get_current_issue().get("team", {}).get("id")
+                    if not tid:
+                        raise LinearError(
+                            code=ErrorCode.API_ERROR,
+                            message=f"Could not determine team for issue {issue_id}",
+                        )
+                    _cache["team_id"] = tid
+            return _cache["team_id"]
 
         # Resolve parent identifier to UUID if provided
         parent_id = None
@@ -2949,14 +3128,14 @@ def update(
         removed_label_ids = None
         if no_labels or label:
             # Fetch current issue to get existing labels
-            current_issue = client.get_issue(issue_id)
-            current_labels = current_issue.get("labels", {}).get("nodes", [])
+            current = get_current_issue()
+            current_labels = current.get("labels", {}).get("nodes", [])
             current_label_ids = [l["id"] for l in current_labels]
 
             if no_labels and not label:
                 removed_label_ids = current_label_ids
             if label:
-                label_ids = client.resolve_label_names(label, config.team_id)
+                label_ids = client.resolve_label_names(label, resolve_team_id())
                 # Remove labels not in the new set
                 new_set = set(label_ids)
                 removed_label_ids = [lid for lid in current_label_ids if lid not in new_set]
@@ -2984,7 +3163,7 @@ def update(
         if no_project:
             project_id = ""  # Empty string signals removal to update_issue
         elif project:
-            found = client.find_project_by_name(project, config.team_id)
+            found = client.find_project_by_name(project, resolve_team_id())
             project_id = found["id"]
 
         # Resolve milestone
@@ -2992,8 +3171,8 @@ def update(
         if no_milestone:
             milestone_id = ""  # Empty string signals removal
         elif milestone:
-            current_issue = client.get_issue(issue_id)
-            issue_project = current_issue.get("project")
+            current = get_current_issue()
+            issue_project = current.get("project")
             if not issue_project:
                 raise LinearError(
                     code=ErrorCode.INVALID_INPUT,
@@ -3008,7 +3187,7 @@ def update(
         if no_cycle:
             cycle_id = ""  # Empty string signals removal
         elif cycle:
-            resolved_cycle = client.resolve_cycle(cycle, config.team_id)
+            resolved_cycle = client.resolve_cycle(cycle, resolve_team_id())
             cycle_id = resolved_cycle["id"]
 
         issue = client.update_issue(
@@ -3170,7 +3349,6 @@ def break_issue(
     command = "break"
 
     try:
-        config = load_config()
         client = LinearClient()
 
         # Parse JSON issues
@@ -3190,21 +3368,31 @@ def break_issue(
                 suggestions=['Use format: [{"title": "..."}, {"title": "..."}]'],
             )
 
+        # Fetch the parent once; sub-issues inherit its team (no config required).
+        parent = client.get_issue(issue_id)
+        team_id = parent.get("team", {}).get("id")
+        if not team_id:
+            raise LinearError(
+                code=ErrorCode.API_ERROR,
+                message=f"Could not determine team for parent issue {issue_id}",
+            )
+
         # Resolve project name to ID if provided
         project_id = None
         if project:
-            project_info = client.find_project_by_name(project, config.team_id)
+            project_info = client.find_project_by_name(project, team_id)
             project_id = project_info["id"]
 
         # Resolve label names to IDs if provided
         label_ids = None
         if label:
-            label_ids = client.resolve_label_names(label, config.team_id)
+            label_ids = client.resolve_label_names(label, team_id)
 
         created = client.create_sub_issues(
-            config, issue_id, issues_data,
+            issue_id, issues_data,
             project_id=project_id, no_project=no_project,
             label_ids=label_ids, no_labels=no_labels,
+            parent=parent,
         )
 
         formatted_created = []
@@ -3227,7 +3415,7 @@ def break_issue(
             },
             metadata={
                 "count": len(created),
-                "teamId": config.team_id,
+                "teamId": team_id,
             },
         )
         typer.echo(output_json(response))

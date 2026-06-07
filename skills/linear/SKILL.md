@@ -34,8 +34,8 @@ Use `-V` only when the user:
 **Commands:**
 | Command | Usage | Purpose |
 |---------|-------|---------|
-| `create` | `create "<title>" [-d desc] [-p priority] [-e estimate] [--parent ID] [--project name] [--no-project] [--label name] [--assignee <email-or-@me>] [--cycle <number-or-"active">]` | Create issue |
-| `update` | `update <ID> [-t title] [-d desc] [-p priority] [-e estimate] [--parent ID] [--label name] [--no-labels] [--assignee <email-or-@me>] [--no-assignee] [--project name] [--no-project] [--cycle <number-or-"active">] [--no-cycle]` | Update fields |
+| `create` | `create "<title>" [-d desc] [-p priority] [-e estimate] [--parent ID] [--project name] [--no-project] [--label name] [--assignee <email-or-@me>] [--cycle <number-or-"active">] [--team <key-or-uuid>]` | Create issue |
+| `update` | `update <ID> [-t title] [-d desc] [-p priority] [-e estimate] [--parent ID] [--label name] [--no-labels] [--assignee <email-or-@me>] [--no-assignee] [--project name] [--no-project] [--cycle <number-or-"active">] [--no-cycle] [--team <key-or-uuid>]` | Update fields |
 | `done` | `done <ID>` | Mark completed |
 | `state` | `state <ID> "<name>"` | Change state |
 | `break` | `break <ID> --issues '[{...}]' [--project name] [--no-project] [--label name] [--no-labels]` | Create sub-issues |
@@ -102,7 +102,7 @@ Filters combine with AND logic.
 </cli_reference>
 
 <config>
-**Project config:** `.linear.json` in project root (searched upward from pwd):
+**Project config:** `.linear.json` in project root (searched upward from pwd). **Optional** — see team resolution below.
 
 ```json
 {
@@ -113,9 +113,21 @@ Filters combine with AND logic.
 }
 ```
 
-- `teamId` — Required. Your Linear team UUID.
+- `teamId` — Your Linear team UUID. Only needed in the file if you rely on `.linear.json` to pick the team (see below).
 - `projectId` — Optional. Default project for new issues. Can be overridden with `--project` or `--no-project`.
 - `defaultLabels` — Optional. Label names auto-applied on `create` when `--label` is not specified.
+
+**Team resolution.** When a write command (`create`/`update`/`break`) needs a team, it resolves in this order and stops at the first hit:
+
+1. `--team <key-or-uuid>` flag (on `create`/`update`) — accepts a team **key** like `ENG` or a raw UUID
+2. `LINEAR_TEAM` env var (key or UUID)
+3. the issue's / parent's own team — `update` and `break` derive the team from the target issue, so they need **no config and no `--team`**
+4. `.linear.json` `teamId`
+5. single-team auto-detect — if the workspace has exactly one team, it is used automatically
+
+A **single-team workspace needs no config at all** — every command auto-detects the only team. In a multi-team workspace, `create` needs one of `--team` / `LINEAR_TEAM` / `.linear.json` (or it errors listing the available team keys).
+
+When `.linear.json` is present but the team is overridden to a *different* team (via `--team`/`LINEAR_TEAM`), the file's `defaultPriority`/`defaultLabels` still apply but its `projectId` is dropped (it is scoped to the file's team).
 
 **API key:** Set `LINEAR_API_KEY` in project's `.claude/settings.local.json` (git-ignored by default):
 
@@ -399,7 +411,8 @@ User provides the sub-issues in conversation. Do NOT propose or generate sub-iss
 **Handle errors gracefully:**
 
 - **MISSING_API_KEY:** Explain how to set LINEAR_API_KEY in project `.claude/settings.local.json`
-- **MISSING_CONFIG:** Explain how to create .linear.json
+- **MISSING_CONFIG:** Only seen in a multi-team workspace with no team selected. Tell the user to pass `--team KEY`, set `LINEAR_TEAM`, or create `.linear.json`; single-team workspaces auto-detect and never hit this. The error lists the available team keys.
+- **TEAM_NOT_FOUND:** The `--team`/`LINEAR_TEAM` ref matched no team. List the available team keys from the error suggestions.
 - **ISSUE_NOT_FOUND:** Suggest checking the identifier
 - **STATE_NOT_FOUND:** List available states from `states` command
 - **PROJECT_NOT_FOUND:** List available projects from `projects` command
