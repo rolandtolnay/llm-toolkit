@@ -16,6 +16,14 @@ _Avoid_: Shopping search, product scraper
 The command-line source tool that turns a YouTube query into selected video evidence with transcripts or extracted findings.
 _Avoid_: YouTube scraper, transcript script
 
+**Gmail Skill**:
+A reusable skill that lets an agent find and read the user's Gmail messages through a narrow, structured, read-only command surface.
+_Avoid_: Gmail scraper, email bot
+
+**Gmail Read CLI**:
+The command-line source tool that turns email search instructions into bounded message metadata, snippets, and selected message bodies for agent use.
+_Avoid_: Gmail API when referring to the caller-facing command contract, mailbox dump
+
 **Primary Backend**:
 The backend attempted first by a source tool during normal operation.
 _Avoid_: Default provider when describing fallback behavior
@@ -38,6 +46,8 @@ _Avoid_: After date, exact date filter
 - The **Research Skill** exposes the **YouTube Research CLI**.
 - The **YouTube Research CLI** has exactly one **Public CLI Contract**.
 - The **YouTube Research CLI** attempts the **Primary Backend** before the **Free Fallback Backend**.
+- The **Gmail Skill** exposes the **Gmail Read CLI**.
+- The **Gmail Read CLI** has exactly one **Public CLI Contract**.
 
 ## Example dialogue
 
