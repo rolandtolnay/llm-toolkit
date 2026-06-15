@@ -20,19 +20,18 @@ def load_gmail_module():
     return module
 
 
-def test_config_reports_loaded_env_files_and_masks_credentials(monkeypatch, tmp_path):
+def test_config_reports_credential_sources_and_masks_credentials(monkeypatch, tmp_path):
     home = tmp_path / "home"
     project = tmp_path / "project"
-    global_env_dir = home / ".claude" / "gmail"
-    local_env_dir = project / ".claude"
-    global_env_dir.mkdir(parents=True)
-    local_env_dir.mkdir(parents=True)
-    project.mkdir(exist_ok=True)
-    (global_env_dir / ".env").write_text(
-        "GMAIL_USER=global@example.com\nGMAIL_APP_PASSWORD=global-secret\n"
+    user_env_dir = home / ".claude" / "gmail"
+    project_env_dir = project / ".claude"
+    user_env_dir.mkdir(parents=True)
+    project_env_dir.mkdir(parents=True)
+    (user_env_dir / ".env").write_text(
+        "GMAIL_USER=user-file@example.com\nGMAIL_APP_PASSWORD=user-file-secret\n"
     )
-    (local_env_dir / "gmail.env").write_text(
-        "GMAIL_USER=local@example.com\nGMAIL_APP_PASSWORD=local-secret\n"
+    (project_env_dir / "gmail.env").write_text(
+        "GMAIL_USER=project-file@example.com\nGMAIL_APP_PASSWORD=project-file-secret\n"
     )
 
     monkeypatch.chdir(project)
@@ -51,14 +50,218 @@ def test_config_reports_loaded_env_files_and_masks_credentials(monkeypatch, tmp_
         "gmail_user_present": True,
         "gmail_app_password_present": True,
     }
-    assert data["result"]["env_files"] == [
-        {"path": str(global_env_dir / ".env"), "loaded": True},
-        {"path": str(local_env_dir / "gmail.env"), "loaded": True},
+    assert {"kind": "project_env_file", "loaded": True, "path": str(project_env_dir / "gmail.env")} in data[
+        "result"
+    ]["credential_sources"]
+    assert {"kind": "user_env_file", "loaded": True, "path": str(user_env_dir / ".env")} in data["result"][
+        "credential_sources"
     ]
-    assert "global-secret" not in result.stdout
-    assert "local-secret" not in result.stdout
-    assert "global@example.com" not in result.stdout
-    assert "local@example.com" not in result.stdout
+    assert "project-file-secret" not in result.stdout
+    assert "user-file-secret" not in result.stdout
+    assert "project-file@example.com" not in result.stdout
+    assert "user-file@example.com" not in result.stdout
+
+
+def test_process_env_wins_over_config_files(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "project"
+    project_env_dir = project / ".claude"
+    project_env_dir.mkdir(parents=True)
+    (project_env_dir / "gmail.env").write_text(
+        "GMAIL_USER=file@example.com\nGMAIL_APP_PASSWORD=file-secret\n"
+    )
+
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("GMAIL_USER", "env@example.com")
+    monkeypatch.setenv("GMAIL_APP_PASSWORD", "env-secret")
+    module = load_gmail_module()
+    seen = {}
+
+    class FakeBackend:
+        def __init__(self, user, password):
+            seen["user"] = user
+            seen["password"] = password
+
+        def labels(self):
+            return ({"labels": []}, {"backend": "imap", "readonly": True})
+
+    monkeypatch.setattr(module, "GmailBackend", FakeBackend, raising=False)
+
+    result = CliRunner().invoke(module.app, ["labels"])
+
+    assert result.exit_code == 0
+    assert seen == {"user": "env@example.com", "password": "env-secret"}
+    assert "file-secret" not in result.stdout
+
+
+def test_project_env_file_wins_over_user_env_file(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "project"
+    user_env_dir = home / ".claude" / "gmail"
+    project_env_dir = project / ".claude"
+    user_env_dir.mkdir(parents=True)
+    project_env_dir.mkdir(parents=True)
+    (user_env_dir / ".env").write_text(
+        "GMAIL_USER=user-file@example.com\nGMAIL_APP_PASSWORD=user-file-secret\n"
+    )
+    (project_env_dir / "gmail.env").write_text(
+        "GMAIL_USER=project-file@example.com\nGMAIL_APP_PASSWORD=project-file-secret\n"
+    )
+
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("GMAIL_USER", raising=False)
+    monkeypatch.delenv("GMAIL_APP_PASSWORD", raising=False)
+    module = load_gmail_module()
+    seen = {}
+
+    class FakeBackend:
+        def __init__(self, user, password):
+            seen["user"] = user
+            seen["password"] = password
+
+        def labels(self):
+            return ({"labels": []}, {"backend": "imap", "readonly": True})
+
+    monkeypatch.setattr(module, "GmailBackend", FakeBackend, raising=False)
+
+    result = CliRunner().invoke(module.app, ["labels"])
+
+    assert result.exit_code == 0
+    assert seen == {"user": "project-file@example.com", "password": "project-file-secret"}
+    assert "user-file-secret" not in result.stdout
+
+
+def test_user_env_file_wins_over_agents_env_json(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "project"
+    user_env_dir = home / ".claude" / "gmail"
+    agents_dir = home / ".config" / "agents"
+    user_env_dir.mkdir(parents=True)
+    agents_dir.mkdir(parents=True)
+    project.mkdir()
+    (user_env_dir / ".env").write_text(
+        "GMAIL_USER=user-file@example.com\nGMAIL_APP_PASSWORD=user-file-secret\n"
+    )
+    (agents_dir / "env.json").write_text(
+        json.dumps(
+            {
+                "env": {
+                    "GMAIL_USER": "agent-json@example.com",
+                    "GMAIL_APP_PASSWORD": "agent-json-secret",
+                }
+            }
+        )
+    )
+
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("GMAIL_USER", raising=False)
+    monkeypatch.delenv("GMAIL_APP_PASSWORD", raising=False)
+    module = load_gmail_module()
+    seen = {}
+
+    class FakeBackend:
+        def __init__(self, user, password):
+            seen["user"] = user
+            seen["password"] = password
+
+        def labels(self):
+            return ({"labels": []}, {"backend": "imap", "readonly": True})
+
+    monkeypatch.setattr(module, "GmailBackend", FakeBackend, raising=False)
+
+    result = CliRunner().invoke(module.app, ["labels"])
+
+    assert result.exit_code == 0
+    assert seen == {"user": "user-file@example.com", "password": "user-file-secret"}
+    assert "agent-json-secret" not in result.stdout
+
+
+def test_agents_env_json_fills_missing_credentials_without_printing_values(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "project"
+    agents_dir = home / ".config" / "agents"
+    agents_dir.mkdir(parents=True)
+    project.mkdir()
+    (agents_dir / "env.json").write_text(
+        json.dumps(
+            {
+                "env": {
+                    "GMAIL_USER": "agent-json@example.com",
+                    "GMAIL_APP_PASSWORD": "agent-json-secret",
+                }
+            }
+        )
+    )
+
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("GMAIL_USER", raising=False)
+    monkeypatch.delenv("GMAIL_APP_PASSWORD", raising=False)
+    module = load_gmail_module()
+
+    result = CliRunner().invoke(module.app, ["config"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["result"]["credentials"] == {
+        "gmail_user_present": True,
+        "gmail_app_password_present": True,
+    }
+    assert {"kind": "agents_env_json", "loaded": True, "path": str(agents_dir / "env.json")} in data[
+        "result"
+    ]["credential_sources"]
+    assert "agent-json-secret" not in result.stdout
+    assert "agent-json@example.com" not in result.stdout
+
+
+def test_shell_env_is_ignored_by_default_and_loaded_when_requested(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "project"
+    home.mkdir()
+    project.mkdir()
+    fake_shell = tmp_path / "fake-shell"
+    fake_shell.write_text(
+        "#!/bin/sh\n"
+        "cat <<'EOF'\n"
+        "__GMAIL_ENV_JSON_START__\n"
+        '{"GMAIL_USER":"shell@example.com","GMAIL_APP_PASSWORD":"shell-secret"}\n'
+        "__GMAIL_ENV_JSON_END__\n"
+        "EOF\n"
+    )
+    fake_shell.chmod(0o755)
+
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("SHELL", str(fake_shell))
+    monkeypatch.delenv("GMAIL_USER", raising=False)
+    monkeypatch.delenv("GMAIL_APP_PASSWORD", raising=False)
+    module = load_gmail_module()
+
+    default_result = CliRunner().invoke(module.app, ["config"])
+    loaded_result = CliRunner().invoke(module.app, ["config", "--load-shell-env"])
+
+    assert default_result.exit_code == 0
+    default_data = json.loads(default_result.stdout)
+    assert default_data["result"]["credentials"] == {
+        "gmail_user_present": False,
+        "gmail_app_password_present": False,
+    }
+    assert {"kind": "login_shell_env", "loaded": False, "skipped": True, "reason": "not requested"} in default_data[
+        "result"
+    ]["credential_sources"]
+
+    assert loaded_result.exit_code == 0
+    loaded_data = json.loads(loaded_result.stdout)
+    assert loaded_data["result"]["credentials"] == {
+        "gmail_user_present": True,
+        "gmail_app_password_present": True,
+    }
+    assert {"kind": "login_shell_env", "loaded": True} in loaded_data["result"]["credential_sources"]
+    assert "shell-secret" not in loaded_result.stdout
+    assert "shell@example.com" not in loaded_result.stdout
 
 
 def test_doctor_reports_readonly_connectivity(monkeypatch):
@@ -159,10 +362,16 @@ def test_labels_returns_success_envelope_from_backend(monkeypatch):
     }
 
 
-def test_search_missing_credentials_returns_stable_error(monkeypatch):
-    module = load_gmail_module()
+def test_search_missing_credentials_returns_stable_error(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "project"
+    home.mkdir()
+    project.mkdir()
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("HOME", str(home))
     monkeypatch.delenv("GMAIL_USER", raising=False)
     monkeypatch.delenv("GMAIL_APP_PASSWORD", raising=False)
+    module = load_gmail_module()
 
     result = CliRunner().invoke(module.app, ["search", "--from", "example.com"])
 

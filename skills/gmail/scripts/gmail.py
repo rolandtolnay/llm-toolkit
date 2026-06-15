@@ -15,7 +15,10 @@ import json
 import os
 import quopri
 import re
+import shlex
 import ssl
+import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email import policy
@@ -33,32 +36,238 @@ import typer
 # Env file loading
 # ---------------------------------------------------------------------------
 
-_ENV_FILE_PATHS = [
-    Path.home() / ".claude" / "gmail" / ".env",
-    Path.cwd() / ".claude" / "gmail.env",
-]
+_GMAIL_ENV_KEYS = ("GMAIL_USER", "GMAIL_APP_PASSWORD")
+_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
-def _load_env_files() -> list[Path]:
-    """Load skill-specific env files into os.environ. Later files override earlier files."""
-    loaded: list[Path] = []
-    for p in _ENV_FILE_PATHS:
-        if p.is_file():
-            for line in p.read_text().splitlines():
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                key, sep, value = line.partition("=")
-                if key and sep:
-                    value = value.strip()
-                    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
-                        value = value[1:-1]
-                    os.environ[key.strip()] = value
-            loaded.append(p)
-    return loaded
+@dataclass
+class EnvSourceStatus:
+    kind: str
+    loaded: bool
+    path: str | None = None
+    skipped: bool = False
+    reason: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {"kind": self.kind, "loaded": self.loaded}
+        if self.path is not None:
+            data["path"] = self.path
+        if self.skipped:
+            data["skipped"] = True
+        if self.reason:
+            data["reason"] = self.reason
+        return data
 
 
-_LOADED_ENV_FILES = _load_env_files()
+@dataclass
+class GmailConfig:
+    user: str
+    app_password: str
+    sources: list[EnvSourceStatus]
+
+
+def _env_file_paths() -> list[tuple[str, Path]]:
+    return [
+        ("project_env_file", Path.cwd() / ".claude" / "gmail.env"),
+        ("user_env_file", Path.home() / ".claude" / "gmail" / ".env"),
+    ]
+
+
+def _agents_env_json_paths() -> list[Path]:
+    """Return candidate Pi/Agents env.json locations without reading protected contents."""
+    paths: list[Path] = []
+    configured = os.environ.get("AGENTS_ENV_JSON")
+    if configured:
+        paths.append(Path(configured).expanduser())
+    paths.extend(
+        [
+            Path.home() / ".config" / "agents" / "env.json",
+            Path.home() / ".agents" / "env.json",
+            Path.home() / ".pi" / "agents" / "env.json",
+            Path.home() / ".pi" / "agent" / "agents" / "env.json",
+        ]
+    )
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for path in paths:
+        if path not in seen:
+            unique.append(path)
+            seen.add(path)
+    return unique
+
+
+def _parse_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, sep, value = line.partition("=")
+        key = key.strip()
+        if key and sep and _ENV_NAME_RE.match(key):
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                value = value[1:-1]
+            values[key] = value
+    return values
+
+
+def _coerce_env_json_value(value: Any) -> str | None:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, dict) and isinstance(value.get("value"), str):
+        return value["value"]
+    return None
+
+
+def _extract_env_json_values(data: Any) -> dict[str, str]:
+    if not isinstance(data, dict):
+        return {}
+
+    raw_values: dict[str, Any] = {}
+    raw_values.update(data)
+    for key in ("env", "environment", "environmentVariables"):
+        nested = data.get(key)
+        if isinstance(nested, dict):
+            raw_values.update(nested)
+
+    values: dict[str, str] = {}
+    for key, value in raw_values.items():
+        if not isinstance(key, str) or key not in _GMAIL_ENV_KEYS:
+            continue
+        coerced = _coerce_env_json_value(value)
+        if coerced is not None:
+            values[key] = coerced
+    return values
+
+
+def _missing_keys(values: dict[str, str]) -> set[str]:
+    return {key for key in _GMAIL_ENV_KEYS if not values.get(key)}
+
+
+def _fill_missing_credentials(target: dict[str, str], values: dict[str, str]) -> None:
+    for key in _GMAIL_ENV_KEYS:
+        value = values.get(key)
+        if value and not target.get(key):
+            target[key] = value
+
+
+def _login_shell_commands() -> list[list[str]]:
+    shells: list[str] = []
+    configured_shell = os.environ.get("SHELL")
+    if configured_shell:
+        shells.append(configured_shell)
+    shells.extend(["/bin/zsh", "/bin/bash", "/bin/sh"])
+
+    python = shlex.quote(sys.executable)
+    code = (
+        "import json, os; "
+        "print('__GMAIL_ENV_JSON_START__'); "
+        "print(json.dumps(dict(os.environ))); "
+        "print('__GMAIL_ENV_JSON_END__')"
+    )
+    commands: list[list[str]] = []
+    seen: set[str] = set()
+    for shell in shells:
+        if shell in seen or not Path(shell).exists():
+            continue
+        seen.add(shell)
+        shell_name = Path(shell).name
+        flags = "-lic" if shell_name in {"bash", "zsh"} else "-lc"
+        commands.append([shell, flags, f"{python} -c {shlex.quote(code)}"])
+    return commands
+
+
+def _read_login_shell_environment(missing_keys: set[str]) -> dict[str, str]:
+    env = dict(os.environ)
+    for command in _login_shell_commands():
+        try:
+            result = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                env=env,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode != 0:
+            continue
+
+        start = result.stdout.find("__GMAIL_ENV_JSON_START__")
+        end = result.stdout.find("__GMAIL_ENV_JSON_END__", start)
+        if start == -1 or end == -1:
+            continue
+        payload = result.stdout[start + len("__GMAIL_ENV_JSON_START__") : end].strip()
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        values = {
+            key: value
+            for key, value in data.items()
+            if key in missing_keys and isinstance(value, str) and value
+        }
+        if values:
+            return values
+    return {}
+
+
+def _resolve_gmail_config(*, load_shell_env: bool = False) -> GmailConfig:
+    values = {key: os.environ.get(key, "") for key in _GMAIL_ENV_KEYS}
+    sources = [
+        EnvSourceStatus(
+            "process_env",
+            loaded=any(values.values()),
+            reason="highest priority when set",
+        )
+    ]
+
+    for kind, path in _env_file_paths():
+        loaded = False
+        if path.is_file():
+            try:
+                file_values = _parse_env_file(path)
+            except OSError:
+                file_values = {}
+            else:
+                loaded = True
+                _fill_missing_credentials(values, file_values)
+        sources.append(EnvSourceStatus(kind, loaded=loaded, path=str(path)))
+
+    for path in _agents_env_json_paths():
+        loaded = False
+        if path.is_file():
+            try:
+                json_values = _extract_env_json_values(json.loads(path.read_text()))
+            except (OSError, json.JSONDecodeError):
+                json_values = {}
+            else:
+                loaded = True
+                _fill_missing_credentials(values, json_values)
+        sources.append(EnvSourceStatus("agents_env_json", loaded=loaded, path=str(path)))
+
+    missing = _missing_keys(values)
+    if load_shell_env and missing:
+        shell_values = _read_login_shell_environment(missing)
+        _fill_missing_credentials(values, shell_values)
+        sources.append(EnvSourceStatus("login_shell_env", loaded=bool(shell_values)))
+    else:
+        reason = "not requested" if not load_shell_env else "credentials already present"
+        sources.append(EnvSourceStatus("login_shell_env", loaded=False, skipped=True, reason=reason))
+
+    return GmailConfig(
+        user=values.get("GMAIL_USER", ""),
+        app_password=values.get("GMAIL_APP_PASSWORD", ""),
+        sources=sources,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -190,20 +399,21 @@ def build_gmail_query(
 # ---------------------------------------------------------------------------
 
 
-def _require_credentials() -> tuple[str, str]:
-    user = os.environ.get("GMAIL_USER", "")
-    password = os.environ.get("GMAIL_APP_PASSWORD", "")
-    if not user or not password:
+def _require_credentials(*, load_shell_env: bool = False) -> tuple[str, str]:
+    config = _resolve_gmail_config(load_shell_env=load_shell_env)
+    if not config.user or not config.app_password:
         raise GmailError(
             ErrorCode.MISSING_CREDENTIALS,
             "GMAIL_USER and GMAIL_APP_PASSWORD must be set for Gmail access.",
             suggestions=[
-                "Add GMAIL_USER and GMAIL_APP_PASSWORD to ~/.claude/gmail/.env",
-                "Or add them to ./.claude/gmail.env for this project",
+                "Export GMAIL_USER and GMAIL_APP_PASSWORD in the process environment",
+                "Or add them to ~/.claude/gmail/.env or ./.claude/gmail.env",
+                "Or add them to an agents/env.json source such as ~/.config/agents/env.json",
+                "If they are exported only from shell startup files, rerun with --load-shell-env",
                 "Use a Gmail app password, not your normal account password",
             ],
         )
-    return user, password
+    return config.user, config.app_password
 
 
 GMAIL_IMAP_HOST = "imap.gmail.com"
@@ -896,9 +1106,11 @@ class GmailBackend:
 def _run_backend_command(
     command: str,
     action: Callable[[GmailBackend], tuple[dict[str, Any], dict[str, Any]]],
+    *,
+    load_shell_env: bool = False,
 ) -> None:
     try:
-        user, password = _require_credentials()
+        user, password = _require_credentials(load_shell_env=load_shell_env)
         result, metadata = action(GmailBackend(user, password))
         emit(output_success(command, result, metadata))
     except GmailError as e:
@@ -918,19 +1130,23 @@ app = typer.Typer(
 
 
 @app.command()
-def config() -> None:
+def config(
+    load_shell_env: bool = typer.Option(
+        False,
+        "--load-shell-env",
+        help="Opt in to reading exported Gmail credentials from a login shell.",
+    ),
+) -> None:
     """Show resolved Gmail configuration without printing secret values."""
+    resolved = _resolve_gmail_config(load_shell_env=load_shell_env)
     emit(
         output_success(
             "config",
             {
-                "env_files": [
-                    {"path": str(p), "loaded": p in _LOADED_ENV_FILES}
-                    for p in _ENV_FILE_PATHS
-                ],
+                "credential_sources": [source.to_dict() for source in resolved.sources],
                 "credentials": {
-                    "gmail_user_present": bool(os.environ.get("GMAIL_USER")),
-                    "gmail_app_password_present": bool(os.environ.get("GMAIL_APP_PASSWORD")),
+                    "gmail_user_present": bool(resolved.user),
+                    "gmail_app_password_present": bool(resolved.app_password),
                 },
             },
             {"network": False},
@@ -939,9 +1155,15 @@ def config() -> None:
 
 
 @app.command()
-def doctor() -> None:
+def doctor(
+    load_shell_env: bool = typer.Option(
+        False,
+        "--load-shell-env",
+        help="Opt in to reading exported Gmail credentials from a login shell.",
+    ),
+) -> None:
     """Check read-only Gmail connectivity."""
-    _run_backend_command("doctor", lambda backend: backend.doctor())
+    _run_backend_command("doctor", lambda backend: backend.doctor(), load_shell_env=load_shell_env)
 
 
 @app.command()
@@ -958,6 +1180,11 @@ def search(
     snippet_chars: str = typer.Option("500", "--snippet-chars", help="Maximum snippet characters"),
     include_sent: bool = typer.Option(False, "--include-sent", help="Include sent mail in discovery search"),
     include_spam_trash: bool = typer.Option(False, "--include-spam-trash", help="Include spam/trash"),
+    load_shell_env: bool = typer.Option(
+        False,
+        "--load-shell-env",
+        help="Opt in to reading exported Gmail credentials from a login shell.",
+    ),
 ) -> None:
     """Search Gmail messages."""
     try:
@@ -985,6 +1212,7 @@ def search(
             limit=limit_value,
             snippet_chars=snippet_chars_value,
         ),
+        load_shell_env=load_shell_env,
     )
 
 
@@ -992,6 +1220,11 @@ def search(
 def get(
     message_id: str,
     max_chars: str = typer.Option("8000", "--max-chars", help="Maximum body characters"),
+    load_shell_env: bool = typer.Option(
+        False,
+        "--load-shell-env",
+        help="Opt in to reading exported Gmail credentials from a login shell.",
+    ),
 ) -> None:
     """Read one selected Gmail message."""
     try:
@@ -999,7 +1232,11 @@ def get(
     except GmailError as e:
         emit(output_error("get", e))
         raise typer.Exit(code=1)
-    _run_backend_command("get", lambda backend: backend.get_message(message_id, max_chars_value))
+    _run_backend_command(
+        "get",
+        lambda backend: backend.get_message(message_id, max_chars_value),
+        load_shell_env=load_shell_env,
+    )
 
 
 @app.command()
@@ -1008,6 +1245,11 @@ def thread(
     max_messages: str = typer.Option("10", "--max-messages", help="Maximum messages to return"),
     max_chars_per_message: str = typer.Option(
         "6000", "--max-chars-per-message", help="Maximum body characters per message"
+    ),
+    load_shell_env: bool = typer.Option(
+        False,
+        "--load-shell-env",
+        help="Opt in to reading exported Gmail credentials from a login shell.",
     ),
 ) -> None:
     """Read one selected Gmail thread."""
@@ -1020,13 +1262,20 @@ def thread(
     _run_backend_command(
         "thread",
         lambda backend: backend.get_thread(thread_id, max_messages_value, max_chars_value),
+        load_shell_env=load_shell_env,
     )
 
 
 @app.command()
-def labels() -> None:
+def labels(
+    load_shell_env: bool = typer.Option(
+        False,
+        "--load-shell-env",
+        help="Opt in to reading exported Gmail credentials from a login shell.",
+    ),
+) -> None:
     """List Gmail labels/mailboxes."""
-    _run_backend_command("labels", lambda backend: backend.labels())
+    _run_backend_command("labels", lambda backend: backend.labels(), load_shell_env=load_shell_env)
 
 
 if __name__ == "__main__":

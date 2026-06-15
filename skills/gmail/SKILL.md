@@ -18,12 +18,12 @@ Script path: `~/.claude/skills/gmail/scripts/gmail.py`
 Run with: `uv run <script> <command> [options]`
 
 ```
-uv run <script> search [--from X] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--subject TEXT] [--text TEXT] [--query RAW] [--label LABEL] [--mailbox all|inbox] [--limit N] [--snippet-chars N] [--include-sent] [--include-spam-trash]
-uv run <script> get <message-id> [--max-chars N]
-uv run <script> thread <thread-id> [--max-messages N] [--max-chars-per-message N]
-uv run <script> labels
-uv run <script> config
-uv run <script> doctor
+uv run <script> search [--from X] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--subject TEXT] [--text TEXT] [--query RAW] [--label LABEL] [--mailbox all|inbox] [--limit N] [--snippet-chars N] [--include-sent] [--include-spam-trash] [--load-shell-env]
+uv run <script> get <message-id> [--max-chars N] [--load-shell-env]
+uv run <script> thread <thread-id> [--max-messages N] [--max-chars-per-message N] [--load-shell-env]
+uv run <script> labels [--load-shell-env]
+uv run <script> config [--load-shell-env]
+uv run <script> doctor [--load-shell-env]
 ```
 
 Defaults: search uses All Mail, received mail only, excludes spam/trash, returns bounded snippets rather than full bodies, and applies conservative result limits.
@@ -35,12 +35,9 @@ Required credentials:
 - `GMAIL_USER`
 - `GMAIL_APP_PASSWORD`
 
-The CLI loads configuration from these files, with later files overriding earlier ones:
+Provide these variables through the agent environment, process environment, or the CLI's supported credential files.
 
-1. `~/.claude/gmail/.env`
-2. `./.claude/gmail.env`
-
-Run `config` to see which files loaded and whether required variables are present. Secret values are never printed.
+Run `config` to see which credential sources loaded and whether required variables are present. Secret values are never printed. If credentials are exported only from shell startup files, use `--load-shell-env`.
 
 Run `doctor` to verify read-only IMAP connectivity without returning email content.
 </configuration>
