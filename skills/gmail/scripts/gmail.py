@@ -9,18 +9,21 @@
 
 from __future__ import annotations
 
+import base64
 import imaplib
 import json
 import os
+import quopri
 import re
 import ssl
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from email import policy
 from email.parser import BytesParser
 from email.utils import parseaddr, parsedate_to_datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from bs4 import BeautifulSoup
 import typer
@@ -250,6 +253,11 @@ def _parse_labels_from_fetch(fetch_text: str) -> list[str]:
     return normalized
 
 
+def _imap_quote(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 def _extract_fetch_response(data: list[Any]) -> tuple[str, bytes]:
     for item in data:
         if isinstance(item, tuple) and len(item) >= 2 and isinstance(item[1], bytes):
@@ -284,6 +292,15 @@ def _part_text(part: Any) -> str:
         return payload.decode(charset, "replace")
 
 
+def _normalize_body_parts(plain_parts: list[str], html_parts: list[str]) -> str:
+    if plain_parts:
+        return normalize_whitespace("\n".join(plain_parts))
+    if html_parts:
+        html = "\n".join(html_parts)
+        return normalize_whitespace(BeautifulSoup(html, "html.parser").get_text(" "))
+    return ""
+
+
 def extract_normalized_body(message: Any) -> str:
     """Return normalized plain text, preferring text/plain over HTML."""
     plain_parts: list[str] = []
@@ -301,12 +318,7 @@ def extract_normalized_body(message: Any) -> str:
         elif content_type == "text/html":
             html_parts.append(_part_text(part))
 
-    if plain_parts:
-        return normalize_whitespace("\n".join(plain_parts))
-    if html_parts:
-        html = "\n".join(html_parts)
-        return normalize_whitespace(BeautifulSoup(html, "html.parser").get_text(" "))
-    return ""
+    return _normalize_body_parts(plain_parts, html_parts)
 
 
 def _truncate_text(text: str, max_chars: int) -> dict[str, Any]:
@@ -343,6 +355,27 @@ def extract_attachment_metadata(message: Any) -> list[dict[str, Any]]:
     return attachments
 
 
+@dataclass
+class BodyPartSpec:
+    number: str
+    content_type: str
+    encoding: str
+    charset: str | None = None
+    filename: str | None = None
+    disposition: str | None = None
+    size: int | None = None
+
+
+@dataclass
+class FetchedMessage:
+    uid: bytes
+    fetch_text: str
+    headers: Any
+    plain_parts: list[str]
+    html_parts: list[str]
+    attachments: list[dict[str, Any]]
+
+
 def _format_message_date(value: str | None) -> str | None:
     if not value:
         return None
@@ -360,48 +393,223 @@ def _sender(value: str | None) -> dict[str, str]:
     return {"name": name, "email": address}
 
 
-def _base_message_fields(message: Any, *, uid: bytes, fetch_text: str) -> dict[str, Any]:
-    gmail_id = _extract_fetch_id(fetch_text, "X-GM-MSGID") or uid.decode("ascii", "ignore")
-    thread_id = _extract_fetch_id(fetch_text, "X-GM-THRID") or gmail_id
+def _tokenize_bodystructure(value: str) -> list[Any]:
+    tokens: list[Any] = []
+    i = 0
+    while i < len(value):
+        ch = value[i]
+        if ch.isspace():
+            i += 1
+            continue
+        if ch in "()":
+            tokens.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            i += 1
+            out: list[str] = []
+            while i < len(value):
+                ch = value[i]
+                if ch == "\\" and i + 1 < len(value):
+                    out.append(value[i + 1])
+                    i += 2
+                    continue
+                if ch == '"':
+                    i += 1
+                    break
+                out.append(ch)
+                i += 1
+            tokens.append("".join(out))
+            continue
+        start = i
+        while i < len(value) and not value[i].isspace() and value[i] not in "()":
+            i += 1
+        atom = value[start:i]
+        if atom.upper() == "NIL":
+            tokens.append(None)
+        elif re.fullmatch(r"\d+", atom):
+            tokens.append(int(atom))
+        else:
+            tokens.append(atom)
+    return tokens
+
+
+def _parse_bodystructure_tokens(tokens: list[Any], pos: int = 0) -> tuple[Any, int]:
+    if pos >= len(tokens):
+        raise GmailError(ErrorCode.PARSE_ERROR, "Unexpected end of BODYSTRUCTURE response.")
+    token = tokens[pos]
+    if token == "(":
+        pos += 1
+        items: list[Any] = []
+        while pos < len(tokens) and tokens[pos] != ")":
+            item, pos = _parse_bodystructure_tokens(tokens, pos)
+            items.append(item)
+        if pos >= len(tokens):
+            raise GmailError(ErrorCode.PARSE_ERROR, "Unclosed BODYSTRUCTURE list.")
+        return items, pos + 1
+    if token == ")":
+        raise GmailError(ErrorCode.PARSE_ERROR, "Unexpected BODYSTRUCTURE close paren.")
+    return token, pos + 1
+
+
+def _extract_parenthesized(value: str, start: int) -> str:
+    depth = 0
+    in_quote = False
+    escaped = False
+    for i in range(start, len(value)):
+        ch = value[i]
+        if escaped:
+            escaped = False
+            continue
+        if ch == "\\" and in_quote:
+            escaped = True
+            continue
+        if ch == '"':
+            in_quote = not in_quote
+            continue
+        if in_quote:
+            continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return value[start : i + 1]
+    raise GmailError(ErrorCode.PARSE_ERROR, "Could not parse BODYSTRUCTURE response.")
+
+
+def _bodystructure_from_fetch(fetch_text: str) -> Any:
+    marker = fetch_text.upper().find("BODYSTRUCTURE")
+    if marker == -1:
+        raise GmailError(ErrorCode.PARSE_ERROR, "IMAP fetch response did not include BODYSTRUCTURE.")
+    start = fetch_text.find("(", marker)
+    if start == -1:
+        raise GmailError(ErrorCode.PARSE_ERROR, "IMAP BODYSTRUCTURE response was malformed.")
+    bodystructure_text = _extract_parenthesized(fetch_text, start)
+    parsed, _ = _parse_bodystructure_tokens(_tokenize_bodystructure(bodystructure_text))
+    return parsed
+
+
+def _params_to_dict(value: Any) -> dict[str, str]:
+    if not isinstance(value, list):
+        return {}
+    params: dict[str, str] = {}
+    for i in range(0, len(value) - 1, 2):
+        key = value[i]
+        val = value[i + 1]
+        if isinstance(key, str) and val is not None:
+            params[key.upper()] = str(val)
+    return params
+
+
+def _disposition_from_node(node: list[Any]) -> tuple[str | None, dict[str, str]]:
+    for item in node[7:]:
+        if (
+            isinstance(item, list)
+            and item
+            and isinstance(item[0], str)
+            and item[0].upper() in {"ATTACHMENT", "INLINE"}
+        ):
+            return item[0].lower(), _params_to_dict(item[1] if len(item) > 1 else None)
+    return None, {}
+
+
+def _body_part_specs(node: Any, prefix: str = "") -> list[BodyPartSpec]:
+    if not isinstance(node, list) or not node:
+        return []
+    if isinstance(node[0], list):
+        specs: list[BodyPartSpec] = []
+        part_index = 1
+        for child in node:
+            if not isinstance(child, list):
+                break
+            number = f"{prefix}.{part_index}" if prefix else str(part_index)
+            specs.extend(_body_part_specs(child, number))
+            part_index += 1
+        return specs
+
+    if len(node) < 7 or not isinstance(node[0], str) or not isinstance(node[1], str):
+        return []
+    params = _params_to_dict(node[2])
+    disposition, disposition_params = _disposition_from_node(node)
+    filename = disposition_params.get("FILENAME") or params.get("NAME")
+    size = node[6] if isinstance(node[6], int) else None
+    return [
+        BodyPartSpec(
+            number=prefix or "1",
+            content_type=f"{node[0].lower()}/{node[1].lower()}",
+            encoding=str(node[5] or "7BIT"),
+            charset=params.get("CHARSET"),
+            filename=filename,
+            disposition=disposition,
+            size=size,
+        )
+    ]
+
+
+def _attachment_from_part(part: BodyPartSpec) -> dict[str, Any]:
+    attachment: dict[str, Any] = {
+        "filename": part.filename,
+        "content_type": part.content_type,
+    }
+    if part.size is not None:
+        attachment["size"] = part.size
+    return attachment
+
+
+def _is_attachment_part(part: BodyPartSpec) -> bool:
+    return part.disposition == "attachment" or bool(part.filename)
+
+
+def _decode_body_payload(payload: bytes, part: BodyPartSpec) -> str:
+    encoding = part.encoding.upper()
+    data = payload
+    if encoding == "BASE64":
+        try:
+            data = base64.b64decode(payload, validate=False)
+        except Exception:
+            data = payload
+    elif encoding in {"QUOTED-PRINTABLE", "QUOTEDPRINTABLE"}:
+        data = quopri.decodestring(payload)
+    return data.decode(part.charset or "utf-8", "replace")
+
+
+def _message_public_id(fetch_text: str, uid: bytes) -> tuple[str, str]:
+    gmail_id = _extract_fetch_id(fetch_text, "X-GM-MSGID")
+    if gmail_id:
+        return gmail_id, "gmail"
+    return f"imap-uid:{uid.decode('ascii', 'ignore')}", "imap-uid"
+
+
+def _base_message_fields(fetched: FetchedMessage) -> dict[str, Any]:
+    message_id, id_source = _message_public_id(fetched.fetch_text, fetched.uid)
+    thread_id = _extract_fetch_id(fetched.fetch_text, "X-GM-THRID") or message_id
     return {
-        "id": gmail_id,
+        "id": message_id,
+        "idSource": id_source,
         "threadId": thread_id,
-        "date": _format_message_date(message.get("Date")),
-        "from": _sender(message.get("From")),
-        "subject": message.get("Subject", ""),
-        "labels": _parse_labels_from_fetch(fetch_text),
-        "attachments": extract_attachment_metadata(message),
+        "date": _format_message_date(fetched.headers.get("Date")),
+        "from": _sender(fetched.headers.get("From")),
+        "subject": fetched.headers.get("Subject", ""),
+        "labels": _parse_labels_from_fetch(fetched.fetch_text),
+        "attachments": fetched.attachments,
     }
 
 
-def _message_metadata(
-    raw_message: bytes,
-    *,
-    uid: bytes,
-    fetch_text: str,
-    snippet_chars: int,
-) -> dict[str, Any]:
-    message = _message_from_bytes(raw_message)
-    body = extract_normalized_body(message)
+def _message_metadata(fetched: FetchedMessage, *, snippet_chars: int) -> dict[str, Any]:
+    body = _normalize_body_parts(fetched.plain_parts, fetched.html_parts)
     snippet = _truncate_text(body, snippet_chars)
     return {
-        **_base_message_fields(message, uid=uid, fetch_text=fetch_text),
+        **_base_message_fields(fetched),
         "snippet": snippet["text"],
         "snippet_truncated": snippet["truncated"],
     }
 
 
-def _message_body_result(
-    raw_message: bytes,
-    *,
-    uid: bytes,
-    fetch_text: str,
-    max_chars: int,
-) -> dict[str, Any]:
-    message = _message_from_bytes(raw_message)
-    body = extract_normalized_body(message)
+def _message_body_result(fetched: FetchedMessage, *, max_chars: int) -> dict[str, Any]:
+    body = _normalize_body_parts(fetched.plain_parts, fetched.html_parts)
     return {
-        **_base_message_fields(message, uid=uid, fetch_text=fetch_text),
+        **_base_message_fields(fetched),
         "body": _truncate_text(body, max_chars),
     }
 
@@ -483,7 +691,7 @@ class GmailBackend:
             if all_mail:
                 resolved_key = "all"
                 resolved_name = all_mail["name"]
-        status, _ = self._connect().select(resolved_name, readonly=True)
+        status, _ = self._connect().select(_imap_quote(resolved_name), readonly=True)
         if not _ok(status):
             raise GmailError(
                 ErrorCode.MAILBOX_NOT_FOUND,
@@ -495,7 +703,8 @@ class GmailBackend:
         return self._search_uids_by("X-GM-RAW", query)
 
     def _search_uids_by(self, key: str, value: str) -> list[bytes]:
-        status, data = self._connect().uid("SEARCH", None, key, value)
+        search_value = _imap_quote(value) if key == "X-GM-RAW" else value
+        status, data = self._connect().uid("SEARCH", None, key, search_value)
         if not _ok(status):
             raise GmailError(ErrorCode.IMAP_ERROR, "Gmail IMAP search failed.")
         raw = data[0] if data else b""
@@ -503,15 +712,49 @@ class GmailBackend:
             raw = raw.encode()
         return raw.split()
 
-    def _fetch_message(self, uid: bytes) -> tuple[str, bytes]:
+    def _fetch_body_part(self, uid: bytes, part: BodyPartSpec) -> bytes:
+        status, data = self._connect().uid("FETCH", uid, f"(BODY.PEEK[{part.number}])")
+        if not _ok(status):
+            raise GmailError(
+                ErrorCode.IMAP_ERROR,
+                f"Could not fetch Gmail message UID {uid!r} body part {part.number}.",
+            )
+        _, payload = _extract_fetch_response(data or [])
+        return payload
+
+    def _fetch_message(self, uid: bytes) -> FetchedMessage:
         status, data = self._connect().uid(
             "FETCH",
             uid,
-            "(X-GM-MSGID X-GM-THRID X-GM-LABELS BODY.PEEK[])",
+            "(X-GM-MSGID X-GM-THRID X-GM-LABELS BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (DATE FROM SUBJECT)])",
         )
         if not _ok(status):
             raise GmailError(ErrorCode.IMAP_ERROR, f"Could not fetch Gmail message UID {uid!r}.")
-        return _extract_fetch_response(data or [])
+        fetch_text, header_bytes = _extract_fetch_response(data or [])
+        headers = _message_from_bytes(header_bytes)
+        parts = _body_part_specs(_bodystructure_from_fetch(fetch_text))
+        attachments = [_attachment_from_part(part) for part in parts if _is_attachment_part(part)]
+        plain_parts: list[str] = []
+        html_parts: list[str] = []
+        for part in parts:
+            if _is_attachment_part(part):
+                continue
+            if part.content_type not in {"text/plain", "text/html"}:
+                continue
+            payload = self._fetch_body_part(uid, part)
+            text = _decode_body_payload(payload, part)
+            if part.content_type == "text/plain":
+                plain_parts.append(text)
+            else:
+                html_parts.append(text)
+        return FetchedMessage(
+            uid=uid,
+            fetch_text=fetch_text,
+            headers=headers,
+            plain_parts=plain_parts,
+            html_parts=html_parts,
+            attachments=attachments,
+        )
 
     def doctor(self) -> tuple[dict[str, Any], dict[str, Any]]:
         try:
@@ -541,23 +784,23 @@ class GmailBackend:
         finally:
             self._close()
 
-    def search(self, **kwargs: Any) -> tuple[dict[str, Any], dict[str, Any]]:
-        query = str(kwargs.get("query", ""))
-        mailbox = str(kwargs.get("mailbox", "all"))
-        limit = int(kwargs.get("limit", 20))
-        snippet_chars = int(kwargs.get("snippet_chars", 500))
+    def search(
+        self,
+        *,
+        query: str,
+        mailbox: str = "all",
+        limit: int = 20,
+        snippet_chars: int = 500,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         try:
             resolved_key, resolved_name = self._select_mailbox(mailbox)
             uids = self._search_uids(query)
             selected_uids = list(reversed(uids))[:limit]
             messages: list[dict[str, Any]] = []
             for uid in selected_uids:
-                fetch_text, raw_message = self._fetch_message(uid)
                 messages.append(
                     _message_metadata(
-                        raw_message,
-                        uid=uid,
-                        fetch_text=fetch_text,
+                        self._fetch_message(uid),
                         snippet_chars=snippet_chars,
                     )
                 )
@@ -581,18 +824,25 @@ class GmailBackend:
     def get_message(self, message_id: str, max_chars: int) -> tuple[dict[str, Any], dict[str, Any]]:
         try:
             resolved_key, resolved_name = self._select_mailbox("all")
-            uids = self._search_uids_by("X-GM-MSGID", message_id)
-            if not uids and message_id.isdigit():
-                uids = [message_id.encode("ascii")]
+            if message_id.startswith("imap-uid:"):
+                fallback_uid = message_id.removeprefix("imap-uid:")
+                if not fallback_uid.isdigit():
+                    raise GmailError(
+                        ErrorCode.INVALID_INPUT,
+                        "Invalid imap-uid fallback identifier.",
+                        suggestions=["Use the exact id returned by search"],
+                    )
+                uids = [fallback_uid.encode("ascii")]
+            else:
+                uids = self._search_uids_by("X-GM-MSGID", message_id)
             if not uids:
                 raise GmailError(
                     ErrorCode.MESSAGE_NOT_FOUND,
                     f"No Gmail message found for id '{message_id}'.",
                 )
             uid = uids[-1]
-            fetch_text, raw_message = self._fetch_message(uid)
             return (
-                {"message": _message_body_result(raw_message, uid=uid, fetch_text=fetch_text, max_chars=max_chars)},
+                {"message": _message_body_result(self._fetch_message(uid), max_chars=max_chars)},
                 {
                     "backend": "imap",
                     "mailbox": resolved_key,
@@ -619,11 +869,8 @@ class GmailBackend:
                 )
             messages: list[dict[str, Any]] = []
             for uid in uids[:max_messages]:
-                fetch_text, raw_message = self._fetch_message(uid)
                 message = _message_body_result(
-                    raw_message,
-                    uid=uid,
-                    fetch_text=fetch_text,
+                    self._fetch_message(uid),
                     max_chars=max_chars_per_message,
                 )
                 message["direction"] = _message_direction(message, self.user)
@@ -646,11 +893,13 @@ class GmailBackend:
             self._close()
 
 
-def _run_backend_command(command: str, action: str, *args: Any, **kwargs: Any) -> None:
+def _run_backend_command(
+    command: str,
+    action: Callable[[GmailBackend], tuple[dict[str, Any], dict[str, Any]]],
+) -> None:
     try:
         user, password = _require_credentials()
-        backend = GmailBackend(user, password)
-        result, metadata = getattr(backend, action)(*args, **kwargs)
+        result, metadata = action(GmailBackend(user, password))
         emit(output_success(command, result, metadata))
     except GmailError as e:
         emit(output_error(command, e))
@@ -692,7 +941,7 @@ def config() -> None:
 @app.command()
 def doctor() -> None:
     """Check read-only Gmail connectivity."""
-    _run_backend_command("doctor", "doctor")
+    _run_backend_command("doctor", lambda backend: backend.doctor())
 
 
 @app.command()
@@ -730,19 +979,12 @@ def search(
         raise typer.Exit(code=1)
     _run_backend_command(
         "search",
-        "search",
-        query=gmail_query,
-        from_value=from_value,
-        after=after,
-        before=before,
-        subject=subject,
-        text=text,
-        label=label,
-        mailbox=mailbox,
-        limit=limit_value,
-        snippet_chars=snippet_chars_value,
-        include_sent=include_sent,
-        include_spam_trash=include_spam_trash,
+        lambda backend: backend.search(
+            query=gmail_query,
+            mailbox=mailbox,
+            limit=limit_value,
+            snippet_chars=snippet_chars_value,
+        ),
     )
 
 
@@ -757,7 +999,7 @@ def get(
     except GmailError as e:
         emit(output_error("get", e))
         raise typer.Exit(code=1)
-    _run_backend_command("get", "get_message", message_id, max_chars_value)
+    _run_backend_command("get", lambda backend: backend.get_message(message_id, max_chars_value))
 
 
 @app.command()
@@ -777,17 +1019,14 @@ def thread(
         raise typer.Exit(code=1)
     _run_backend_command(
         "thread",
-        "get_thread",
-        thread_id,
-        max_messages_value,
-        max_chars_value,
+        lambda backend: backend.get_thread(thread_id, max_messages_value, max_chars_value),
     )
 
 
 @app.command()
 def labels() -> None:
     """List Gmail labels/mailboxes."""
-    _run_backend_command("labels", "labels")
+    _run_backend_command("labels", lambda backend: backend.labels())
 
 
 if __name__ == "__main__":

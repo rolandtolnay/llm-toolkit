@@ -4,6 +4,7 @@ import sys
 from email.message import EmailMessage
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 
@@ -336,46 +337,73 @@ def raw_email(subject="Hello", body="Body text"):
     return msg.as_bytes()
 
 
+PLAIN_BODYSTRUCTURE = '("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" 24 1 NIL NIL NIL NIL)'
+MIXED_BODYSTRUCTURE = (
+    '(("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" 11 1 NIL NIL NIL NIL)'
+    '("APPLICATION" "PDF" ("NAME" "report.pdf") NIL NIL "BASE64" 20 NIL '
+    '("ATTACHMENT" ("FILENAME" "report.pdf")) NIL NIL) "MIXED" ("BOUNDARY" "x") NIL NIL NIL)'
+)
+
+
+def fetch_prefix(bodystructure=PLAIN_BODYSTRUCTURE, msgid="999", thrid="888", labels="\\Inbox"):
+    return (
+        f'101 (X-GM-MSGID {msgid} X-GM-THRID {thrid} X-GM-LABELS ({labels}) '
+        f'BODYSTRUCTURE {bodystructure} BODY[HEADER.FIELDS (DATE FROM SUBJECT)] {{1}}'
+    ).encode()
+
+
+class FakeIMAPBase:
+    mailboxes = [b'(\\HasNoChildren \\All) "/" "[Gmail]/All Mail"']
+
+    def __init__(self, host="imap.gmail.com", port=993, ssl_context=None):
+        self.host = host
+        self.port = port
+        self.ssl_context = ssl_context
+        self.selected = None
+        self.login_args = None
+        self.search_args = None
+        self.fetch_commands = []
+
+    def login(self, user, password):
+        self.login_args = (user, password)
+        return "OK", [b"authenticated"]
+
+    def list(self):
+        return "OK", self.mailboxes
+
+    def select(self, mailbox, readonly=False):
+        self.selected = (mailbox, readonly)
+        return "OK", [b"1"]
+
+    def logout(self):
+        return "OK", [b"bye"]
+
+
 def test_backend_search_selects_all_mail_readonly(monkeypatch):
     module = load_gmail_module()
     instances = []
 
-    class FakeIMAP:
+    class FakeIMAP(FakeIMAPBase):
+        mailboxes = [
+            b'(\\HasNoChildren \\All) "/" "[Gmail]/All Mail"',
+            b'(\\HasNoChildren) "/" "INBOX"',
+        ]
+
         def __init__(self, host, port, ssl_context=None):
-            self.host = host
-            self.port = port
-            self.selected = None
+            super().__init__(host, port, ssl_context)
             instances.append(self)
-
-        def login(self, user, password):
-            self.login_args = (user, password)
-            return "OK", [b"authenticated"]
-
-        def list(self):
-            return "OK", [
-                b'(\\HasNoChildren \\All) "/" "[Gmail]/All Mail"',
-                b'(\\HasNoChildren) "/" "INBOX"',
-            ]
-
-        def select(self, mailbox, readonly=False):
-            self.selected = (mailbox, readonly)
-            return "OK", [b"1"]
 
         def uid(self, command, *args):
             if command.upper() == "SEARCH":
+                self.search_args = args
                 return "OK", [b"101"]
             if command.upper() == "FETCH":
-                return "OK", [
-                    (
-                        b'101 (X-GM-MSGID 999 X-GM-THRID 888 X-GM-LABELS (\\Inbox) BODY[] {1}',
-                        raw_email(),
-                    ),
-                    b")",
-                ]
-            raise AssertionError(command)
-
-        def logout(self):
-            return "OK", [b"bye"]
+                fetch_command = args[1]
+                if "BODYSTRUCTURE" in fetch_command:
+                    return "OK", [(fetch_prefix(), raw_email()), b")"]
+                if "BODY.PEEK[1]" in fetch_command:
+                    return "OK", [(b"101 (BODY[1] {9}", b"Body text"), b")"]
+            raise AssertionError((command, args))
 
     monkeypatch.setattr(module.imaplib, "IMAP4_SSL", FakeIMAP)
 
@@ -384,7 +412,8 @@ def test_backend_search_selects_all_mail_readonly(monkeypatch):
     )
 
     assert instances[0].login_args == ("me@example.com", "secret")
-    assert instances[0].selected == ("[Gmail]/All Mail", True)
+    assert instances[0].selected == ('"[Gmail]/All Mail"', True)
+    assert instances[0].search_args == (None, "X-GM-RAW", '"from:example.com"')
     assert metadata == {
         "backend": "imap",
         "mailbox": "all",
@@ -486,28 +515,17 @@ def test_backend_search_falls_back_to_inbox_when_all_mail_missing(monkeypatch):
     module = load_gmail_module()
     instances = []
 
-    class FakeIMAP:
+    class FakeIMAP(FakeIMAPBase):
+        mailboxes = [b'(\\HasNoChildren) "/" "INBOX"']
+
         def __init__(self, host, port, ssl_context=None):
-            self.selected = None
+            super().__init__(host, port, ssl_context)
             instances.append(self)
-
-        def login(self, user, password):
-            return "OK", [b"authenticated"]
-
-        def list(self):
-            return "OK", [b'(\\HasNoChildren) "/" "INBOX"']
-
-        def select(self, mailbox, readonly=False):
-            self.selected = (mailbox, readonly)
-            return "OK", [b"1"]
 
         def uid(self, command, *args):
             if command.upper() == "SEARCH":
                 return "OK", [b""]
             raise AssertionError(command)
-
-        def logout(self):
-            return "OK", [b"bye"]
 
     monkeypatch.setattr(module.imaplib, "IMAP4_SSL", FakeIMAP)
 
@@ -515,7 +533,7 @@ def test_backend_search_falls_back_to_inbox_when_all_mail_missing(monkeypatch):
         query="from:example.com", mailbox="all", limit=5, snippet_chars=50
     )
 
-    assert instances[0].selected == ("INBOX", True)
+    assert instances[0].selected == ('"INBOX"', True)
     assert metadata["mailbox"] == "inbox"
     assert metadata["resolved_mailbox"] == "INBOX"
     assert result["messages"] == []
@@ -524,35 +542,19 @@ def test_backend_search_falls_back_to_inbox_when_all_mail_missing(monkeypatch):
 def test_search_results_are_bounded_snippets_without_bodies(monkeypatch):
     module = load_gmail_module()
 
-    class FakeIMAP:
-        def __init__(self, host, port, ssl_context=None):
-            self.fetch_args = None
-
-        def login(self, user, password):
-            return "OK", [b"authenticated"]
-
-        def list(self):
-            return "OK", [b'(\\HasNoChildren \\All) "/" "[Gmail]/All Mail"']
-
-        def select(self, mailbox, readonly=False):
-            return "OK", [b"1"]
-
+    class FakeIMAP(FakeIMAPBase):
         def uid(self, command, *args):
             if command.upper() == "SEARCH":
                 return "OK", [b"101"]
             if command.upper() == "FETCH":
-                self.fetch_args = args
-                return "OK", [
-                    (
-                        b'101 (X-GM-MSGID 999 X-GM-THRID 888 X-GM-LABELS (\\Inbox) BODY[] {1}',
-                        raw_email(body="0123456789 extra body text"),
-                    ),
-                    b")",
-                ]
-            raise AssertionError(command)
-
-        def logout(self):
-            return "OK", [b"bye"]
+                self.fetch_commands.append(args[1])
+                fetch_command = args[1]
+                assert "BODY.PEEK[]" not in fetch_command
+                if "BODYSTRUCTURE" in fetch_command:
+                    return "OK", [(fetch_prefix(), raw_email()), b")"]
+                if "BODY.PEEK[1]" in fetch_command:
+                    return "OK", [(b"101 (BODY[1] {26}", b"0123456789 extra body text"), b")"]
+            raise AssertionError((command, args))
 
     instances = []
 
@@ -571,7 +573,72 @@ def test_search_results_are_bounded_snippets_without_bodies(monkeypatch):
     assert message["snippet"] == "0123456789"
     assert message["snippet_truncated"] is True
     assert "body" not in message
-    assert "BODY.PEEK[]" in instances[0].fetch_args[1]
+    assert instances[0].fetch_commands == [
+        "(X-GM-MSGID X-GM-THRID X-GM-LABELS BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (DATE FROM SUBJECT)])",
+        "(BODY.PEEK[1])",
+    ]
+
+
+def test_attachment_metadata_from_bodystructure_without_fetching_attachment_payload(monkeypatch):
+    module = load_gmail_module()
+
+    class FakeIMAP(FakeIMAPBase):
+        def uid(self, command, *args):
+            if command.upper() == "SEARCH":
+                return "OK", [b"101"]
+            if command.upper() == "FETCH":
+                fetch_command = args[1]
+                self.fetch_commands.append(fetch_command)
+                assert "BODY.PEEK[]" not in fetch_command
+                assert "BODY.PEEK[2]" not in fetch_command
+                if "BODYSTRUCTURE" in fetch_command:
+                    return "OK", [(fetch_prefix(bodystructure=MIXED_BODYSTRUCTURE), raw_email()), b")"]
+                if "BODY.PEEK[1]" in fetch_command:
+                    return "OK", [(b"101 (BODY[1] {11}", b"hello world"), b")"]
+            raise AssertionError((command, args))
+
+    instances = []
+
+    def fake_factory(*args, **kwargs):
+        imap = FakeIMAP(*args, **kwargs)
+        instances.append(imap)
+        return imap
+
+    monkeypatch.setattr(module.imaplib, "IMAP4_SSL", fake_factory)
+
+    result, _ = module.GmailBackend("me@example.com", "secret").search(
+        query="from:example.com", mailbox="all", limit=5, snippet_chars=100
+    )
+
+    message = result["messages"][0]
+    assert message["snippet"] == "hello world"
+    assert message["attachments"] == [
+        {"filename": "report.pdf", "content_type": "application/pdf", "size": 20}
+    ]
+    assert instances[0].fetch_commands == [
+        "(X-GM-MSGID X-GM-THRID X-GM-LABELS BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (DATE FROM SUBJECT)])",
+        "(BODY.PEEK[1])",
+    ]
+
+
+def test_numeric_gmail_message_id_does_not_fallback_to_unrelated_imap_uid(monkeypatch):
+    module = load_gmail_module()
+
+    class FakeIMAP(FakeIMAPBase):
+        def uid(self, command, *args):
+            if command.upper() == "SEARCH":
+                assert args == (None, "X-GM-MSGID", "999")
+                return "OK", [b""]
+            if command.upper() == "FETCH":
+                raise AssertionError("numeric Gmail ID should not be treated as an IMAP UID")
+            raise AssertionError((command, args))
+
+    monkeypatch.setattr(module.imaplib, "IMAP4_SSL", FakeIMAP)
+
+    with pytest.raises(module.GmailError) as exc:
+        module.GmailBackend("me@example.com", "secret").get_message("999", 100)
+
+    assert exc.value.code == module.ErrorCode.MESSAGE_NOT_FOUND
 
 
 def test_body_extraction_prefers_plain_text_and_falls_back_from_html():
