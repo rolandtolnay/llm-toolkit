@@ -276,10 +276,9 @@ vercel deploy . -y --no-wait --scope <team-slug>
 vercel inspect <deployment-url> --scope <team-slug>
 ```
 
-For production, prefer the automatic GitHub flow:
+For production, prefer the automatic GitHub flow. Run the Verification gate checks first, then:
 
 ```bash
-npm run typecheck && npm run lint && npm run test && npm run build
 git add <changed-files>
 git commit -m "<summary>"
 git push origin main
@@ -309,34 +308,13 @@ Notes:
 
 ## `/goal` judged loop
 
-These hobby projects are meant to be built as one-shot `/goal` runs in Codex or Claude Code. Apply the Pareto version of the judged goal loop: enough structure to prevent self-delusion, not enough to turn a hobby app into a process project.
+These hobby projects are built as one-shot `/goal` runs in Codex or Claude Code. The full workflow — rubric shape, judge subagent prompt, builder rules, and the deploy rule — lives in `judged-goal-loop.md` next to this playbook. Use that file as the single source for the loop; do not re-derive it here.
 
-Use `judged-goal-loop.md` next to this playbook as the full supporting workflow. The summary below is the minimum version to keep in mind while building.
+The only things to remember at the playbook level:
 
-Use this loop:
-
-1. Convert the user's desired outcome into a short rubric with falsifiable checks.
-2. Name the judge persona: target audience, device class, expertise, time pressure, and emotional context.
-3. Build the simplest version that satisfies the rubric.
-4. Run the repo checks.
-5. Have a fresh judge subagent drive the real running app, not the diff, using `agent-browser` and real auth if needed.
-6. Judge returns `BLOCKERS`, `POLISH`, and a final verdict: `GOAL MET` or `BLOCKERS REMAIN`.
-7. Fix blockers and surfaced polish, then re-judge. Stop only when the judge returns `GOAL MET`.
-
-Judge prompt shape:
-
-```text
-You are the judge for this one-shot hobby app. Do not edit code.
-Grade the real running app as <persona> on <target device class>.
-Use the rubric at <path or inline>. Drive the app via <URL> with normal auth.
-Return:
-BLOCKERS: must-fix issues that prevent the stated outcome, or "none".
-POLISH: smaller friction with concrete fixes, or "none".
-VERDICT: GOAL MET only if blockers are empty; otherwise BLOCKERS REMAIN.
-Scope: the requested app/flow only. Do not invent issues to hit a quota.
-```
-
-Cap the loop at two or three judge passes unless the user asked for more. If blockers keep changing, the goal is underspecified; sharpen the rubric instead of spinning.
+- Turn the user's outcome into a short rubric with falsifiable checks, then build the simplest version that satisfies it.
+- Have a fresh judge subagent drive the real running app (not the diff) via `agent-browser` with real auth.
+- Stop only when the judge returns `GOAL MET`. Cap at two or three passes; if blockers keep changing, the goal is underspecified — sharpen the rubric instead of spinning.
 
 ## Browser and device testing with agent-browser
 
@@ -447,30 +425,11 @@ A one-off project is ready for real use when:
 - [ ] Vercel project is connected to the GitHub repo.
 - [ ] Pushes to `main` automatically deploy production.
 - [ ] App has at least one real end-to-end user flow.
-- [ ] `npm run typecheck` passes.
-- [ ] `npm run lint` passes.
-- [ ] `npm run test` passes, if tests exist.
-- [ ] `npm run build` passes.
+- [ ] Verification gate passes (`typecheck`, `lint`, `test`, `build`).
 - [ ] Vercel production deployment from `main` is live.
 - [ ] Fresh judge subagent returned `GOAL MET`.
 - [ ] `agent-browser` smoke test passes at the target viewport/device class.
 - [ ] Authenticated flow is tested with a real evaluator account, if auth exists.
 - [ ] Live URL is opened or ready to open on the target devices.
 
-## Copy-paste kickoff prompt
-
-Use this when starting a new project with an LLM:
-
-```text
-Run this as a one-shot `/goal` project. Build a small end-to-end hobby app using the reusable stack: Next.js App Router + TypeScript frontend, Firebase Auth + Firestore backend, GitHub-connected Vercel deployment, Vitest for domain logic, and agent-browser for live browser/device testing.
-
-Target platform: <mobile | tablet | desktop | responsive>. Design system: use <kit name> from `/Users/rolandtolnay/Documents/Development/design-systems`.
-
-Create a minimal vertical slice that I can deploy and test immediately on the target device class. Keep Firebase as Auth + Firestore only unless a backend service is truly necessary. Put pure logic behind small domain modules, keep Firestore behind adapters, and document domain terms in CONTEXT.md plus decisions in docs/decisions.md. Add ADRs only for hard-to-reverse, surprising, trade-off decisions.
-
-Use canonical terms from CONTEXT.md when implementing. For user-facing copy, use the humanizer skill and write for the target audience rather than exposing technical/domain jargon.
-
-Before calling done: use `hobby-bundle/judged-goal-loop.md`, write a short rubric, build the app, run npm run typecheck, npm run lint, npm run test, npm run build, then have a fresh judge subagent drive the real running app with agent-browser on the target viewport/device class. Fix blockers and surfaced polish until the judge returns GOAL MET.
-
-If no GitHub repo exists, create a private GitHub repository and push main. Connect Vercel to the GitHub repo so pushes to main automatically deploy production. Use direct Vercel preview deployments only for throwaway smoke testing before production is ready. For production, commit the intended files, push main, inspect the resulting Vercel deployment, and smoke-test the deployed app with agent-browser. Report the production URL and only the checks you actually ran.
-```
+To kick off a new project, use the copy-paste `/goal` template in `judged-goal-loop.md` rather than a separate prompt that restates this playbook.
