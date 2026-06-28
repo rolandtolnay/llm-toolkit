@@ -21,10 +21,10 @@ Do not turn this into ceremony. Two or three judge passes is usually enough. If 
 
 ## Core loop
 
-1. **Rubric:** turn the user's outcome into falsifiable checks.
+1. **Rubric:** turn the user's outcome into falsifiable checks across two lenses — UI/UX and product effectiveness.
 2. **Build:** implement the smallest version that can satisfy the rubric.
 3. **Checks:** run the repo checks that apply.
-4. **Judge:** ask a fresh judge subagent to drive the real running app as the target persona.
+4. **Judge:** run a fresh judge pass — a subagent if the harness supports it, otherwise a fresh-context review — driving the real running app as the target persona.
 5. **Fix:** resolve blockers and surfaced polish.
 6. **Re-judge:** repeat until the judge returns `GOAL MET`.
 7. **Ship:** deploy the exact committed state and verify the live URL.
@@ -40,12 +40,12 @@ plus the surfaced polish from that pass has either been fixed or explicitly reje
 
 ## Inputs the builder needs
 
-Ask or infer these before writing the rubric:
+The user is not available mid-run, so **derive** these from the goal description rather than asking, and persist them to `docs/goal-log.md`:
 
 - **Target:** app, screen, flow, or command.
 - **Outcome:** what should change or exist.
 - **Target platform:** mobile, tablet, desktop, or responsive.
-- **Persona:** who is using it, with constraints such as device, time pressure, expertise, mood, and environment.
+- **Persona:** who is using it, with constraints such as device, time pressure, expertise, mood, and environment. When the user did not name one, infer the most likely persona from the goal and state the assumption in `docs/goal-log.md`.
 - **Design system:** which kit under `/Users/rolandtolnay/Documents/Development/design-systems` to use.
 - **Confusions to kill:** what should not be unclear anymore.
 - **Guardrails:** what not to build, refactor, or touch.
@@ -60,16 +60,20 @@ Keep the rubric short. Every line should be able to pass or fail.
 
 Judge as <persona> on <target platform>.
 
-First-principles checks:
-1. <Falsifiable check tied to the user's outcome>
-2. <Falsifiable check tied to the target device>
-3. <Falsifiable check tied to clarity/copy>
-4. <Falsifiable check tied to the primary flow>
-5. <Falsifiable check tied to trust, save state, auth, or deployment if relevant>
+UI/UX checks:
+1. <Falsifiable check tied to the target device>
+2. <Falsifiable check tied to clarity/copy>
+3. <Falsifiable check tied to the primary flow>
+4. <Falsifiable check tied to trust, save state, auth, or deployment if relevant>
+
+Product-effectiveness checks:
+5. <Does the primary flow actually achieve the user's stated outcome?>
+6. <Is every feature pulling its weight toward the outcome, or is something gold-plating?>
+7. <Is anything essential to the outcome missing?>
 
 Scope guardrails:
 - Grade only <requested scope>.
-- Do not propose new features unless required to satisfy the stated outcome.
+- Additions are allowed only when essential to the stated outcome; reject feature creep beyond it.
 - Empty blockers is a valid result.
 
 Return format:
@@ -92,17 +96,17 @@ Bad checks are vague:
 - "The app feels modern."
 - "The copy is friendly."
 
-## Judge subagent prompt
+## Judge prompt
 
-Use a fresh context when practical. The judge should not edit code.
+Run as a fresh judge pass — a subagent if the harness supports it, otherwise a fresh-context review. The judge should not edit code.
 
 ```text
-You are the judge for one one-shot hobby project. Do not edit code.
+You are the judge for a one-shot hobby project. Do not edit code.
 
 Read this rubric:
 <rubric>
 
-Grade the real running app as <persona> on <target platform>. Use the normal app path, not a mock and not a production auth bypass.
+Grade the real running app as <persona> on <target platform>, on two lenses: UI/UX and product effectiveness. Use the normal app path, not a mock and not a production auth bypass.
 
 Drive it via:
 - URL: <local or deployed URL>
@@ -110,11 +114,13 @@ Drive it via:
 - Auth: <normal auth instructions; credentials file path if needed>
 
 Tasks:
-1. Walk the primary flow end to end.
+1. Walk the primary flow end to end and confirm it achieves the stated outcome.
 2. Try the important controls.
 3. Check layout at the target viewport.
 4. Check whether the copy fits the audience.
-5. Capture concrete evidence: text, screenshot path, command output, or DOM facts.
+5. Audit the UI against web-design-guidelines (accessibility, interaction).
+6. Judge product fit: does every feature serve the outcome, is anything gold-plating, is anything essential missing?
+7. Capture concrete evidence: text, screenshot path, command output, or DOM facts.
 
 Return exactly:
 
@@ -141,7 +147,8 @@ The builder owns the final decision. The judge provides evidence, not commands.
 
 - Fix every blocker unless it conflicts with the user's explicit goal, `CONTEXT.md`, an ADR, or a security boundary.
 - Fix surfaced polish when it is cheap and aligned with the goal.
-- If rejecting a judge item, write down why.
+- If rejecting a judge item, write down why in `docs/goal-log.md`.
+- Record each judge pass — verdict, blockers, and what you changed — in `docs/goal-log.md` so the user can reconstruct the run.
 - Re-run checks after fixes.
 - Re-judge fresh after meaningful changes.
 - Stop only after `GOAL MET`.
@@ -174,17 +181,18 @@ Use a manual `vercel deploy --prod` only when GitHub integration is unavailable 
 Outcome: <what should exist or improve>.
 Target platform: <mobile | tablet | desktop | responsive>.
 Design system: <kit under /Users/rolandtolnay/Documents/Development/design-systems>.
-Persona: <who uses it, on what device, in what context>.
-Confusions to kill: <what must be obvious or no longer frustrating>.
 Guardrails: <what not to build or touch>.
 
-Method: use the judged goal loop from hobby-bundle/judged-goal-loop.md.
-1. Write a short rubric with falsifiable checks.
-2. Build the smallest working vertical slice.
-3. Run typecheck, lint, tests, and build where applicable.
-4. Have a fresh judge drive the real running app with agent-browser using normal auth.
-5. Fix blockers and surfaced polish, then re-judge until the judge returns GOAL MET.
-6. Create or use a private GitHub repo, connect Vercel to it, push main to deploy production, inspect the deployment, and smoke-test the production URL.
+This runs unattended: I will walk away and return to a finished, deployed app. Never block on a question — infer sensible defaults from this goal, state them, and record them in docs/goal-log.md. Derive the user persona and the things that must be obvious from this description yourself.
 
-Done when: checks pass, production is live from main, agent-browser smoke passes on the target device class, and the fresh judge returns GOAL MET.
+Method: follow hobby-bundle/playbook.md and the judged goal loop in hobby-bundle/judged-goal-loop.md.
+1. Run the Preflight checks; halt and report if any credential is missing.
+2. Derive the persona and write a short rubric with falsifiable checks on two lenses: UI/UX and product effectiveness. Persist persona + rubric to docs/goal-log.md.
+3. Build the smallest working vertical slice.
+4. Run typecheck, lint, tests, and build where applicable.
+5. Run a fresh judge pass driving the real running app with agent-browser using normal auth; audit UI with web-design-guidelines and judge product fit against the outcome.
+6. Fix blockers and surfaced polish, log each pass, and re-judge until the judge returns GOAL MET on both lenses.
+7. Use a private GitHub repo, connect Vercel to it, set Firebase env vars non-interactively, deploy least-privilege Firestore rules, push main to deploy production, inspect the deployment, and smoke-test the production URL.
+
+Done when: checks pass, least-privilege rules are deployed, production is live from main, agent-browser smoke passes on the target device class, docs/goal-log.md is complete, and the fresh judge returns GOAL MET.
 ```

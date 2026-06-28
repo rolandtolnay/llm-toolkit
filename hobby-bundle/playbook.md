@@ -14,22 +14,28 @@ Use this default stack unless the project has a strong reason not to:
 - **Hosting:** Vercel.
 - **Testing:** TypeScript, ESLint, Vitest, `next build`, and `agent-browser` smoke tests.
 - **Device access:** deploy early to a Vercel preview/prod URL so the app can be opened immediately on the requested target devices: mobile, tablet, desktop, or a mix.
-- **Design system:** use the requested kit from `/Users/rolandtolnay/Documents/Development/design-systems` as the UI source of truth.
+- **Design system:** use the requested kit from `~/Documents/Development/design-systems` as the UI source of truth.
 - **Secrets/config:** browser Firebase config goes in `NEXT_PUBLIC_FIREBASE_*`; local `.env*` files stay ignored.
 
 Keep the first slice boring: one app, one Firebase project, one Vercel project, one deployable path. Do not overindex on mobile, tablet, or desktop unless the user asks for that target.
 
 ## LLM operating instructions
 
-When handing this to an LLM for a fresh project, tell it:
+This playbook is meant to run unattended inside a `/goal` loop: the user kicks it off, walks away, and returns to a finished, deployed app. Operate accordingly:
+
+- **Never block on a question.** When something is unspecified, infer the most sensible default from the goal, state the choice, and record it in `docs/goal-log.md`. Only halt for missing credentials or genuinely irreversible actions (see Preflight and Security).
+- **Persist your reasoning.** The persona, rubric, and per-pass judge verdicts must live in files, not just in context, so the user can reconstruct why the app is the way it is.
+
+Then run the loop:
 
 1. Treat the project as a one-shot `/goal` run: build, verify, judge, fix, deploy, and report in one loop.
 2. Build the smallest useful vertical slice first.
-3. Confirm the target surface: mobile, tablet, desktop, or responsive.
-4. Set up Firebase Auth + Firestore and a GitHub-connected Vercel production path before expanding scope.
-5. Use real auth in tests; do not add production auth bypasses.
-6. Run CLI checks, browser smoke tests, and a fresh judge pass before calling the project done.
-7. Commit only the intended files, then ship production by pushing `main` once the exact committed state is ready.
+3. Infer the target surface (mobile, tablet, desktop, or responsive) from the goal and state the choice.
+4. Derive the judge persona from the goal description and persist it; this drives both the UI/UX and product-effectiveness judging lenses.
+5. Set up Firebase Auth + Firestore and a GitHub-connected Vercel production path before expanding scope.
+6. Use real auth in tests; do not add production auth bypasses.
+7. Run CLI checks, browser smoke tests, and a fresh judge pass (a subagent if the harness supports it, otherwise a fresh-context review) before calling the project done.
+8. Commit only the intended files, then ship production by pushing `main` once the exact committed state is ready.
 
 ## Recommended agent skills
 
@@ -38,13 +44,37 @@ Use these skills when available:
 - `vercel-react-best-practices` — React/Next performance and bundle-size guidance.
 - `vercel-composition-patterns` — reusable component API design when components start getting boolean-prop-heavy.
 - `agent-browser` — live UI testing, auth flows, screenshots, and target-device viewport checks.
+- `web-design-guidelines` — audit UI for accessibility and interaction best practices; use it in the UI/UX judge pass.
 - `deploy-to-vercel` — Vercel linking/deploy workflow.
 - `improve-codebase-architecture` — keep modules deep, interfaces small, and tests focused on seams.
 - `grill-with-docs` — sharpen domain terms and record durable decisions while planning.
 - `humanizer` — write user-facing copy in the audience's language, not implementation jargon.
 - `diagnose` — for hard bugs, failing deploys, or regressions.
 
-Next.js best-practices are intentionally not in this list. They are no longer a standalone skill; the guidance now ships with the framework as version-matched agent docs. See the "Next.js agent guidance" step under Project bootstrap.
+Next.js best-practices are not a skill here; they ship with the framework as version-matched agent docs. See "Next.js agent guidance" under Project bootstrap.
+
+## Preflight
+
+Because the loop runs unattended, verify every external dependency is authenticated and reachable **before** building. Interactive logins (notably `firebase login`) cannot complete mid-run, so a missing session is a fatal, halt-and-report condition, not something to work around.
+
+Check, and halt with a clear report if any required item is missing:
+
+```bash
+node -v && npm -v
+firebase projects:list >/dev/null 2>&1 && echo "firebase: ok" || echo "firebase: NOT AUTHENTICATED"
+gh auth status >/dev/null 2>&1 && echo "gh: ok" || echo "gh: NOT AUTHENTICATED"
+vercel whoami >/dev/null 2>&1 && echo "vercel: ok" || echo "vercel: NOT AUTHENTICATED"
+command -v agent-browser >/dev/null 2>&1 && echo "agent-browser: ok" || echo "agent-browser: MISSING"
+ls ~/Documents/Development/design-systems >/dev/null 2>&1 && echo "design-systems: ok" || echo "design-systems: MISSING"
+```
+
+For fully non-interactive auth, expect these to be provided by the environment rather than prompted:
+
+- Firebase: an active CLI session or `FIREBASE_TOKEN` / `GOOGLE_APPLICATION_CREDENTIALS`.
+- Vercel: an active session or `VERCEL_TOKEN` (pass `--token` / `--scope` on commands).
+- GitHub: an authenticated `gh` session or `GH_TOKEN`.
+
+Record which auth mode is in use in `docs/external-setup.md`.
 
 ## Project bootstrap
 
@@ -72,7 +102,7 @@ Add standard scripts:
 
 ### Next.js agent guidance
 
-Next.js best-practices used to be a separate `next-best-practices` skill. That knowledge now ships with the framework, version-matched, so it never drifts:
+Pull Next.js best-practices from the framework's own version-matched agent docs instead of a separate skill:
 
 - On Next.js 16.3+, `next dev` auto-generates `AGENTS.md` / `CLAUDE.md` agent rules in the project. Let it, and keep those generated files committed or ignored per your convention.
 - On older versions, pull the version-matched bundled docs in manually:
@@ -95,7 +125,10 @@ Create the minimal docs/contracts early:
 - `docs/decisions.md` — lightweight notes for non-obvious choices that are useful but not ADR-worthy.
 - `docs/adr/` — create lazily for decisions that are hard to reverse, surprising without context, and the result of a real trade-off.
 - `docs/external-setup.md` — Firebase/Vercel/GitHub project IDs, CLI state, deploy URLs, evaluator account location.
+- `docs/goal-log.md` — the durable record of the run: the goal, the derived persona, the rubric, each judge pass (verdict + blockers + what was fixed), and any inferred defaults you chose without the user. This is what lets the user return and understand why the app is the way it is.
 - `.env.example` — public env var names with no secrets.
+
+Create or append to additional memory files when the goal needs them; these are the minimum, not a ceiling.
 
 ## Firebase setup
 
@@ -145,6 +178,31 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
 
 Browser Firebase config values are public app config, but keep local `.env*` ignored anyway to avoid accidental mixing with secrets.
 
+### Firestore security rules
+
+The Firestore client SDK runs in the browser, so rules are the only thing standing between an authenticated user and everyone else's data. Never ship test-mode or open rules (`allow read, write: if true;`) to production.
+
+Before the first production deploy, write least-privilege rules tied to `request.auth` and deploy them. A typical per-user shape:
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
+
+Deploy and verify rules non-interactively:
+
+```bash
+firebase deploy --only firestore:rules --project <project-id>
+```
+
+Shipping correct rules is part of the Done definition, not an optional hardening step.
+
 ### Firebase client pattern
 
 Create one small Firebase client module that:
@@ -190,18 +248,18 @@ This keeps the LLM effective: logic is testable without a browser or cloud, and 
 Always build UI from the design systems under:
 
 ```text
-/Users/rolandtolnay/Documents/Development/design-systems
+~/Documents/Development/design-systems
 ```
 
 Start by reading the design-system index files, then the requested kit:
 
 ```bash
-ls /Users/rolandtolnay/Documents/Development/design-systems
-cat /Users/rolandtolnay/Documents/Development/design-systems/CANONICAL.md
-cat /Users/rolandtolnay/Documents/Development/design-systems/README.md
+ls ~/Documents/Development/design-systems
+cat ~/Documents/Development/design-systems/CANONICAL.md
+cat ~/Documents/Development/design-systems/README.md
 ```
 
-Available kits may include `warm-press-kit`, `calm-paper-kit`, `dark-workspace-kit`, `sunny-playfield-kit`, and `violet-arcade-kit`. Use whichever kit the user names. If they do not name one, ask or pick the closest match and state the choice.
+Treat the `CANONICAL.md` / `README.md` index as the source of truth for which kits exist; do not rely on a hardcoded list here. Use whichever kit the user names. If they did not name one, pick the closest match to the goal, state the choice, and record it in `docs/goal-log.md` — do not stop and wait for the user.
 
 Copy rule:
 
@@ -240,7 +298,7 @@ If no GitHub remote exists yet, create a private repository and push `main`:
 gh repo create <repo-name> --private --source=. --remote=origin --push
 ```
 
-If `gh` is unavailable or unauthenticated, ask the user to create a private GitHub repo, then add it:
+`gh` auth is checked in Preflight, so this should succeed unattended. If `gh` is genuinely unavailable at this point, this is a halt-and-report condition: commit locally, record the blocker in `docs/goal-log.md`, and report that production deployment needs a GitHub remote. Do not silently skip deployment. Once a remote exists, the standard wiring is:
 
 ```bash
 git remote add origin git@github.com:<owner>/<repo-name>.git
@@ -261,13 +319,15 @@ If linking Vercel from the CLI and a git remote exists, prefer repo linking:
 vercel link --repo --scope <team-slug>
 ```
 
-Set Firebase env vars in Vercel for every target you will use:
+Set Firebase env vars in Vercel for every target (production, preview, and development if needed). Do this non-interactively by piping each value over stdin so the run never stalls on a prompt:
 
-- Production
-- Preview
-- Development, if needed
+```bash
+# For each NEXT_PUBLIC_FIREBASE_* var and each target environment:
+printf '%s' "$VALUE" | vercel env add NEXT_PUBLIC_FIREBASE_API_KEY production --scope <team-slug>
+printf '%s' "$VALUE" | vercel env add NEXT_PUBLIC_FIREBASE_API_KEY preview --scope <team-slug>
+```
 
-If the CLI prompts awkwardly for preview branch selection, use the Vercel dashboard to add preview env vars manually from the Firebase web app config.
+Pull the values from the Firebase web app config (`firebase apps:sdkconfig WEB ...`). Avoid the dashboard; it requires manual interaction the unattended loop cannot perform.
 
 For throwaway smoke testing before production is ready, create a preview deployment directly:
 
@@ -313,8 +373,10 @@ These hobby projects are built as one-shot `/goal` runs in Codex or Claude Code.
 The only things to remember at the playbook level:
 
 - Turn the user's outcome into a short rubric with falsifiable checks, then build the simplest version that satisfies it.
-- Have a fresh judge subagent drive the real running app (not the diff) via `agent-browser` with real auth.
-- Stop only when the judge returns `GOAL MET`. Cap at two or three passes; if blockers keep changing, the goal is underspecified — sharpen the rubric instead of spinning.
+- Judge on two lenses every pass: **UI/UX** (drive the real running app via `agent-browser` with real auth; audit with `web-design-guidelines`) and **product effectiveness** (does each feature serve the stated outcome; is anything essential to the outcome missing; is anything gold-plating).
+- Run the judge as a fresh pass — a subagent if the harness supports it, otherwise a fresh-context review of the real running app, not the diff.
+- Stop only when the judge returns `GOAL MET` on both lenses. The two-or-three-pass cap is an anti-thrash limit on re-litigating the *same* unresolved blocker, not a ceiling on total iteration: keep improving across UI/UX and product passes until the rubric holds. If blockers keep changing, the goal is underspecified — sharpen the rubric instead of spinning.
+- Record each pass's verdict, blockers, and fixes in `docs/goal-log.md`.
 
 ## Browser and device testing with agent-browser
 
@@ -403,31 +465,38 @@ Avoid scattering literal colors and radii through components. It slows later red
 
 - Treat Firebase service account keys as local-only. Store under `.local/` and ignore them.
 - Use Admin SDK only in local/admin CLIs, not browser code.
-- Keep Firestore rules committed and verify deploys/dry-runs.
+- Ship least-privilege Firestore rules tied to `request.auth` before production; never deploy open/test-mode rules. Keep rules committed and verify deploys/dry-runs.
 - Do not bypass auth in production for testing convenience.
 - Treat pushes to `main` as production deployments; push `main` only when the exact committed state is intended to ship.
-- Ask before changing Vercel security/project settings.
-- If a cloud command fails unexpectedly, stop and report the exact command/error instead of recreating resources blindly.
+- Do not change Vercel security/project settings autonomously. If the goal genuinely requires it, halt and report rather than guessing.
+
+### Unattended failure policy
+
+The loop runs without a human watching, so a blanket "stop on any error" wastes the run. Classify failures instead:
+
+- **Recoverable** (build/type/lint/test errors, a flaky deploy, a transient network call): fix or retry, and log the cause in `docs/goal-log.md`. Use `diagnose` for hard ones.
+- **Fatal** (missing or expired credentials, a destructive/irreversible action, repeated failure of the same cloud command, anything that would recreate resources blindly): stop, leave the project in a clean committed state, and report the exact command and error. Do not paper over it.
 
 ## Done checklist for a fresh project
 
 A one-off project is ready for real use when:
 
-- [ ] Project was run as a one-shot `/goal` loop with a rubric and fresh judge pass.
+- [ ] Project was run as a one-shot `/goal` loop with a rubric and a fresh judge pass.
 - [ ] Target platform is documented: mobile, tablet, desktop, or responsive.
-- [ ] Selected design system from `/Users/rolandtolnay/Documents/Development/design-systems` is documented.
+- [ ] Selected design system from `~/Documents/Development/design-systems` is documented.
 - [ ] `CONTEXT.md` and `docs/decisions.md` exist.
+- [ ] `docs/goal-log.md` records the derived persona, rubric, per-pass judge verdicts, and any inferred defaults.
 - [ ] Firebase project, web app, Auth provider, and Firestore database exist.
 - [ ] `.env.example` documents required `NEXT_PUBLIC_FIREBASE_*` vars.
 - [ ] Local `.env.local` works and is ignored.
-- [ ] Firestore rules and indexes are committed.
+- [ ] Least-privilege, auth-scoped Firestore rules and indexes are committed and deployed.
 - [ ] Private GitHub repo exists and `main` tracks `origin/main`.
 - [ ] Vercel project is connected to the GitHub repo.
 - [ ] Pushes to `main` automatically deploy production.
 - [ ] App has at least one real end-to-end user flow.
 - [ ] Verification gate passes (`typecheck`, `lint`, `test`, `build`).
 - [ ] Vercel production deployment from `main` is live.
-- [ ] Fresh judge subagent returned `GOAL MET`.
+- [ ] Fresh judge pass returned `GOAL MET` on both the UI/UX and product-effectiveness lenses.
 - [ ] `agent-browser` smoke test passes at the target viewport/device class.
 - [ ] Authenticated flow is tested with a real evaluator account, if auth exists.
 - [ ] Live URL is opened or ready to open on the target devices.
