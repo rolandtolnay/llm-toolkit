@@ -35,7 +35,6 @@ When handing this to an LLM for a fresh project, tell it:
 
 Use these skills when available:
 
-- `next-best-practices` — Next.js App Router conventions, boundaries, metadata, routes, async APIs.
 - `vercel-react-best-practices` — React/Next performance and bundle-size guidance.
 - `vercel-composition-patterns` — reusable component API design when components start getting boolean-prop-heavy.
 - `agent-browser` — live UI testing, auth flows, screenshots, and target-device viewport checks.
@@ -44,6 +43,8 @@ Use these skills when available:
 - `grill-with-docs` — sharpen domain terms and record durable decisions while planning.
 - `humanizer` — write user-facing copy in the audience's language, not implementation jargon.
 - `diagnose` — for hard bugs, failing deploys, or regressions.
+
+Next.js best-practices are intentionally not in this list. They are no longer a standalone skill; the guidance now ships with the framework as version-matched agent docs. See the "Next.js agent guidance" step under Project bootstrap.
 
 ## Project bootstrap
 
@@ -67,6 +68,25 @@ Add standard scripts:
     "typecheck": "tsc --noEmit"
   }
 }
+```
+
+### Next.js agent guidance
+
+Next.js best-practices used to be a separate `next-best-practices` skill. That knowledge now ships with the framework, version-matched, so it never drifts:
+
+- On Next.js 16.3+, `next dev` auto-generates `AGENTS.md` / `CLAUDE.md` agent rules in the project. Let it, and keep those generated files committed or ignored per your convention.
+- On older versions, pull the version-matched bundled docs in manually:
+
+```bash
+npx @next/codemod@canary agents-md
+```
+
+This writes the docs to `.next-docs/` and points your `AGENTS.md` at them. See https://nextjs.org/docs/app/guides/ai-agents for full setup.
+
+For Next.js workflow skills (cache-component adoption/optimization, dev loop), install them from the framework repo rather than copying them around:
+
+```bash
+npx skills add vercel/next.js
 ```
 
 Create the minimal docs/contracts early:
