@@ -1,79 +1,48 @@
 # <project-name> — agent working notes
 
-How any agent builds in this repo. The task-specific goal lives in the prompt; this file is the standing method so loops do not have to repeat it.
+How any agent builds in this repo. The task-specific goal lives in the prompt; this file is the standing method so loops do not have to repeat it. Read the canonical sources below for detail instead of trusting a summary.
 
-## Domain & locked decisions
+## Canonical sources
 
-- Canonical vocabulary is `CONTEXT.md`. Use those terms exactly during implementation. Use user-friendly variants for user-facing text when the glossary terms are too internal.
-- Locked decisions are in `docs/adr/` — read the ones your task touches and do not re-litigate them.
-- Non-obvious choices and their reasons are in `docs/decisions.md` — read it before undoing anything deliberate; record new lightweight decisions there.
-- Standing locks for this project:
-  - <decision 1, with ADR/doc link if available>
-  - <decision 2, with ADR/doc link if available>
-  - <styling source, e.g. `app/tokens.css` or selected design-system tokens, is the source of truth; avoid ad hoc colors/radii>
+- Domain vocabulary → `CONTEXT.md` (glossary only). Use these terms in implementation; use user-friendly variants in user-facing copy when the glossary terms are too internal.
+- Locked decisions and their reasons → `docs/decisions.md`. Do not re-litigate them; record new lightweight decisions there, and use `docs/adr/` only for hard-to-reverse, trade-off-driven choices.
+- Cloud/project facts — backend/hosting IDs, regions, env wiring, evaluator accounts, emulator/local commands → `docs/external-setup.md`. Reuse existing resources; never reprovision or recreate them after a failure.
+- Full build/verify/deploy method → `<method docs path, e.g. etc/playbook.md>`.
+- Judged `/goal` loop — rubric, judge prompt, builder rules → `<method docs path, e.g. etc/judged-goal-loop.md>`.
+- <Any project-specific doc, e.g. asset/art direction → `docs/<topic>.md`>.
 
-## Stack & cloud
+## Standing locks (do not break without an explicit goal)
 
-- Default hobby stack: Next.js App Router + React + TypeScript; Firebase Auth + Firestore; installable PWA where useful; deploy to Vercel.
-- Project-specific stack notes:
-  - Frontend: <framework/version>
-  - Backend/data: <Firebase project/services or other backend>
-  - Hosting: <Vercel project/team/repo connection>
-  - Design system: <kit under `~/Documents/Development/design-systems` or local token source>
-- Cloud setup is documented in `docs/external-setup.md`. Reuse existing resources; do not reprovision or recreate resources after a failure.
-- If a cloud command fails unexpectedly, stop and report the exact command/error rather than guessing, recreating resources, or changing project security settings.
+- <decision 1, e.g. data scoping/security boundary — with the rule that enforces it>
+- <decision 2, e.g. primary target platform + viewport and its non-negotiable UX constraints>
+- <decision 3, e.g. a core flow rule that must not gain friction>
+- <styling source, e.g. `app/tokens.css` or selected design-system tokens, is the source of truth; no ad hoc colors, radii, spacing, shadows, or typography>
 
-## Deployment
+## Stack
 
-- `main` auto-deploys to production via Vercel's Git integration once configured. Pushing to `main` builds and ships, so do not push half-done work.
-- Path: run the checks the change touches, commit only the task's files, then push `main`. Vercel builds on push — do not use manual `vercel --prod` unless GitHub integration is unavailable or broken.
-- Production URL: <https://example.vercel.app>
-- Hold the push only if the user asks for a plan/preview, the work is blocked, or it is unsafe to ship.
-- For a throwaway smoke target, use a Vercel preview deployment or a non-`main` branch preview.
-- After production is ready, verify changed behavior on the production URL with `agent-browser` for UI or HTTP checks for routes/assets. Report the commit, production URL, and checks actually run.
-
-## How to verify
-
-- Verify with a fresh, separate context, not self-critique. Prefer a judge subagent/fresh-context pass for UI/UX and product-effectiveness checks.
-- Run the repo checks the change touches. For most Next.js hobby projects:
-  - `npm run typecheck`
-  - `npm run lint`
-  - `npm run test`
-  - `npm run build`
-- Add Vitest units for changed domain logic. Report only checks you actually ran; if one fails or was skipped, say so with the output or reason.
-- Verify UI/UX changes against the real app from a user's perspective with `agent-browser`:
-  - Use the target viewport from the goal: <mobile/tablet/desktop/responsive viewport>.
-  - Sign in through the normal auth form when auth exists.
-  - Evaluator credentials live in <ignored credentials path, e.g. `.local/evaluator-credentials.md`>.
-  - Never build or use a production auth bypass.
-- Hand important UI screens or flows to a fresh judge/subagent. Do not score your own work as the final judge.
-- Dogfooding is a separate, occasional whole-app bug hunt; it is not a per-change gate unless the task asks for it.
-- Delegate bulky, repetitive sub-work such as synthetic cases or per-screen judging to bounded parallel subagents and reason over their summaries.
-
-## Architecture & data access
-
-- Keep pure domain logic in small modules that can be tested without browser or cloud.
-- Put data access behind feature/domain interfaces; Firestore or other persistence is an adapter behind those seams.
-- React components should consume feature/domain interfaces, not scatter raw database paths or cloud details.
-- Prefer deep modules with small interfaces. Avoid shallow pass-through files that only add navigation overhead.
-- The interface is the test surface.
+<Frontend + backend + hosting in one line, e.g. Next.js App Router + React + TypeScript; Firebase Auth + Firestore (project `<id>`); deployed to Vercel.> Project IDs, regions, and env wiring are in `docs/external-setup.md`. If a cloud command fails unexpectedly, stop and report the exact command/error rather than guessing or recreating resources.
 
 ## Build style
 
-- Build the simplest thing that meets the goal; do not add features, refactors, abstractions, or infrastructure beyond what the task needs.
-- Optimize for the target platform from the goal:
-  - Mobile: portrait-first, thumb-reachable controls, large tap targets, no horizontal overflow.
-  - Tablet: use extra width without making a cramped desktop layout.
-  - Desktop: make keyboard/pointer interactions natural and use density deliberately.
-  - Responsive: define the primary target and verify adjacent breakpoints.
-- Use the selected design system/tokens as the styling source of truth. Avoid literal colors, radii, spacing, and shadows in components when tokens exist.
-- User-facing copy should fit the audience and avoid implementation jargon, generic praise, filler, title-case overuse, and AI-sounding polish.
+- Build the simplest thing that meets the goal; no features, refactors, abstractions, or infrastructure beyond what the task needs.
+- Keep pure domain logic in small testable modules; put data access behind feature/domain interfaces with persistence as an adapter; components consume those interfaces, not raw database paths. The interface is the test surface. (Detail: `<method docs path>` → architecture.)
+- User-facing copy: short, glanceable, concrete, fitted to the audience. Avoid jargon, generic praise, filler, title-case overuse, and AI-sounding polish.
 
-## Security and operations
+## Verify
 
-- Keep `.env.local`, `.local/*`, evaluator credentials, service-account JSON, and other secrets ignored.
-- Browser Firebase config may be public app config, but local env files still stay ignored.
-- Use least-privilege Firestore rules tied to `request.auth` before production. Never deploy open/test-mode rules.
-- Use Admin SDK only in local/admin scripts, not browser code.
-- Do not change Vercel security/project settings autonomously. If the goal requires that, halt and report.
-- Treat missing credentials, destructive actions, repeated cloud-command failures, and resource recreation as fatal blockers. Leave the tree clean if possible and report exact commands/errors.
+- Run the repo checks the change touches — `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build` — and add unit tests for changed domain logic. Report only checks you actually ran; if one fails or was skipped, say so.
+- Verify UI/UX from the user's perspective with `agent-browser` at the target viewport (<mobile/tablet/desktop/responsive>), signed in through the normal auth form (never a production auth bypass). Evaluator credentials live in `<ignored path, e.g. .local/evaluator-*.md>`; never print them.
+- Verify with a fresh context, not self-critique: hand important screens/flows to a fresh judge/subagent. Loop method and judge prompt are in `<method docs path, e.g. etc/judged-goal-loop.md>`. Delegate bulky, repetitive sub-work to bounded parallel subagents and reason over their summaries.
+- Dogfooding is a separate, occasional whole-app bug hunt, not a per-change gate unless the task asks for it.
+
+## Deploy
+
+- `main` auto-deploys production via Vercel's Git integration once configured, so never push half-done work. Run the checks, commit only the task's files, then push `main`; do not run manual `vercel --prod` unless the GitHub integration is broken. For a throwaway smoke target, use a Vercel preview or non-`main` branch.
+- Production URL: `<https://example.vercel.app>`. After shipping, verify changed behavior there (`agent-browser` for UI, HTTP checks for routes/assets) and report the commit, URL, and checks run.
+- Hold the push only if the user asks for a plan/preview, the work is blocked, or it is unsafe to ship.
+
+## Security & blockers
+
+- Keep `.env.local`, `.local/*`, evaluator credentials, and service-account JSON ignored. Use least-privilege rules tied to `request.auth` (or the equivalent auth boundary); never deploy open/test-mode rules. Use admin/privileged SDKs only in local/admin scripts, not browser code.
+- Do not change Vercel security/project settings autonomously; if the goal requires it, halt and report.
+- Treat missing credentials, destructive actions, repeated cloud-command failures, and resource recreation as fatal blockers: leave the tree clean if possible and report the exact command/error.

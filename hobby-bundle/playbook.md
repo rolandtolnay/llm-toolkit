@@ -32,8 +32,8 @@ Then run the loop:
 2. Build the smallest useful vertical slice first.
 3. Infer the target surface (mobile, tablet, desktop, or responsive) from the goal and state the choice.
 4. Derive the judge persona from the goal description and persist it; this drives both the UI/UX and product-effectiveness judging lenses.
-5. Set up Firebase Auth + Firestore and a GitHub-connected Vercel production path before expanding scope.
-6. Use real auth in tests; do not add production auth bypasses.
+5. Create/link Firebase + Vercel early and detect whether production Firebase Auth is enabled; if it is not, keep building against emulators and save the real Auth check for the production gate.
+6. Use real Firebase Auth or the Firebase Auth emulator in tests; do not add production auth bypasses.
 7. Run CLI checks, browser smoke tests, and a fresh judge pass (a subagent if the harness supports it, otherwise a fresh-context review) before calling the project done.
 8. Commit only the intended files, then ship production by pushing `main` once the exact committed state is ready.
 
@@ -71,10 +71,11 @@ ls ~/Documents/Development/design-systems >/dev/null 2>&1 && echo "design-system
 For fully non-interactive auth, expect these to be provided by the environment rather than prompted:
 
 - Firebase: an active CLI session or `FIREBASE_TOKEN` / `GOOGLE_APPLICATION_CREDENTIALS`.
+- Google Cloud: when enabling APIs or creating Firestore, `gcloud config get-value account` must be the same Google account that owns/can administer the Firebase project. A stale or different active account will produce 403/reauth friction even when `firebase` itself is logged in.
 - Vercel: an active session or `VERCEL_TOKEN` (pass `--token` / `--scope` on commands).
 - GitHub: an authenticated `gh` session or `GH_TOKEN`.
 
-Record which auth mode is in use in `docs/external-setup.md`.
+Record which auth mode is in use in `docs/external-setup.md`. Prefer `python3` or Node for local scripts; do not assume a `python` executable exists.
 
 ## Project bootstrap
 
@@ -149,6 +150,20 @@ Enable in the Firebase console or CLI as needed:
 - Firestore database, preferably in a nearby region.
 - Firebase Auth provider, usually Email/Password for small private apps.
 - A dedicated evaluator/test user for browser automation.
+
+### Firebase Auth enablement policy
+
+For newly created hobby projects, expect the Firebase project to start on the free Spark plan. Do **not** block the whole build on Email/Password being enabled in production Auth.
+
+Use this split gate instead:
+
+1. **Detect early:** after the Firebase project and web app exist, attempt a real evaluator-account creation/sign-in or equivalent Auth config check.
+2. **If production Auth is not initialized:** record the exact blocker in `docs/goal-log.md` and `docs/external-setup.md`, including the Firebase Console URL and the one manual step: Authentication → Sign-in method → Email/Password → Enable.
+3. **Keep building:** wire the app to Firebase Auth/Firestore normally, but run local authenticated browser flows against the Firebase Emulator Suite using an explicit emulator flag. Do not add a production auth bypass.
+4. **Production auth gate:** near the end, after build/lint/tests and deployment wiring are done, retry the evaluator-account script against real Firebase Auth. If it still returns `CONFIGURATION_NOT_FOUND`, stop with the precise manual instruction and resume command.
+5. **Done gate:** the project is not done until the deployed production URL has been smoke-tested with a real Firebase Auth evaluator account.
+
+Only use the fully automated Identity Platform path (`identityPlatform:initializeAuth` + `projects.updateConfig`) when the user explicitly authorizes billing-backed Identity Platform/API setup. For the default Spark-plan flow, the least-friction path is emulator-backed development plus a late, small production-auth handoff.
 
 Commit Firebase project metadata and rules:
 
@@ -313,21 +328,32 @@ Preferred long-term state:
 4. Pushes to `main` automatically create production deployments.
 5. Agents deploy production by committing the intended files and pushing `main`, not by running manual production deploys.
 
-If linking Vercel from the CLI and a git remote exists, prefer repo linking:
+If linking Vercel from the CLI and a git remote exists, prefer the stable project-link path:
 
 ```bash
-vercel link --repo --scope <team-slug>
+vercel link --yes --scope <team-slug> --project <project-name>
 ```
 
-Set Firebase env vars in Vercel for every target (production, preview, and development if needed). Do this non-interactively by piping each value over stdin so the run never stalls on a prompt:
+Do not rely on `vercel link --repo` for unattended setup. It can discover the GitHub remote but still leave no project selected. After linking, verify the GitHub connection with `vercel project inspect <project-name> --scope <team-slug>` or by checking the next production deployment metadata.
+
+Set Firebase env vars in Vercel for every target (production, preview, and development if needed). The CLI `vercel env add ... preview` path can still ask for a preview branch even with `--yes`, so prefer Vercel's REST API for unattended setup when token-backed API access is available. Upsert one variable per request with a single-object body, not an array:
 
 ```bash
-# For each NEXT_PUBLIC_FIREBASE_* var and each target environment:
-printf '%s' "$VALUE" | vercel env add NEXT_PUBLIC_FIREBASE_API_KEY production --scope <team-slug>
-printf '%s' "$VALUE" | vercel env add NEXT_PUBLIC_FIREBASE_API_KEY preview --scope <team-slug>
+# For each NEXT_PUBLIC_FIREBASE_* var, with VALUE read from local config without printing it:
+tmp=$(mktemp)
+KEY=NEXT_PUBLIC_FIREBASE_API_KEY VALUE="$VALUE" node - <<'NODE' > "$tmp"
+process.stdout.write(JSON.stringify({
+  type: 'encrypted',
+  key: process.env.KEY,
+  value: process.env.VALUE,
+  target: ['production', 'preview', 'development']
+}));
+NODE
+vercel api '/v10/projects/<project-name>/env?upsert=true' -X POST --input "$tmp" --scope <team-slug> --silent
+rm -f "$tmp"
 ```
 
-Pull the values from the Firebase web app config (`firebase apps:sdkconfig WEB ...`). Avoid the dashboard; it requires manual interaction the unattended loop cannot perform.
+Pull the values from the Firebase web app config (`firebase apps:sdkconfig WEB ...`). Avoid the dashboard for routine env entry; it requires manual interaction the unattended loop cannot perform. After setting envs, verify with `vercel env ls --scope <team-slug>` and require each key to show `Production, Preview, Development`. If only an interactive Vercel session is available and the CLI prompts for a preview branch, record the blocker and either skip preview envs until production is wired or ask the user for the exact branch scope.
 
 For throwaway smoke testing before production is ready, create a preview deployment directly:
 
