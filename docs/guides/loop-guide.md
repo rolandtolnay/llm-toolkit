@@ -148,6 +148,22 @@ Establish a way to check your own work as you build, and run it at an interval a
 the spec — preferably with a fresh, separate context rather than self-critique.
 ```
 
+**Forced entropy (for loops descending toward a metric over many cycles):**
+```text
+Each cycle, ask: am I building a general solution, or memorizing the eval? If
+memorizing, the next change must remove an eval-shaped artifact (cap a list, widen the
+eval), not add one. If the last cycle didn't move the metric, don't retry the same idea
+harder — make a genuinely different attempt. Log each cycle's hypothesis, expected
+failure mode, and result, and reread the log after compaction.
+```
+
+**Hard budgets:**
+```text
+Budgets: <N> hours wall-clock, <$X> total paid-API spend. Check elapsed time and
+cumulative spend before each expensive step. An 80% result inside budget beats a 100%
+result over it; when a budget is hit, stop and report the best state reached.
+```
+
 ---
 
 ## Checklist before you run it

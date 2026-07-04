@@ -29,19 +29,20 @@ Check the idea against the fields for your mode, in priority order. Mark each **
 
 1. **Outcome** (required) — what the user can do or see when it works, stated as a result, not a feature list. The run grades against this, so it must be concrete. In brownfield, state it as a delta from current behavior.
 2. **Success signal** — how you'd know it's good. Becomes the metric (see step 3).
-3. **Guardrails** — what *not* to build, change, or touch.
-4. **Hard constraints** — only if real: a required integration, specific data, a must-have feature.
+3. **Tail coverage** — a bare success signal exits at "mostly good," leaving the long tail (edge cases, missing states, rough edges) for the user to discover in use. For a product the user will live with, the goal should demand a derived eval before building (realistic + edge cases) and/or a soak after (use the product as the persona; fix every friction found).
+4. **Guardrails** — what *not* to build, change, or touch.
+5. **Hard constraints** — only if real: a required integration, specific data, a must-have feature.
 
 **Greenfield only:**
 
-5. **Who & when** — the person and the moment of use. A few words; the run expands it into a persona.
-6. **Design kit + target device** — which kit under the design-systems dir, and mobile / tablet / desktop / responsive.
+6. **Who & when** — the person and the moment of use. A few words; the run expands it into a persona.
+7. **Design kit + target device** — which kit under the design-systems dir, and mobile / tablet / desktop / responsive.
 
 **Brownfield only:**
 
-5. **Anchor** — which existing feature, area, or module the change attaches to, so the run starts in the right place instead of wandering.
-6. **Regression boundary** — the existing behavior that must keep working. This is the brownfield safety field, not optional scope hygiene.
-7. **Conventions** — an exemplar to match ("follow the pattern in `<existing thing>`") so the run extends the codebase instead of inventing a second way. UI matches the existing app, not a new kit.
+6. **Anchor** — which existing feature, area, or module the change attaches to, so the run starts in the right place instead of wandering.
+7. **Regression boundary** — the existing behavior that must keep working. This is the brownfield safety field, not optional scope hygiene.
+8. **Conventions** — an exemplar to match ("follow the pattern in `<existing thing>`") so the run extends the codebase instead of inventing a second way. UI matches the existing app, not a new kit.
 
 ## 3. Ask only the high-leverage gaps
 
@@ -53,7 +54,7 @@ Ask the fewest questions that turn a vague idea into a gradeable goal. Sometimes
 - **Don't ask what the run can discover.** Never ask about stack, testing, deployment, or persona detail. In brownfield the run reads the repo, so don't ask about existing conventions it can find — but **do** surface what it *can't* infer: the regression boundary and any off-limits areas.
 - **Infer over interrogate.** If a field is reasonably inferable, infer it and state the assumption instead of asking.
 
-**Pick the metric deliberately.** In brownfield, prefer the project's existing automated checks — tests, types, build — as the success signal ("existing checks stay green + new behavior verified"), and reach for a subjective judge only for the genuinely un-testable parts. In greenfield, the success signal is usually a short rubric the run judges against.
+**Pick the metric deliberately.** In brownfield, prefer the project's existing automated checks — tests, types, build — as the success signal ("existing checks stay green + new behavior verified"), and reach for a subjective judge only for the genuinely un-testable parts. In greenfield, the success signal is usually a short rubric the run judges against. Match the instrument's resolution to what the user will notice: a self-judged rubric passes at "the feature works" and is blind to the fine-grained flaws — spacing, awkward flows, missing empty states — the user sees in the first ten minutes of use. When polish matters, give the run an instrument that can see at that resolution: drive the real product, compare screenshots against the kit, diff against a reference.
 
 **Flag irreversibility.** If the change is mostly schema, data migration, auth, or a public API, say so: a hands-off loop may be the wrong tool, and the work may want a reviewed plan instead. Surface this rather than silently emitting a loop.
 
@@ -82,6 +83,7 @@ Don't break <regression boundary>; don't touch <off-limits>.
 - Cut anything about *how* to build it.
 - Drop vague quality words ("modern", "beautiful", "great UX") — let the success signal carry quality.
 - Omit empty fields rather than padding.
+- For a product the user will live with, add the tail-coverage line(s): "Before building, derive ~<N> realistic and edge cases into `etc/loop/<slug>-eval.md`; done when ≥<bar> pass." and/or "After building, use it as <persona> through real tasks; fix every friction until a full pass finds none."
 
 ## 5. Deliver
 
@@ -90,6 +92,7 @@ Present the finished goal in a code block, ready to paste after `/goal`. Save a 
 Then run a fast self-check and fix in place:
 
 - Could a stranger tell whether the result met the goal? If not, the success signal is too weak.
+- Would the run exit while the product still has rough edges the user would find in the first ten minutes of use? If yes, add the eval or soak demand.
 - Is there anything about *how* to build it? Cut it.
 - Brownfield: does it name what must not break?
 - Is it short enough to live within a goal's character budget?
@@ -98,6 +101,6 @@ Then run a fast self-check and fix in place:
 
 - Mode identified, and gaps checked against that mode's fields before any question is asked.
 - Only high-leverage, batched questions asked — none about stack, testing, deployment, or persona detail.
-- Metric chosen deliberately (existing checks in brownfield, rubric in greenfield), and irreversible changes flagged.
+- Metric chosen deliberately (existing checks in brownfield, rubric in greenfield), tail coverage considered for products the user will live with, and irreversible changes flagged.
 - Final goal is short, outcome-focused, and gradeable, following the right skeleton.
 - Saved to `etc/loop/<slug>.md` and presented ready to paste.
