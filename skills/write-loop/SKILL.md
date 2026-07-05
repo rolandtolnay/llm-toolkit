@@ -89,13 +89,20 @@ Don't break <regression boundary>; don't touch <off-limits>.
 
 Present the finished goal in a code block, ready to paste after `/goal`. Save a copy to `etc/loop/<slug>.md` (a 3-5 word dash-separated slug; create the directory if needed) so it's reusable.
 
+**Default to one artifact.** A well-formed goal is short and fits in one file. If — *after* cutting every trace of "how" — the goal still overflows the 4,000-char cap (only large, multi-slice, greenfield unattended builds should), split into two files instead of shaving meaning:
+
+- `etc/loop/<slug>.md` — the **brief**: the run's opening prompt (unbounded). Holds only run-specific "how" that isn't derivable and isn't already in the repo — slice order, which kit to port, eval-before / soak-after demands, docs to maintain.
+- `etc/loop/<slug>-goal.md` — the compact `/goal` **completion condition** (under 4,000), which the user pastes. Its first line points the run at the brief.
+
+Before writing the brief, point the condition at the project's existing docs (PROJECT.md, playbook.md, AGENTS.md) and put in the brief *only* what those don't already carry. If the brief is mostly restating standing repo docs, you haven't cut enough — a bloated brief is the same failure as a bloated goal, just relocated.
+
 Then run a fast self-check and fix in place:
 
 - Could a stranger tell whether the result met the goal? If not, the success signal is too weak.
 - Would the run exit while the product still has rough edges the user would find in the first ten minutes of use? If yes, add the eval or soak demand.
 - Is there anything about *how* to build it? Cut it.
 - Brownfield: does it name what must not break?
-- Is it short enough to live within a goal's character budget?
+- Is it short enough to live within a goal's character budget? The `/goal` evaluator caps the condition at **4,000 characters** — if you're near it, you're almost certainly still carrying "how"; cut it before anything else.
 
 ## Success criteria
 
