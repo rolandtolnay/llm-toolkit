@@ -5,5 +5,7 @@ __pycache__/
 
 .linear.json
 .envrc
+.claude/*.env
+.claude/*/.env
 
 etc/

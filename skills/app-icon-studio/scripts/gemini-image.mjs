@@ -2,6 +2,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { describeSkillEnvFiles, loadSkillEnvFiles } from "./env-files.mjs";
 
 const DEFAULT_MODEL = "gemini-3-pro-image-preview";
 const DEFAULT_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
@@ -22,15 +23,20 @@ const MIME_BY_EXT = {
   ".webp": "image/webp",
   ".gif": "image/gif",
 };
+const LOADED_ENV_FILES = loadSkillEnvFiles();
 
 const HELP = `
 Gemini image CLI (Nano Banana) for app-icon-studio.
 
 Uses GEMINI_API_KEY by default and calls the Gemini generateContent API directly.
+The script loads skill-specific env files before reading process env:
+  ~/.claude/app-icon-studio/.env
+  ./.claude/app-icon-studio.env
+The project file loads second and overrides the global file.
 The default model is ${DEFAULT_MODEL} (Nano Banana Pro), the latest Gemini image
 model documented when this script was added. If the default model returns 404,
-list available models and pick the newest image model:
-  curl -s -H "x-goog-api-key: $GEMINI_API_KEY" ${DEFAULT_API_BASE}/models | grep -i image
+run the models command and pick the newest image model:
+  node scripts/gemini-image.mjs models
 Docs: https://ai.google.dev/gemini-api/docs/image-generation
 
 Usage:
@@ -38,14 +44,17 @@ Usage:
   node scripts/gemini-image.mjs generate --prompt-file prompt.txt --n 2 --name candidate
   echo "prompt text" | node scripts/gemini-image.mjs generate --stdin
   node scripts/gemini-image.mjs edit --image input.png --prompt "make the mark 30% larger"
+  node scripts/gemini-image.mjs config
 
 Commands:
   generate    Generate image(s) from text. This is the default command.
   edit        Edit or combine source images (same API, images attached as input).
+  models      List available Gemini image models.
+  config      Print env-file/key presence status without revealing secrets.
   help        Print this help.
 
 Required:
-  GEMINI_API_KEY must be exported in the shell, or pass --api-key-env NAME.
+  GEMINI_API_KEY must be present in a skill env file, or pass --api-key-env NAME.
   A prompt is required via --prompt, --prompt-file, --stdin, or positional text.
   The edit command also requires at least one --image PATH.
 
@@ -89,11 +98,22 @@ async function main(argv) {
   }
 
   const command = parsed.command ?? "generate";
-  if (!["generate", "edit"].includes(command)) {
+  if (!["generate", "edit", "models", "config"].includes(command)) {
     throw new UsageError(`Unknown command "${command}". Run with --help.`);
   }
 
   const options = normalizeOptions(parsed.options);
+  if (command === "config") {
+    printConfig(options);
+    return;
+  }
+  if (command === "models") {
+    const apiKey = readApiKey(options.apiKeyEnv);
+    const models = await listModels(options, apiKey);
+    printModels(models, options);
+    return;
+  }
+
   const prompt = await readPrompt(options, parsed.positionals);
   if (!prompt) {
     throw new UsageError("Prompt is required. Use --prompt, --prompt-file, --stdin, or positional text.");
@@ -124,7 +144,7 @@ function parseArgs(argv) {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (!command && !arg.startsWith("-") && ["generate", "edit", "help"].includes(arg)) {
+    if (!command && !arg.startsWith("-") && ["generate", "edit", "models", "config", "help"].includes(arg)) {
       command = arg;
       continue;
     }
@@ -452,9 +472,54 @@ function endpointFor(options) {
 function readApiKey(envName) {
   const value = process.env[envName];
   if (!value) {
-    throw new UsageError(`${envName} is not set. Export your Gemini API key before running this script.`);
+    throw new UsageError(
+      `${envName} is not set. Add it to ~/.claude/app-icon-studio/.env `
+      + "or ./.claude/app-icon-studio.env before running this script.",
+    );
   }
   return value;
+}
+
+async function listModels(options, apiKey) {
+  const response = await requestWithTimeout(`${options.apiBase}/models`, {
+    headers: { "x-goog-api-key": apiKey },
+  }, options.timeoutMs);
+
+  const text = await response.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Gemini API returned non-JSON response (${response.status}): ${text.slice(0, 500)}`);
+  }
+  if (!response.ok) {
+    const message = data?.error?.message ?? JSON.stringify(data);
+    const error = new Error(`Gemini API error ${response.status}: ${message}`);
+    error.status = response.status;
+    throw error;
+  }
+  return data?.models ?? [];
+}
+
+function printModels(models, options) {
+  const imageModels = models.filter((model) => /image/i.test(JSON.stringify(model)));
+  if (options.json) {
+    printJson({ models: imageModels });
+    return;
+  }
+  for (const model of imageModels) {
+    console.log(model.name);
+  }
+}
+
+function printConfig(options) {
+  printJson({
+    success: true,
+    command: "config",
+    api_key_env: options.apiKeyEnv,
+    api_key_present: Boolean(process.env[options.apiKeyEnv]),
+    env_files: describeSkillEnvFiles(LOADED_ENV_FILES),
+  });
 }
 
 async function readStdin() {

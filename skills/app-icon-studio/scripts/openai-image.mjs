@@ -2,6 +2,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { describeSkillEnvFiles, loadSkillEnvFiles } from "./env-files.mjs";
 
 const DEFAULT_MODEL = "gpt-image-2";
 const DEFAULT_API_BASE = "https://api.openai.com/v1";
@@ -20,11 +21,16 @@ const MIME_BY_EXT = {
   ".webp": "image/webp",
   ".gif": "image/gif",
 };
+const LOADED_ENV_FILES = loadSkillEnvFiles();
 
 const HELP = `
-OpenAI image CLI for Orfea landing-page asset work.
+OpenAI image CLI for app-icon-studio.
 
-Uses OPENAI_API_KEY by default and calls the current GPT Image API directly.
+Uses OPENAI_API_KEY by default and calls the current GPT Image API directly. The
+script loads skill-specific env files before reading process env:
+  ~/.claude/app-icon-studio/.env
+  ./.claude/app-icon-studio.env
+The project file loads second and overrides the global file.
 The default model is ${DEFAULT_MODEL}, the latest GPT Image model documented by OpenAI
 when this script was added. Re-check official docs before changing that default:
 https://developers.openai.com/api/docs/guides/image-generation
@@ -34,14 +40,16 @@ Usage:
   node scripts/openai-image.mjs generate --prompt "..." --out .local/generated-images
   echo "prompt text" | node scripts/openai-image.mjs generate --stdin --size 1536x1024
   node scripts/openai-image.mjs edit --image input.jpg --prompt "make it feel more premium"
+  node scripts/openai-image.mjs config
 
 Commands:
   generate    Generate image(s) from text. This is the default command.
   edit        Edit or extend one or more source images.
+  config      Print env-file/key presence status without revealing secrets.
   help        Print this help.
 
 Required:
-  OPENAI_API_KEY must be exported in the shell, or pass --api-key-env NAME.
+  OPENAI_API_KEY must be present in a skill env file, or pass --api-key-env NAME.
   A prompt is required via --prompt, --prompt-file, --stdin, or positional text.
   The edit command also requires at least one --image PATH.
 
@@ -112,11 +120,16 @@ async function main(argv) {
   }
 
   const command = parsed.command ?? "generate";
-  if (!["generate", "edit"].includes(command)) {
+  if (!["generate", "edit", "config"].includes(command)) {
     throw new UsageError(`Unknown command "${command}". Run with --help.`);
   }
 
   const options = normalizeOptions(parsed.options);
+  if (command === "config") {
+    printConfig(options);
+    return;
+  }
+
   const prompt = await readPrompt(options, parsed.positionals);
   if (!prompt) {
     throw new UsageError("Prompt is required. Use --prompt, --prompt-file, --stdin, or positional text.");
@@ -149,7 +162,7 @@ function parseArgs(argv) {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (!command && !arg.startsWith("-") && ["generate", "edit", "help"].includes(arg)) {
+    if (!command && !arg.startsWith("-") && ["generate", "edit", "config", "help"].includes(arg)) {
       command = arg;
       continue;
     }
@@ -661,9 +674,22 @@ function endpointFor(command, apiBase) {
 function readApiKey(envName) {
   const value = process.env[envName];
   if (!value) {
-    throw new UsageError(`${envName} is not set. Export your OpenAI API key before running this script.`);
+    throw new UsageError(
+      `${envName} is not set. Add it to ~/.claude/app-icon-studio/.env `
+      + "or ./.claude/app-icon-studio.env before running this script.",
+    );
   }
   return value;
+}
+
+function printConfig(options) {
+  printJson({
+    success: true,
+    command: "config",
+    api_key_env: options.apiKeyEnv,
+    api_key_present: Boolean(process.env[options.apiKeyEnv]),
+    env_files: describeSkillEnvFiles(LOADED_ENV_FILES),
+  });
 }
 
 async function readStdin() {

@@ -1,6 +1,6 @@
 ---
 name: app-icon-studio
-description: Design and generate a vetted batch of app icon candidates end-to-end — designer interview, concept directions, parallel OpenAI + Nano Banana generation via bundled CLI scripts, independent vision-judge subagents, one surgical revision turn, and a final contact sheet with 5-7 finalists. Use when the user wants an app icon created/generated for them via API (requires OPENAI_API_KEY and GEMINI_API_KEY).
+description: Design and generate a vetted batch of app icon candidates end-to-end — designer interview, concept directions, parallel OpenAI + Nano Banana generation via bundled CLI scripts, independent vision-judge subagents, one surgical revision turn, and a final contact sheet with 5-7 finalists. Use when the user wants an app icon created/generated for them via API (requires OPENAI_API_KEY and GEMINI_API_KEY in the app-icon-studio env file).
 ---
 
 <objective>
@@ -10,8 +10,10 @@ directions, parallel generation on two image engines, independent judge subagent
 surgical revision turn, and a contact sheet that proves each finalist at home-screen sizes.
 
 This skill is standalone: its `scripts/` call the OpenAI and Gemini image APIs directly
-(dependency-free Node ≥18), and its `references/` and `assets/exemplars/` carry all craft
-knowledge. All run artifacts live under `./icons/<app-slug>/` in the working directory.
+(dependency-free Node ≥18), loading API keys from `~/.claude/app-icon-studio/.env` and then
+`./.claude/app-icon-studio.env` (project file wins). Its `references/` and
+`assets/exemplars/` carry all craft knowledge. All run artifacts live under
+`./icons/<app-slug>/` in the working directory.
 
 A full run costs roughly $2-4 in API fees (≈16 generations + ≈6 edits) and the autonomous
 stretch takes several minutes of wall-clock generation time. Say both to the user before
@@ -46,7 +48,10 @@ Stage 3.
 
 Resolve the app name to a kebab-case slug and create `./icons/<slug>/` with subdirectories
 `prompts/`, `round-1/`, `round-2/`, `final/`. In one bash call, check: `node --version` (≥18),
-`OPENAI_API_KEY` and `GEMINI_API_KEY` are set (report presence, never values). If one key is
+`node <skill>/scripts/openai-image.mjs config`, and
+`node <skill>/scripts/gemini-image.mjs config`. Report only env-file paths loaded and key
+presence, never values. Keys should live in `~/.claude/app-icon-studio/.env` or
+`./.claude/app-icon-studio.env`; do not ask the user to export them globally. If one key is
 missing, offer to run single-engine with doubled counts; if node is missing, stop and say so.
 
 If `icons/<slug>/brief.md` already exists, this is a resumption: read it plus the latest stage
@@ -140,8 +145,9 @@ or tinted variants, or export sizes.
 </pipeline>
 
 <edge_cases>
-- **One engine unavailable or a key missing**: proceed single-engine with doubled counts,
-  tell the user which comparisons are lost.
+- **One engine unavailable or a key missing**: ask the user to add the key to the
+  app-icon-studio env file, or proceed single-engine with doubled counts and tell the user
+  which comparisons are lost.
 - **Gemini default model 404s**: list models via the API (command in `prompt-recipes.md`),
   switch `--model` to the newest image model, note the change.
 - **Moderation block or refusal**: rephrase once; if it persists, drop that candidate slot and
@@ -168,6 +174,7 @@ or tinted variants, or export sizes.
 - Do NOT inflate results: report failed generations, dropped candidates, and dead directions
   in the funnel numbers exactly as they happened.
 - Do NOT print or log API key values anywhere, including metadata and error reports.
+- Do NOT ask the user to export API keys globally; the scripts load app-icon-studio env files.
 </anti_patterns>
 
 <reference_index>

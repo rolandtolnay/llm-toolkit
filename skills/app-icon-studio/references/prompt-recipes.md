@@ -9,8 +9,21 @@ Both scripts live in this skill's `scripts/` directory and are dependency-free N
 
 - `scripts/openai-image.mjs` — GPT Image API (`gpt-image-2`). Needs `OPENAI_API_KEY`.
 - `scripts/gemini-image.mjs` — Gemini image API / Nano Banana (`gemini-3-pro-image-preview`).
-  Needs `GEMINI_API_KEY`. If the default model 404s, list models and pick the newest image
-  model: `curl -s -H "x-goog-api-key: $GEMINI_API_KEY" https://generativelanguage.googleapis.com/v1beta/models | grep -i image`
+  Needs `GEMINI_API_KEY`. If the default model 404s, list models with
+  `node <skill>/scripts/gemini-image.mjs models` and pick the newest image model.
+
+API keys are loaded from app-icon-studio env files before each script looks up the key:
+
+```dotenv
+# ~/.claude/app-icon-studio/.env, or project override ./.claude/app-icon-studio.env
+OPENAI_API_KEY=...
+GEMINI_API_KEY=...
+```
+
+The project env file loads second and overrides both the global file and any inherited env
+value. Keep project env files out of git; this repo ignores `.claude/*.env` and
+`.claude/*/.env`. Use each script's `config` command to confirm key presence without printing
+values.
 
 Run `--help` on either script for the full flag list. Both support `--dry-run`.
 
