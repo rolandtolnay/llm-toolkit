@@ -19,9 +19,11 @@ Use the standard research synthesis frontmatter (see `../../research/references/
 
 ## Master class
 
+> For the full buying guide covering all aspects in depth, see [the complete masterclass](02-masterclass.md).
+
 ### What actually matters
 
-{{3-6 ranked criteria, each with 1-2 sentences of why. Drawn from 02-criteria.md.}}
+{{3-6 ranked criteria, each with 1-2 sentences of why. Condensed from the masterclass's "What matters most for your situation" section.}}
 
 1. **{{Criterion 1}}** — {{Why it matters, in plain language}}
 2. **{{Criterion 2}}** — {{Why}}
@@ -30,7 +32,7 @@ Use the standard research synthesis frontmatter (see `../../research/references/
 
 ### What people think matters but doesn't
 
-{{2-4 marketing myths or spec theater items. Each a short bullet with a reason.}}
+{{2-4 marketing myths or spec theater items. Each a short bullet with a reason. Condensed from the masterclass's "Marketing vs Reality" section.}}
 
 - **{{Myth 1}}** — {{Why it doesn't matter as much as marketed}}
 - **{{Myth 2}}** — {{Why}}
@@ -111,11 +113,12 @@ Entry at **~{{X}} RON** · Sweet spot around **~{{Y}} RON** · Premium starts **
 
 See angle files in this directory for full findings, source URLs, and verbatim quotes:
 - [Interview](01-interview.md) — Q&A + priorities
-- [Criteria](02-criteria.md) — ranked criteria + myths
+- [Masterclass](02-masterclass.md) — comprehensive buying guide covering all product dimensions
 - [Availability](03-availability.md) — RO/EU platform shortlist
 - [Owner voice](04-owner-voice.md) — Reddit + YouTube owner synthesis
 - [Expert voice](05-expert-voice.md) — expert/trade comparative
 - [Retailer voice](06-retailer-voice.md) — current availability and price
+- [Aspect research](aspects/) — deep-dive research files per aspect cluster
 
 ## Verification
 
@@ -181,6 +184,8 @@ Never rewrite the recommendation based on a verification flag. The flag goes in 
 **Context:** Open-plan kitchen, replacing a 5-year-old noisy unit, counter placement, 1 adult + infant arriving soon
 
 ## Master class
+
+> For the full buying guide covering all aspects in depth, see [the complete masterclass](02-masterclass.md).
 
 ### What actually matters
 

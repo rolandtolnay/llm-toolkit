@@ -1,10 +1,11 @@
 ---
 name: product-research
+disable-model-invocation: true
 description: Run staged buying-decision research for a household or personal product (microwave, mattress, vacuum, dishwasher, appliance, furniture, electronics). Use when picking what to buy and wanting ranked picks with tradeoffs, not just information.
 ---
 
 <objective>
-Produce a trustworthy buying decision for a single product category through a staged pipeline that resists SEO/affiliate noise. The output is a synthesis with two parts: a master class on what actually matters for this category, and three tiers of recommendations (primary + runner-up per tier) grounded in owner voice, expert voice, and current EU/RO retailer availability.
+Produce a trustworthy buying decision for a single product category through a staged pipeline that resists SEO/affiliate noise. The output includes a comprehensive standalone masterclass document that educates the user on all dimensions of the category, and a synthesis with ranked recommendations (primary + runner-up per tier) grounded in owner voice, expert voice, and current EU/RO retailer availability.
 
 Run persists to `~/Documents/Research/` in the same format as the generic research skill, with a product-specific synthesis structure.
 </objective>
@@ -16,7 +17,7 @@ Run persists to `~/Documents/Research/` in the same format as the generic resear
 4. **Availability tiering:** Green (RO retailer) → full recommend. Yellow (EU retailer, Amazon DE / Bol.nl / etc.) → recommend, flag import. Red (US-only / non-EU) → exclude.
 5. **Never invent a tier** to fill a slot. Substitute the tier name with a use-case axis, or omit the tier.
 6. **Scrape-only verification.** Flag recommendations — never rewrite them based on verification result.
-7. **Stage order is sequential.** Preliminary (Stage 2) must finish before Product phase (Stage 3) spawns — product subagents consume the ranked criteria.
+7. **Stage order is sequential.** Preliminary (Stage 2) — including aspect discovery, deep-dives, and masterclass assembly — must finish before Product phase (Stage 3) spawns. Product subagents consume the ranked criteria extracted from the masterclass.
 </core_rules>
 
 <shared_infrastructure>
@@ -54,35 +55,62 @@ Out of scope — redirect to generic `/research`:
 
 **Read `references/interview-calibration.md` before composing questions.**
 
-Generate 4-6 category-specific questions using the frame in that reference. Fire them via AskUserQuestion in a single round.
+**Outcome:** A filled interview handoff block (see `<handoff_contracts>`) with enough signal to rank the masterclass criteria and differentiate tiers. Every question must plausibly change the final shortlist — drop any that won't.
 
-Fire a second AskUserQuestion round only if one of:
-- Answers reveal contradictory constraints (e.g., "quiet + cheap + powerful") — ask user to rank top 2
-- Budget absent AND category has wide price range (10x+ between entry and premium)
-- A critical category-specific variable was missed (rare; orchestrator judgment)
+Generate category-specific questions using the frame in that reference. The pipeline already surfaces budget-to-premium tiers for every run, so skip budget unless the user likely has a hard cap that would exclude entire tiers. Fewer, sharper questions beat a longer list with padding.
 
-Build the interview handoff block (see `<handoff_contracts>`). Write full Q&A and the structured block to `01-interview.md` with angle-file frontmatter (`role: angle`, `sub_question: "interview"`).
+AskUserQuestion accepts at most 4 questions per call. Batch accordingly; use multiple sequential calls if needed.
 
-## Stage 2: Preliminary phase — 2 subagents in parallel
+Fire a follow-up round only when answers reveal a genuine ambiguity that would lead to a wrong shortlist — e.g., contradictory constraints the user needs to rank, or a critical category-specific variable that wasn't captured. Mild gaps can be filled by preliminary-phase research.
 
-Spawn both with `Task` tool, `subagent_type: "research-subagent"`. Both receive the full interview handoff block.
+Write full Q&A and the structured handoff block to `01-interview.md` with angle-file frontmatter (`role: angle`, `sub_question: "interview"`).
 
-### Criteria subagent
-**Goal:** Build the ranked-criteria list that Stage 3 uses to score candidates.
+## Stage 2: Preliminary phase — aspect discovery, deep research, and masterclass
 
-**Prompt skeleton:**
-> Research what actually matters when buying a [category]. Draw from expert reviews, non-affiliate YouTube long-form reviewers, and Reddit owner threads (r/BuyItForLife, category-specific subs). Explicitly identify marketing myths and spec theater.
+Three sub-stages executed sequentially (2a → 2b → 2c). The availability subagent runs in parallel with 2b.
+
+### Stage 2a: Aspect Discovery (main context)
+
+**Goal:** Identify the key dimensions of this product category — broadly, not scoped by interview priorities.
+
+Run 2-3 broad searches in the main context. Do NOT reference the user's stated priorities in these queries — the goal is pure category discovery.
+
+1. `research.py ask "what are the most important factors and dimensions to evaluate when buying a [category]? Cover all aspects: performance, build quality, ergonomics, safety, materials, maintenance, durability, accessories" --context high`
+2. `youtube.py search "[category] buying guide what to look for [current year]"`
+3. `research.py ask "[category] common buyer mistakes things people overlook biggest regrets after buying"`
+
+From the combined results, compile a list of 8-12 key aspects of the product category. These should be fundamental dimensions that differentiate products — not features of specific models.
+
+Cluster the aspects into 3-4 groups of related dimensions. Each cluster should make sense as a coherent research topic (e.g., for a stroller: `{wheels, suspension, terrain handling}`, `{fold mechanism, weight, portability}`, `{safety, materials, build quality}`, `{canopy, storage, accessories, ergonomics}`).
+
+### Stage 2b: Aspect Deep-Dives + Availability (all subagents in parallel)
+
+Spawn all subagents with `subagent_type: "research-subagent"`. Run 3-4 aspect subagents + 1 availability subagent in parallel.
+
+#### Aspect deep-dive subagents (3-4)
+
+Each subagent receives the product category and use case context from the interview, but NOT the user's stated priorities — the goal is category education, not priority validation.
+
+**Prompt skeleton (per cluster):**
+> You are researching [aspect cluster name] for [category] to build a buying guide that educates a first-time buyer on what truly matters.
 >
-> Produce:
-> 1. Ranked criteria list, 5-10 items, most important first, with 1-sentence rationale each.
-> 2. Marketing myths to ignore, 2-5 items with source basis.
-> 3. Contradictions with user's stated priorities (from interview block) — only if 2+ independent quality sources push back on a priority. List each as: `{user_priority, research_finding, sources: [url1, url2]}`.
+> Your assigned aspects: [list of 2-3 aspects in this cluster]
 >
-> Do NOT use `--recency` flags. Mature products have valid older reviews.
+> For each aspect, research and document:
+> 1. **What it is and why it matters** — plain-language explanation of the engineering or design dimension
+> 2. **What to look for** — specific specs, features, or qualities that indicate quality vs. cost-cutting
+> 3. **What to avoid** — red flags, misleading specs, marketing traps specific to this aspect
+> 4. **Real-world owner experience** — things people discover only after purchase (from Reddit, forums, YouTube long-form owner reviews)
+> 5. **Engineering tradeoffs** — where improving this aspect necessarily compromises another aspect (e.g., bigger wheels = harder fold)
 >
-> Write to `02-criteria.md` with angle-file frontmatter.
+> Use `research.py ask`, `social.py reddit`, `youtube.py search`, and `research.py scrape` as needed. Aim for 3-5 quality sources per aspect. Do NOT use `--recency` flags.
+>
+> Do NOT rank or score specific products. This is educational research about the ASPECTS themselves, not about models.
+>
+> Write to `aspects/[cluster-slug].md` with angle-file frontmatter.
 
-### Availability subagent
+#### Availability subagent
+
 **Goal:** Map the retailer universe for this category in RO (first) + EU/import fallback, then identify the best starting platforms. Do not narrow discovery to 3-4 platforms too early.
 
 **Prompt skeleton:**
@@ -101,7 +129,22 @@ Spawn both with `Task` tool, `subagent_type: "research-subagent"`. Both receive 
 >
 > Write to `03-availability.md` with angle-file frontmatter.
 
-Wait for both to complete before proceeding. Check both files exist and have their expected content. If criteria subagent failed to produce a ranked list, fall back to user priorities and note the fallback in the synthesis.
+Wait for all subagents to complete. Check that all aspect files in `aspects/` and `03-availability.md` exist and have expected content.
+
+### Stage 2c: Masterclass Assembly (main context)
+
+**Read `references/masterclass-template.md` before writing.**
+
+Read all aspect deep-dive files from `aspects/`. Compose `02-masterclass.md` following the masterclass template structure:
+
+- Organize by aspect cluster (educational structure, not priority order)
+- Each aspect: what it is, what to look for, what to avoid, real-world gotchas, key tradeoffs
+- Conclude with three sections:
+  - **Ranked criteria** (5-10 items) — personalized to the user's use case using interview context. The interview priorities influence the RANKING of criteria, not the COVERAGE of aspects.
+  - **Marketing myths** (2-5 items) — consolidated from aspect research, with source basis
+  - **Decision framework** — practical guidance for the user's specific situation
+
+Extract the ranked criteria and marketing myths into the handoff block for Stage 3. If aspect research reveals contradictions with the user's stated priorities (2+ independent sources), note them in the masterclass and carry them forward to the synthesis.
 
 ## Stage 3: Product phase — 3 subagents in parallel
 
@@ -173,7 +216,7 @@ After all three product-phase subagents return, orchestrator identifies the 6 fi
 **Read `references/synthesis-template.md` before writing.**
 
 Write `00-synthesis.md` following the exact structure. Key reminders:
-- Master class has 4 subsections. Omit the "what we learned vs your initial assumptions" subsection entirely if no contradictions cleared the 2-source threshold — do not write "no contradictions found".
+- Master class section is a condensed summary (400-800 words) of the full masterclass document (`02-masterclass.md`), with a link to it. Include ranked criteria highlights and key myths. Omit the "what we learned vs your initial assumptions" subsection entirely if no contradictions cleared the 2-source threshold.
 - Market reality line is standard; include for every run.
 - 3 tiers by default (overall / budget / premium). Substitute tier name with use-case axis if default doesn't fit the category. Omit a tier entirely if no strong candidate exists.
 - Considered-and-discarded section: 2-3 items from (1) shortlist fallout, (2) SEO-popular but expert-rejected. Each MUST cite specific source/finding. Do not pad.
@@ -205,7 +248,7 @@ raw_qa: [full Q&A for exact phrasing reference]
 
 ## Preliminary → Product phase
 
-Adds the following on top of the interview block:
+Ranked criteria and myths are extracted from the masterclass (Stage 2c). Retailer data comes from the availability subagent. Adds the following on top of the interview block:
 
 ```yaml
 ranked_criteria:
@@ -242,8 +285,8 @@ No separate contract. Orchestrator reads `04-owner-voice.md`, `05-expert-voice.m
 </handoff_contracts>
 
 <edge_cases>
-- **Thin preliminary results** (sparse sources for obscure category) → proceed with best judgment; flag lower confidence in synthesis
-- **Criteria subagent fails to produce ranked list** → fall back to user priorities; note the fallback in synthesis
+- **Thin aspect research** (sparse sources for obscure category) → masterclass assembly works with best available data; flag lower confidence in synthesis and note which aspects had thin coverage
+- **Masterclass fails to produce ranked criteria** → fall back to user priorities for Stage 3 scoring rubric; note the fallback in synthesis
 - **Unrealistic budget** (user says 1500, market starts at 3000) → no explicit warning; the market-reality line in synthesis does the educating naturally
 - **Tier with no strong candidate** → substitute tier name with use-case axis (e.g., "best for small spaces"), or omit tier entirely. Never invent.
 - **Thin retailer market** → document searched retailer classes and dead ends, then consider EU/UK/US import options as Yellow/Red availability rather than forcing a domestic recommendation
@@ -266,6 +309,7 @@ No separate contract. Orchestrator reads `04-owner-voice.md`, `05-expert-voice.m
 Lazy-loaded during specific stages:
 
 - `references/interview-calibration.md` — load at **Stage 1 (Interview)** before composing questions. Contains the question-generation frame and 3 calibration examples (microwave, mattress, vacuum).
+- `references/masterclass-template.md` — load at **Stage 2c (Masterclass Assembly)** before writing `02-masterclass.md`. Contains the document structure, voice guidelines, and length targets.
 - `references/synthesis-template.md` — load at **Stage 5 (Synthesis)** before writing `00-synthesis.md`. Contains the exact output structure and a worked example.
 
 Cross-references to the research skill (same project):
@@ -276,14 +320,16 @@ Cross-references to the research skill (same project):
 <success_criteria>
 Ordered by skip risk (highest first).
 
-- [ ] Pipeline runs all 5 stages in order. Preliminary (Stage 2) completed before Product phase (Stage 3) spawned.
+- [ ] Pipeline runs all 5 stages in order. Preliminary (Stage 2) — including aspect discovery (2a), deep-dives (2b), and masterclass assembly (2c) — completed before Product phase (Stage 3) spawned.
 - [ ] Interview questions generated per-category using the interview-calibration frame, not from a generic template.
-- [ ] Ranked criteria (not user priorities) used to score and order candidates in product phase.
+- [ ] Aspect discovery searches are category-generic, not scoped by interview priorities.
+- [ ] Masterclass document (`02-masterclass.md`) covers all discovered aspects with educational depth, not just user-priority-aligned criteria.
+- [ ] Ranked criteria (extracted from masterclass, not raw user priorities) used to score and order candidates in product phase.
 - [ ] Availability phase produces a retailer universe plus a shortlist; the shortlist is not treated as an exclusive boundary.
 - [ ] Retailer voice performs model-level deal sweeps for finalists/candidates, including official brand stores, specialty sellers, and Romanian price aggregators when available.
 - [ ] "What we learned vs your initial assumptions" subsection appears ONLY when 2+ quality sources contradict a user priority; omitted entirely otherwise.
 - [ ] Synthesis follows synthesis-template.md structure: master class + market reality line + 3 tiers × (primary + runner-up) + tradeoffs + considered-and-discarded.
 - [ ] Verification flags ambiguous recommendations with `verification: manual` — never rewrites them.
-- [ ] Run persisted to `~/Documents/Research/<slug>/` with slug `YYYY-MM-DD-<category>-product-research`, 7 files total (`00-synthesis.md` + 6 angle files); INDEX.md updated with a single run entry.
+- [ ] Run persisted to `~/Documents/Research/<slug>/` with slug `YYYY-MM-DD-<category>-product-research` — `00-synthesis.md` + `01-interview.md` + `02-masterclass.md` + `03-availability.md` + `04-06` voice files + `aspects/*.md`; INDEX.md updated with a single run entry.
 - [ ] No `--recency` flags used on any CLI call during the run.
 </success_criteria>

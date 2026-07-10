@@ -14,8 +14,8 @@ Two load-bearing clauses in that frame:
 
 ## Rules
 
-- **4-6 questions maximum.** Fewer is better if the category is simple (e.g., a kettle doesn't need 6 questions).
-- **Never ask budget first.** Budget anchoring narrows options before the real needs are surfaced. Ask budget last or second-to-last.
+- **Every question must plausibly change the shortlist.** If the answer wouldn't move a product on or off the list, drop the question. Fewer, sharper questions beat a longer set with padding.
+- **Skip budget unless the user likely has a hard cap.** The pipeline already surfaces budget-to-premium tiers. Budget questions are only worth asking when a hard ceiling would exclude entire tiers (e.g., "strollers range from 200 to 2000 EUR — is any of that off the table?").
 - **Always allow a "help me decide" escape** on subjective questions. Users often don't know their own preferences for categories they haven't owned before.
 - **Ask concrete situations, not abstract priorities.** "What have you replaced that you hated?" beats "rank reliability vs price vs features".
 - **Ask about past experience with this category.** First-time buyers and replacement buyers need very different questions.
@@ -48,7 +48,7 @@ Three categories with strong question sets. Do not copy these verbatim for other
    - *Why this:* open-plan apartments make microwave noise a real issue; cheap units are notoriously loud
 5. **Interior vs exterior priorities** — "Do you care more about how it looks or how long it lasts? Many quiet, durable ones are a bit uglier; many sleek ones die after 3-4 years."
    - *Why this:* forces an explicit tradeoff rather than leaving it to research guess
-6. **Budget** — "What's a range you're comfortable with? Or would you prefer I show the market spread and you decide?"
+6. *(Only if the category has a hard-cap risk)* **Budget** — "Microwaves range from 50 to 500+ EUR — is any of that range off the table for you?"
 
 ### Example 2: Mattress
 
@@ -77,14 +77,13 @@ Three categories with strong question sets. Do not copy these verbatim for other
    - *Why this:* stick vacuums that need wall-mount charging are useless if there's no wall to mount to
 5. **How often do you vacuum now** — "Daily, weekly, when-you-notice? Would a robot change that, or do you actually want to do it yourself?"
    - *Why this:* different use pattern, different category entirely
-6. **Budget** — "Range you're comfortable with, or prefer to see market spread first?"
+6. *(Only if the category has a hard-cap risk)* **Budget** — "Vacuums range from 100 to 1000+ EUR — is any of that off the table?"
 
 ## Second-round triggers
 
-Fire a follow-up round via AskUserQuestion only when one of these conditions holds:
+Fire a follow-up round via AskUserQuestion only when the first round's answers would lead to a wrong shortlist. Examples:
 
 1. **Contradictory constraints** — e.g., "quiet" + "cheap" + "powerful" for a blender. Ask user to rank the top 2 of the three.
-2. **Budget absent when needed** — user gave no budget signal AND the category has a wide price range (10x between entry and premium). Ask for a rough range or permission to show market spread instead.
-3. **Critical category variable missed** — orchestrator judgment; rare. For a dishwasher, if built-in vs freestanding wasn't captured. For a camera, if the primary use case (stills vs video) wasn't captured.
+2. **Critical category variable missed** — orchestrator judgment; rare. For a dishwasher, if built-in vs freestanding wasn't captured. For a camera, if the primary use case (stills vs video) wasn't captured.
 
-Do NOT fire a second round for mild gaps. Preliminary phase research can fill those in. A second round is expensive in attention budget — use it only when the first round's output would lead to bad shortlisting.
+Do NOT fire a second round for mild gaps. Preliminary phase research can fill those in. A second round is expensive in attention budget — use it only when proceeding would produce a materially wrong result.
