@@ -57,7 +57,7 @@ Adapt explicitly:
 - require an initial working-tree baseline and protection of unrelated changes;
 - keep secrets and bulky transient output out of tracked memory;
 - retain only evidence that supports a verdict or future decision;
-- encode subagent model economy: keep goal ownership and high-judgment integration with the frontier model, while bounded verifiable work defaults to the least costly lower-tier model that remains comfortably capable;
+- encode the subagent model economy in the playbook, following the foundation contract;
 - add project-specific canonical sources only when they own a distinct kind of truth.
 
 Keep responsibilities non-overlapping. `AGENTS.md` routes; `PROJECT.md` decides product questions; `CONTEXT.md` names the domain; the playbook defines method; the goal log records what happened.
@@ -75,16 +75,7 @@ goal prompt
   -> GOAL MET or explicit [blocked]
 ```
 
-Every autonomous run must:
-
-1. read canonical sources before choosing defaults;
-2. persist the exact goal, baseline, assumptions, rubric, and guardrails;
-3. build the smallest vertical slice;
-4. run only applicable configured checks;
-5. use a fresh judge when user-visible quality, trust, or irreversible behavior is in scope;
-6. log judge findings, fixes, rejected findings, and final state;
-7. stop only at `GOAL MET` or an explicit `[blocked]` condition;
-8. commit, deploy, release, or mutate external systems only when the goal authorizes it.
+The installed files — not this skill — must make the following true for every cold run: it reads canonical sources before choosing defaults; persists the exact goal, baseline, assumptions, rubric, and judge findings in the goal log; builds the smallest vertical slice and runs the applicable configured checks; brings in a fresh judge when user-visible quality, trust, or irreversible behavior is in scope; stops only at `GOAL MET` or an explicit `[blocked]`; and treats commit, deploy, release, and external mutation as unauthorized unless the goal grants them. The method itself lives in the playbook; do not restate it elsewhere.
 
 Use the `write-loop` skill after bootstrap when available to turn rough work into the first outcome-focused goal.
 

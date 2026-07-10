@@ -47,15 +47,7 @@ The full foundation is appropriate for a project expected to span many unattende
 
 ## Subagent model economy
 
-Record this in the project playbook when the harness supports model selection:
-
-- Keep the frontier goal owner responsible for product judgment, architecture, safety boundaries, integration, and final synthesis.
-- Delegate bounded work to the least costly lower-tier model that remains comfortably capable. Default one tier down for substantial scoped work and two tiers down for routine research, exploration, fixture enumeration, mechanical edits, and objective checks.
-- Treat names as current examples rather than durable policy: Fable may delegate to Opus 4.8 or, for narrow verifiable work, Sonnet 5; Sol may delegate to Terra or, for routine research and exploration, Luna.
-- Supply minimum sufficient context, explicit constraints, a bounded deliverable, and a verification contract. The goal owner reviews and integrates the result.
-- Keep ambiguous product forks, cross-cutting architecture, destructive or external mutation, and hard-to-detect failure modes at owner or peer capability. Escalate after an uncertain or failed pass.
-
-The durable rule is capability-aware delegation, not a fixed alias ladder. Resolve the current model hierarchy at run time.
+When the harness supports model selection, record capability-aware delegation in the project playbook: the goal owner keeps product judgment, architecture, safety boundaries, integration, and final synthesis; bounded verifiable work defaults to the least costly lower-tier model that remains comfortably capable, escalating after an uncertain or failed pass. The playbook template carries the full policy. The durable rule is capability-aware delegation, not a fixed alias ladder — resolve the current model hierarchy at run time.
 
 ## Adaptation rules
 
