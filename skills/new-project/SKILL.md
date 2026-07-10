@@ -148,7 +148,7 @@ docs: initialize [project-name]
 [One-liner from Core Value]
 ```
 
-Close with where things stand — the project one-liner and the natural next step, typically drafting the first autonomous goal (e.g. via the write-loop skill), which PROJECT.md now backstops.
+Close with where things stand — the project one-liner and the natural next step. If the repository does not yet have the goal-run foundation, recommend `bootstrap-goal-project` before drafting the first autonomous goal with `write-loop`. If the foundation already exists, go directly to `write-loop`.
 
 The document only works if runs are routed to it. Give the user the line to include in every goal or loop prompt, ready to copy:
 

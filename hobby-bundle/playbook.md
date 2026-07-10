@@ -37,6 +37,17 @@ Then run the loop:
 7. Run CLI checks, browser smoke tests, and a fresh judge pass (a subagent if the harness supports it, otherwise a fresh-context review) before calling the project done.
 8. Commit only the intended files, then ship production by pushing `main` once the exact committed state is ready.
 
+### Subagent model economy
+
+Keep the frontier model that owns the goal focused on product judgment, architecture, integration, and final synthesis. Delegate bounded work to the least costly lower-tier model that remains comfortably capable.
+
+- Default one tier down for substantial but well-scoped implementation, analysis, or review; use two tiers down for routine research, repository exploration, fixture enumeration, mechanical edits, and targeted checks with objective acceptance criteria.
+- Current examples, not permanent mappings: a Fable-owned goal can usually delegate to Opus 4.8, or to Sonnet 5 for narrow verifiable work; a Sol-owned goal can usually delegate to Terra, or to Luna for routine research and exploration.
+- Keep ambiguous product decisions, cross-cutting architecture, destructive or external mutations, and work whose failure is hard to detect with the goal owner or a peer-capability model.
+- Give each subagent a bounded deliverable and verification contract; have the goal owner review and integrate it. Escalate after an uncertain or failed pass instead of accumulating cheap retries.
+
+Choose from the current model ladder at run time because aliases and relative capability change.
+
 ## Recommended agent skills
 
 Use these skills when available:

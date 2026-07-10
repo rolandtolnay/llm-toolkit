@@ -446,6 +446,10 @@ Improve by removing rather than adding. Use when a prompt, config, or module fee
 
 ## Skills
 
+### `bootstrap-goal-project`
+
+Set up or repair the repository-local memory and delivery system for independent autonomous runs: product intent, domain language, decisions, goal history, evidence, playbook, and fresh judging. Use when starting a durable project or adapting the `hobby-bundle` method to a different stack.
+
 ### `create-skill`
 
 Build new SKILL.md files through collaborative conversation. Use when turning a workflow into a reusable skill.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bootstrap Goal Project"
+  short_description: "Set up durable docs for autonomous goal-driven runs"
+  default_prompt: "Use $bootstrap-goal-project to set up this repository for independent goal-driven runs with durable project memory, judging, and handoff documentation."
