@@ -1,5 +1,6 @@
 ---
 name: app-icon-studio
+disable-model-invocation: true
 description: Design and generate a vetted batch of app icon candidates end-to-end — designer interview, concept directions, parallel OpenAI + Nano Banana generation via bundled CLI scripts, independent vision-judge subagents, one surgical revision turn, and a final contact sheet with 5-7 finalists. Use when the user wants an app icon created/generated for them via API (requires OPENAI_API_KEY and GEMINI_API_KEY in the app-icon-studio env file).
 ---
 

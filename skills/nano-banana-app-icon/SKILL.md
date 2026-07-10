@@ -1,5 +1,6 @@
 ---
 name: nano-banana-app-icon
+disable-model-invocation: true
 description: >
   Design iOS/Android app icons with Nano Banana 2. Use when making, replacing,
   or refining an app icon — runs a discovery brief, writes the JSON prompt,

@@ -1,5 +1,6 @@
 ---
 name: create-engineering-skill
+disable-model-invocation: true
 description: Create engineering skills that activate canonical software vocabulary. Use when building a new skill for debugging, testing, architecture, or code review — encoding expert judgment as falsifiable rules.
 ---
 

@@ -1,5 +1,6 @@
 ---
 name: brand-naming
+disable-model-invocation: true
 description: Run a full brand-naming pipeline — strategy interview, competitor landscape research, isolated name-generation teams, sound-symbolism scoring, screening, proof of concept — ending in 3-5 vetted candidates with 1-2 recommendations. Use when naming or renaming a company, product, app, or feature.
 ---
 

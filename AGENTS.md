@@ -8,3 +8,4 @@
   - `--uninstall` removes all toolkit files from the target scope
   - If the user just says "install the toolkit" without specifying, default to local (current project)
 - Test commands should include transient `uv` dependencies when the repo does not declare them. For research-skill tests, use commands like `uv run --with pytest --with typer --with requests pytest skills/research/tests/test_youtube.py` rather than bare `uv run pytest ...`, because `pytest` is not available as a bare executable in this repo's uv environment.
+- Skills with `disable-model-invocation: true` also need `agents/openai.yaml` setting `policy.allow_implicit_invocation: false` so Codex preserves the explicit-only behavior.

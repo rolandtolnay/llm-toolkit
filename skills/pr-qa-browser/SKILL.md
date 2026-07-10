@@ -1,5 +1,6 @@
 ---
 name: pr-qa-browser
+disable-model-invocation: true
 description: Derive and execute risk-focused browser QA for dashboard-web PRs. Use when reviewing current-branch pull requests, validating regressions, or needing Agent Browser screenshots and manual follow-ups.
 argument-hint: "[pr-number-or-branch]"
 ---
