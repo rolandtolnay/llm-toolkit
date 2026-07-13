@@ -74,6 +74,7 @@ The prompt is intentional. Claude Code, Pi, and other agents put skills, prompts
 | Name a company, product, app, or feature | [`brand-naming`](#brand-naming) |
 | Generate and judge app icon candidates | [`app-icon-studio`](#app-icon-workflows) |
 | Prepare a repository for independent agent runs | [`new-project` → `bootstrap-goal-project` → `write-loop`](#goal-driven-projects) |
+| Turn a vague request into a bounded task | [`scope`](#engineering-quality-and-delivery) |
 | Verify finished code or triage review feedback | [`/verify`](#engineering-quality-and-delivery) or [`triage-pr-comments`](#engineering-quality-and-delivery) |
 | Work from a Linear ticket | [`/work-ticket`](#commands) |
 | Search Gmail or Slack from an agent | [`gmail`](#gmail), [`slack`](#slack), or [`linear`](#linear) |
@@ -470,8 +471,9 @@ The CLI can also read supported agent `env.json` locations or process environmen
 
 ## Engineering quality and delivery
 
-### Review and verification
+### Frame, review, and verify
 
+- [`scope`](skills/scope/SKILL.md): Turns an underspecified fresh-session request into a confirmed task frame covering the goal, bounds, verification, and out-of-scope work. It first checks what the repository can answer, asks only material unknowns in one round, and implements only after approval. The skill is explicit-only and needs an interactive question-tool equivalent.
 - [`triage-pr-comments`](skills/triage-pr-comments/SKILL.md): Fetches unresolved GitHub review comments, checks each against actual code usage, domain docs, and linked tickets, then classifies it as act, defer, ignore, or investigate. It confirms decisions before replying, resolving, or creating follow-up work.
 - [`pr-qa-browser`](skills/pr-qa-browser/SKILL.md): Derives 5-8 risk-focused browser stories from a PR, runs feasible Agent Browser flows, and stores screenshots under `etc/mine/test-<branch>/`.
   - This one is written specifically for `dashboard-web`, its `AGENTS.md`, local server, auth state, and fixtures. It needs adaptation before it can serve as generic browser QA.
@@ -503,10 +505,10 @@ The CLI can also read supported agent `env.json` locations or process environmen
 
 ## Complete skill index
 
-The repository currently has 20 top-level skills. Use this collapsed list when you know the name and want the source file.
+The repository currently has 21 top-level skills. Use this collapsed list when you know the name and want the source file.
 
 <details>
-<summary><strong>Show all 20 skills</strong></summary>
+<summary><strong>Show all 21 skills</strong></summary>
 
 ### Create and maintain agent resources
 
@@ -525,6 +527,7 @@ The repository currently has 20 top-level skills. Use this collapsed list when y
 
 ### Project memory and delivery
 
+- [`scope`](skills/scope/SKILL.md): Frames vague requests around an outcome, bounds, verification, and explicit exclusions before implementation.
 - [`new-project`](skills/new-project/SKILL.md): Captures product intent and default judgments in `PROJECT.md`.
 - [`bootstrap-goal-project`](skills/bootstrap-goal-project/SKILL.md): Creates or repairs the repository's durable autonomous-run foundation.
 - [`write-loop`](skills/write-loop/SKILL.md): Writes short, gradeable `/goal` prompts.
@@ -678,7 +681,7 @@ These are strategy lenses, not market evidence. Check pricing, demand, competito
 ## Guides and repository layout
 
 ```text
-skills/           20 primary skills, with bundled references, scripts, and assets
+skills/           21 primary skills, with bundled references, scripts, assets, and agent metadata
 commands/         22 Claude-style command prompts, including 12 decision frameworks
 agents/           the research-subagent definition used by research workflows
 hobby-bundle/     goal-driven web-project example and optional web skills
