@@ -1,622 +1,675 @@
-<div align="center">
-
 # llm-toolkit
 
-**Slash commands, skills, and decision frameworks for Claude Code.**
+> Skills and commands I use for research, coding-agent workflows, integrations, and projects that need to outlive one chat session.
 
-```bash
-git clone https://github.com/rolandtolnay/llm-toolkit.git ~/toolkits/llm-toolkit
-cd your-project && ~/toolkits/llm-toolkit/install.js
+`llm-toolkit` is my working collection of resources for coding agents. Some are small, like a command for explaining a difficult change. Others run full research, naming, buying, review, or project-memory workflows. I keep them together because they solve jobs I run into repeatedly, and because their dependencies and awkward edges are worth documenting.
+
+The source format is Claude Code. The install prompt below can adapt selected resources to Pi or another agent with comparable skills, prompts, hooks, and subagents. That adaptation is a port, and some Claude-specific paths or tools will need translation.
+
+## Quickstart
+
+> [!TIP]
+> Expand the prompt, copy it into a fresh session of the coding agent you want to install into, and let that agent inspect the repository before you choose resources.
+
+<details>
+<summary><strong>Install prompt: click to expand</strong></summary>
+
+```text
+Install selected resources from the llm-toolkit repository into this coding agent.
+
+Repository: https://github.com/rolandtolnay/llm-toolkit.git
+
+# Goal
+
+Give me a working, selective installation that follows THIS agent's discovery conventions and THIS operating system. Preserve each installed resource's behavior while adapting Claude-specific paths, tool names, hooks, prompts, and subagent references where this agent has an equivalent.
+
+# Success criteria
+
+- I choose the scope (project or user), resources, and install mode (copy or symlink) before files are installed.
+- Every installed skill, command/prompt, agent, script, hook, and local reference resolves from its final location.
+- Cross-resource dependencies are installed with the selected resource or reported as unmet.
+- No installed file points at a temporary checkout or an unavailable agent tool.
+- Existing unmanaged files and local modifications are preserved unless I approve a specific overwrite or removal.
+- A local manifest records the source URL and revision, stable checkout path when applicable, selected resources, source and destination paths, install mode, rewrites, and checksums where practical.
+- The final report names installed resources, destinations, invocation names, rewrites, runtime dependencies, API keys and expected config paths, validation performed, and remaining limitations. Never print secret values.
+
+# Installation decisions
+
+Inspect the repository and this agent's local documentation or conventions first. Then ask one compact round of questions for any decision not already known:
+
+- project scope or user/global scope
+- the resources or groups I want
+- copy or symlink mode
+
+Present the repository by use case: research and buying decisions; autonomous project foundations; engineering quality and delivery; integrations; creative workflows; commands and decision frameworks; the optional hobby and business bundles. Recommend a small starting set based on my intended use rather than installing everything by default.
+
+Use a stable checkout for symlinks, never a temporary clone. Prefer copy mode for project/team installs, resources that need path rewrites, and Windows environments where symlinks are unavailable or impractical. Install whole skill directories so bundled references, scripts, assets, and agent metadata stay together.
+
+# Constraints and approval boundaries
+
+Adapt to this agent instead of assuming `~/.claude`, `.claude/`, Claude slash commands, `AskUserQuestion`, `Task`, or Claude hook syntax. Keep relative references intact when possible. Rewrite hardcoded paths only in installed copies; do not modify a shared source checkout to make a symlink work. If faithful adaptation is impossible, leave that resource uninstalled and explain the missing host capability.
+
+Inspect selected resources for hardcoded paths and dependencies before installing. In particular, account for the shared research infrastructure, the `research-subagent`, `bootstrap-goal-project` companions, GitHub/Linear dependencies in delivery workflows, and the `humanizer` dependency used by `create-pr`.
+
+Do not install system packages, create provider accounts, write secrets, overwrite conflicts, delete prior installs, or wire externally mutating hooks without showing the action and getting confirmation. A request to install authorizes the selected local resource files and non-destructive validation; it does not authorize unrelated configuration changes.
+
+# Validation and stop rules
+
+Use the minimum checks that prove the selected installation works: inspect final paths, search for stale checkout and host-specific references, verify discovery names, and run one safe `--help`, `config`, or dry-run command for script-backed resources when its runtime is available. Do not make paid API calls or send external messages as a test.
+
+When enough information is available, perform the installation rather than continuing to survey options. Stop when the selected resources are installed and verified, or when a missing host capability, dependency, credential, or user decision blocks safe progress.
 ```
 
-[Quick start](#quick-start) · [Commands](#commands) · [Skills](#skills) · [Usage examples](#usage-examples) · [Product Research](#product-research)
+</details>
 
-</div>
+The prompt is intentional. Claude Code, Pi, and other agents put skills, prompts, hooks, and secrets in different places. They also use different names for interactive questions and subagents. A guided install can account for those differences while still handling selection, dependencies, conflicts, path changes, and verification.
 
----
+## Pick an entry point
 
-## What this is
+| You want to… | Start with |
+|---|---|
+| Research a current topic with citations | [`research`](#research) |
+| Make a grounded buying decision | [`product-research`](#product-research) |
+| Name a company, product, app, or feature | [`brand-naming`](#brand-naming) |
+| Generate and judge app icon candidates | [`app-icon-studio`](#app-icon-workflows) |
+| Prepare a repository for independent agent runs | [`new-project` → `bootstrap-goal-project` → `write-loop`](#goal-driven-projects) |
+| Verify finished code or triage review feedback | [`/verify`](#engineering-quality-and-delivery) or [`triage-pr-comments`](#engineering-quality-and-delivery) |
+| Work from a Linear ticket | [`/work-ticket`](#commands) |
+| Search Gmail or Slack from an agent | [`gmail`](#gmail), [`slack`](#slack), or [`linear`](#linear) |
 
-Slash commands, auto-activating skills, and reference guides for Claude Code. The four featured skills below — Research, Product Research, Linear, and Slack — are the toolkit's centerpiece, each substantial enough to stand alone. Other commands and skills (workflow automation, decision frameworks, prompt helpers) are grouped later under [Commands](#commands) and [Skills](#skills).
+Invocation examples below use Claude Code slash syntax. A port may expose the same resource through a different explicit command.
 
 ---
 
 ## Research
 
-Web research that scales from quick lookups to deep multi-source investigations. Decomposes a question into sub-questions, runs them in parallel across web search, library docs, Reddit, YouTube, and short-form video, then synthesizes a cited answer and saves it for later runs.
+The [`research`](skills/research/SKILL.md) skill handles quick factual lookups without spinning up a team of agents. Broader questions get split into focused angles, with each subagent assigned the sources that fit its part of the problem. Standard and deep runs are saved under `~/Documents/Research/`.
 
-- **Cost-conscious escalation** — starts with free tools (WebSearch, WebFetch, Context7 docs) and uses ScrapeCreators-backed sources such as Reddit, short-form video, and primary YouTube only when they add value; YouTube keeps a free yt-dlp fallback
-- **Parallel decomposition** — splits complex questions across subagents that investigate independently, with mandatory source diversity per subagent
-- **Source verification** — cross-references findings across primary, secondary, and tertiary sources, flags contradictions, and signals confidence (verified, likely, unverified)
-- **Compounding knowledge** — saves standard and deep runs to `~/Documents/Research/` with a scannable index, then consults that index before spending API budget on questions you've already researched
-- **Audit trail** — every web call is logged so you can review what each subagent did and how much it cost
+A few details make it more useful than a one-shot search:
 
-Activates on "search for", "look up", "find out", "what's the latest", or "research".
+- It starts with built-in web search and reaches for paid providers only when their coverage is needed.
+- It checks saved research before repeating work.
+- It verifies official claims against primary sources.
+- It leaves disagreements between sources visible and labels findings as verified, community-sourced, or unverified.
 
-**Example run:**
+Example:
 
-The skill mirrors how a careful person researches: split the question into angles, then actually check the right source for each — read the docs, scan Reddit threads, watch a YouTube review — instead of asking a single oracle. Each angle is its own sub-agent running in parallel, writing findings to its own file.
+```text
+Research how teams are using coding-agent subagents in production. Compare official guidance with practitioner reports, flag disagreements, and save the run.
+```
 
-> "How is Opus 4.7 landing with developers?"
+This skill is for current web information. Local codebase questions belong with the coding agent's normal file tools. Provider-backed sources can fail, hit rate limits, or cost money, and saved research will age on fast-moving topics.
 
-| Angle | Sources | One-line finding |
-|-------|---------|------------------|
-| Official release | WebSearch + WebFetch | SWE-bench Verified 87.6% (+6.8pp), CursorBench 70 vs 58; `budget_tokens` removed, `/ultrareview` added |
-| Reddit/HN reaction | `social reddit` + `research ask` + WebFetch | ~55% skeptical; tokenizer change inflates cost 1.0-1.35×; MRCR v2 @ 1M flagged 78.3% → 32.2% (Craig_VG, 226 upvotes) |
-| YouTube reviews | `youtube search` (ScrapeCreators primary, yt-dlp fallback) | CodeRabbit measures ~15% bug-finding recall gain; AI for Work's head-to-head shows 4.7 skipping mobile-responsive testing 4.6 did unprompted |
+<details>
+<summary><strong>Research setup, API keys, and source coverage</strong></summary>
 
-Three sub-agents ran in parallel, each writing a findings file to `~/Documents/Research/2026-04-16-opus-4-7-community-reception/` alongside a `00-synthesis.md` verdict. Tagged in `INDEX.md` so future "Opus 4.7" questions reuse this run instead of re-spending API budget.
+The Python CLIs use [`uv`](https://docs.astral.sh/uv/) with inline dependencies; the repository does not maintain a root Python environment.
 
-**Setup:**
+Basic lookups can use the host agent's built-in web search and fetch tools without provider keys. The bundled CLI capabilities are unlocked by these variables:
 
-The skill loads keys from three sources in increasing precedence: your shell environment (lowest), `~/.claude/research/.env` (skill-global), then `.claude/research.env` in the project root (highest). Already export `PERPLEXITY_API_KEY` in your shell? It just works — the env files only need to exist if you want to override or scope a key. Only Perplexity is required; the others unlock additional sources.
+| Variable | Service | Unlocks |
+|---|---|---|
+| `PERPLEXITY_API_KEY` | [Perplexity](https://docs.perplexity.ai/) | `search`, `ask`, and `reason` |
+| `CONTEXT7_API_KEY` | [Context7](https://context7.com/dashboard) | Version-aware library documentation |
+| `FIRECRAWL_API_KEY` | [Firecrawl](https://firecrawl.dev/) | Site mapping and full-page scraping |
+| `SCRAPECREATORS_API_KEY` | [ScrapeCreators](https://scrapecreators.com/) | Primary YouTube backend, Reddit, and short-form research |
 
-| Variable | Service | Powers | Required |
-|----------|---------|--------|----------|
-| `PERPLEXITY_API_KEY` | [Perplexity](https://docs.perplexity.ai/) | Synthesized answers, web search, reasoning | Yes |
-| `CONTEXT7_API_KEY` | [Context7](https://context7.com/dashboard) | Version-aware library documentation | No |
-| `FIRECRAWL_API_KEY` | [Firecrawl](https://firecrawl.dev/) | Site mapping and full page scraping | No |
-| `SCRAPECREATORS_API_KEY` | [ScrapeCreators](https://scrapecreators.com/) | Reddit, short-form video, and primary YouTube research | No |
+Source defaults load from the shell, then `~/.claude/research/.env`, then project `.claude/research.env` (highest precedence). A cross-agent installation may adapt those paths.
 
-Example `~/.claude/research/.env`:
-
-```bash
+```dotenv
 PERPLEXITY_API_KEY=pplx-...
 CONTEXT7_API_KEY=...
 FIRECRAWL_API_KEY=fc-...
 SCRAPECREATORS_API_KEY=...
+
+RESEARCH_NO_PERSIST=0
+RESEARCH_DIR=~/Documents/Research
 ```
 
-YouTube research uses ScrapeCreators first when `SCRAPECREATORS_API_KEY` is configured. Install `yt-dlp` (`brew install yt-dlp` on macOS) to enable the Free Fallback Backend when the key is missing or ScrapeCreators fails. ScrapeCreators YouTube search is cached for 24h, transcripts for 30d; `--after` accepts `today`, `this_week`, `this_month`, or `this_year`.
+YouTube uses ScrapeCreators first when configured. Install [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) for the Free Fallback Backend. Long transcript preprocessing, video selection, and Reddit condensation can use `claude -p`. Use both `--no-preprocess` and `--no-select` to avoid Claude CLI calls in the YouTube path; Reddit condensation must also be avoided or adapted when that CLI is unavailable.
 
-Run `research config` to verify which keys are loaded and which env files were read.
+The [`searchexa`](skills/searchexa/SKILL.md) companion uses `EXA_API_KEY` from `~/.claude/research/.env`. It returns page text with search results and has a documented free allowance of 1,000 searches per month; it does not synthesize or fully scrape pages.
 
----
+```dotenv
+EXA_API_KEY=...
+```
 
-## Product Research
+Check the installed research CLI's `config` command before a real run. It reports key presence and resolved paths without printing secret values.
 
-Staged buying-decision research for household and personal products (appliances, furniture, electronics). Runs a 5-stage pipeline — interview, preliminary research, product evaluation, verification, synthesis — that resists SEO/affiliate noise and produces a ranked recommendation grounded in real owner and expert voices.
-
-- **Structured interview** — generates 4-6 category-specific questions using a calibration frame (not a generic template), surfacing the constraints that actually change the recommendation
-- **Research-derived criteria** — builds a ranked criteria list from expert reviews, non-affiliate YouTube, and Reddit owner threads; user priorities become input signal and tiebreaker, not gospel
-- **Three independent voices** — parallel subagents gather owner voice (Reddit, YouTube long-form), expert voice (trade publications, specialized reviewers), and retailer voice (current availability and pricing in RO/EU)
-- **Verification pass** — scrapes retailer URLs for the final 6 recommendations to flag out-of-stock, price changes, or ambiguous listings without rewriting the quality-based recommendation
-- **Master-class synthesis** — output teaches you what actually matters for the category, calls out marketing myths, and presents 3 tiers (overall / budget / premium) with primary + runner-up per tier, tradeoff analysis, and a considered-and-discarded section
-
-Invoked via `/product-research`. One product per run — deep focus over breadth.
-
-**Availability tiering:** Green (RO retailer, full recommend) → Yellow (EU retailer, recommend with import flag) → Red (US-only, excluded).
-
-**Setup:** Uses the same infrastructure as [Research](#research) — CLI tools, API keys, output directory (`~/Documents/Research/`), and persistence format. No additional configuration needed beyond what Research requires.
+</details>
 
 ---
 
-## Linear
+## Product research
 
-A conversational interface to Linear. Describe what you're working on and Claude infers priority and effort, picks the right project and labels, confirms once, and creates the ticket.
+```text
+/product-research
+```
 
-- **Effort and impact estimation calibrated for AI-assisted development** — infers priority from user impact and estimates implementation effort using values appropriate for working with Claude, not human-week sprints
-- **Project and label discovery** — fetches available projects and labels and matches them to the ticket's domain
-- **Scope-change awareness** — when a comment or description update changes scope, re-evaluates priority and estimate
-- **Custom view management** — create, list, and delete Linear views from the conversation
-- **Document and attachment support** — create native markdown documents on issues, attach files, and link git commits
+This is for buying one thing well, whether that is a mattress, microwave, vacuum, or another household or personal product. The workflow asks only about constraints that could change the shortlist. It then researches the category before comparing models, so the final criteria come from evidence instead of mirroring the user's first assumptions.
 
-Activates on phrases like "create a ticket", "mark done", "my issues", or any reference to an issue ID like `ABC-123`.
+Owner reports, expert reviews, and retailer data are gathered separately. Product quality and current stock also stay separate: an ambiguous retailer page adds a verification warning, but it does not quietly replace the better product with whatever happens to be available.
 
-**Setup:**
+A completed run looks like this:
 
-1. Create a `.linear.json` in your project root:
-   ```json
-   {
-     "teamId": "your-team-uuid",
-     "projectId": "default-project-uuid",
-     "defaultPriority": 3,
-     "defaultLabels": ["mobile"]
-   }
-   ```
-2. Add a Linear API key to `.claude/settings.local.json` (git-ignored):
-   ```json
-   {
-     "env": {
-       "LINEAR_API_KEY": "lin_api_..."
-     }
-   }
-   ```
-3. Generate a key at [linear.app/settings/account/security](https://linear.app/settings/account/security).
+```text
+~/Documents/Research/YYYY-MM-DD-<category>-product-research/
+├── 00-synthesis.md
+├── 01-interview.md
+├── 02-masterclass.md
+├── 03-availability.md
+├── 04-owner-voice.md
+├── 05-expert-voice.md
+├── 06-retailer-voice.md
+└── aspects/
+```
+
+Each run covers one product category. Availability research starts in Romania and the EU, and import options are flagged. Prices and stock can change after the report is written. The workflow filters out obvious affiliate noise, but it cannot remove every source bias or replace trying a product when comfort, sound, or fit matters.
+
+<details>
+<summary><strong>Product Research setup and dependencies</strong></summary>
+
+Install `product-research`, `research`, and the `research-subagent` together.
+
+A full run expects:
+
+- `uv` for bundled Python CLIs
+- `PERPLEXITY_API_KEY` for the research `ask` and `reason` paths
+- `FIRECRAWL_API_KEY` for retailer-page scrape verification
+- `SCRAPECREATORS_API_KEY` for richer Reddit and primary YouTube coverage, or `yt-dlp` for the YouTube fallback
+- write access to the configured research directory, defaulting to `~/Documents/Research/`
+
+Use the same env files as [Research](#research). Missing optional sources reduce coverage; missing Perplexity or Firecrawl prevents parts of the documented full pipeline and must be reported rather than hidden.
+
+</details>
 
 ---
 
-## Slack
+## Brand naming
 
-A conversational interface to Slack that posts as your user, not a bot. Read-only commands run immediately; outbound messages always require explicit confirmation before posting.
+```text
+/brand-naming
+```
 
-- **Posts as you** — uses your User OAuth Token, so messages appear from your account and respect your DMs, channels, and workspace permissions
-- **Confirmation gate on outbound** — every send, schedule, and edit is drafted and shown to you before it goes out, so you never ship a message you didn't approve
-- **PR announcements** — `share the PR in #engineering-pr` reads the current branch's PR via `gh`, drafts an impact-focused message, and posts after confirmation
-- **Search and history** — Slack search modifiers work (`from:me`, `in:#channel`, `before:2026-03-01`); channel history surfaces threads inline
-- **Status and scheduling** — set status with auto-clear durations (`2h`, `1h30m`), schedule messages with `--at "in 30m"`
+[`brand-naming`](skills/brand-naming/SKILL.md) is for the naming job where a quick list of 50 plausible words will not cut it. It starts with strategy and category language, gives three isolated generation teams different briefs, and keeps evaluation out of the generation stage.
 
-Activates on phrases like "message Roland", "post in #engineering", "search Slack for X", or "set my status to deep work".
+The raw list runs into the hundreds before it is narrowed. You react to a curated longlist, then the remaining names go through collision, trademark, domain, search, and language checks. Five to seven survivors are tested in headlines, taglines, app-store or shelf contexts, and spoken introductions. The final dossier recommends three to five.
 
-**Setup:**
+Runs persist under `~/Documents/Research/YYYY-MM-DD-<subject>-naming/`, including the strategy, landscape, generation funnels, screening evidence, proof of concept, and final recommendation.
 
-1. Create a Slack app at [api.slack.com/apps](https://api.slack.com/apps) → "From scratch" → pick your workspace.
-2. Under **OAuth & Permissions**, add these User Token Scopes: `chat:write`, `search:read`, `channels:history`, `channels:read`, `users:read`, `users.profile:write`, `groups:history`, `groups:read`, `reactions:write`, `im:history`.
-3. Click **Install to Workspace** and copy the **User OAuth Token** (starts with `xoxp-`).
-4. Add it to `.claude/settings.local.json` (git-ignored):
-   ```json
-   {
-     "env": {
-       "SLACK_USER_TOKEN": "xoxp-..."
-     }
-   }
-   ```
+It is a long workflow with several user checkpoints, so it is overkill for a casual brainstorm. Its trademark and domain checks are screening, not legal clearance. A shortlisted name still needs qualified trademark review.
 
-Full reference: `skills/slack/references/setup-guide.md`.
+<details>
+<summary><strong>Brand Naming setup and dependencies</strong></summary>
+
+Install `brand-naming`, `research`, and the `research-subagent` together. The full workflow uses the shared research CLI for landscape and screening, so configure `uv` and `PERPLEXITY_API_KEY`. `SCRAPECREATORS_API_KEY` improves access to customer language from Reddit and video sources.
+
+The agent host must support isolated subagents or an equivalent fresh-context mechanism. Without isolation, the three generation teams lose the deliberate diversity the pipeline relies on.
+
+</details>
+
+---
+
+## App icon workflows
+
+Pick the version based on who should run image generation: the skill itself, or you in the Gemini web app.
+
+### `app-icon-studio`: generated and judged in one run
+
+```text
+/app-icon-studio
+```
+
+[`app-icon-studio`](skills/app-icon-studio/SKILL.md) starts by asking what the icon should communicate in half a second. It then proposes four genuinely different directions and generates each one through OpenAI and Gemini. Independent craft and brand judges review the candidates at 48px before one focused revision turn produces a contact sheet with 5-7 finalists.
+
+A normal run produces about 16 first-round images and saves every prompt and output under `./icons/<app-slug>/`. Failed API calls stay in the funnel count. You approve the four design directions before the skill spends money.
+
+A full run costs roughly **$2-4** in image API fees and takes several minutes. The finalists are raster candidates, so production may still need a high-resolution rerender or vector redraw. The documented thumbnail and contact-sheet steps use the macOS tools `sips` and `open`; other operating systems need replacements or a manual step.
+
+<details>
+<summary><strong>App Icon Studio setup and API keys</strong></summary>
+
+Requirements for the documented dual-engine workflow:
+
+- Node.js 18 or newer
+- `OPENAI_API_KEY`
+- `GEMINI_API_KEY`
+- an agent host capable of independent image-judging subagents
+- optional macOS `sips` and `open` support for the documented presentation path
+
+The dependency-free Node scripts load dedicated env files; the project file overrides the user file:
+
+```dotenv
+# ~/.claude/app-icon-studio/.env
+# or ./.claude/app-icon-studio.env
+OPENAI_API_KEY=...
+GEMINI_API_KEY=...
+```
+
+Run each installed script's `config` command before generation. The scripts report whether keys are present without printing them. If one key is unavailable, the skill supports a reduced single-engine run with doubled candidate counts; disclose the lost cross-engine comparison before proceeding.
+
+</details>
+
+### `nano-banana-app-icon`: manual, no API client
+
+```text
+/nano-banana-app-icon
+```
+
+[`nano-banana-app-icon`](skills/nano-banana-app-icon/SKILL.md) runs the discovery and critique loop but leaves generation in `gemini.google.com`. It writes a JSON prompt, waits for you to return a PNG, scores the image against an eight-part rubric, and emits one-change refinement prompts until the 48×48 gate passes.
+
+Use it when you want the same design discipline without API setup or automated batch generation. The tradeoff is manual work: you need Gemini web access, must paste each prompt and download each PNG, and should start a fresh Gemini chat after three failed refinements.
+
+---
+
+## Goal-driven projects
+
+```text
+/new-project
+/bootstrap-goal-project
+/write-loop
+```
+
+These three skills are for projects that will span independent agent runs. They keep product judgment and project language in the repository, alongside the decisions, execution rules, and run history a new session would otherwise have to reconstruct from chat.
+
+### 1. `new-project`: capture product judgment
+
+[`new-project`](skills/new-project/SKILL.md) interviews for information future runs cannot derive: core value, intended users, non-goals, constraints, and tradeoff preferences. It writes a compact `PROJECT.md`, then dry-runs that document against plausible product forks to check whether a cold agent would decide as you would.
+
+The documented workflow initializes Git when needed and commits `PROJECT.md`. If that is not desired, tell the agent before invocation or adapt the installed skill's commit boundary.
+
+### 2. `bootstrap-goal-project`: install repository memory
+
+[`bootstrap-goal-project`](skills/bootstrap-goal-project/SKILL.md) creates or repairs the broader project-local system: `PROJECT.md`, `CONTEXT.md`, `AGENTS.md`, decision records, goal history, retained evidence, a stack-specific playbook, and fresh-context judging rules. It adapts templates to the actual repository instead of copying the web assumptions from [`hobby-bundle/`](hobby-bundle/).
+
+### 3. `write-loop`: define the next destination
+
+[`write-loop`](skills/write-loop/SKILL.md) turns a rough greenfield or brownfield idea into a short, gradeable `/goal`. It asks only for outcome, success, guardrails, regression boundaries, and other information the run cannot safely infer, then saves the prompt under `etc/loop/`.
+
+The three fit together like this:
+
+```text
+PROJECT.md and domain decisions
+  → repository-specific playbook
+  → short outcome-focused goal
+  → implementation and evidence
+  → fresh-context judgment
+  → GOAL MET or an explicit blocker
+```
+
+Skip the full foundation for disposable experiments and small scripts. The extra documentation earns its keep only when work spans sessions or unattended runs. Bootstrap preserves existing artifacts and does not commit unless requested. `new-project` has the separate commit behavior noted above.
+
+<details>
+<summary><strong>Goal-driven project setup</strong></summary>
+
+No API key or third-party runtime is required for the three core skills. Install them together when you want the complete flow:
+
+- `new-project`
+- `bootstrap-goal-project`
+- `write-loop`
+
+The bootstrap skill includes project-foundation templates in its own `assets/` directory. Install the complete directory so those assets come with `SKILL.md`.
+
+The optional [`hobby-bundle/`](hobby-bundle/) is a worked Next.js/Firebase/Vercel example. Treat it as source material or install only the bundled skills that match the target project; do not import its stack assumptions as general rules.
+
+</details>
+
+---
+
+## Integrations
+
+### Linear
+
+[`linear`](skills/linear/SKILL.md) creates, updates, queries, relates, comments on, and organizes Linear issues, projects, cycles, milestones, labels, documents, attachments, and custom views. Single-team workspaces can often resolve the team automatically; multi-team setups can use a flag, environment variable, or `.linear.json`.
+
+Direct update commands run immediately. Ticket creation asks for the smallest missing details first, but there is no universal confirmation gate. Delete and state-change commands mutate Linear as soon as they run.
+
+<details>
+<summary><strong>Linear setup</strong></summary>
+
+Requirements: `uv`, a [Linear personal API key](https://linear.app/settings/account/security), and network access to Linear's GraphQL API.
+
+Claude Code source configuration in `.claude/settings.local.json`:
+
+```json
+{
+  "env": {
+    "LINEAR_API_KEY": "lin_api_..."
+  }
+}
+```
+
+Optional project defaults in `.linear.json`:
+
+```json
+{
+  "teamId": "team-uuid",
+  "projectId": "default-project-uuid",
+  "defaultPriority": 3,
+  "defaultLabels": ["mobile"]
+}
+```
+
+You can also set `LINEAR_TEAM` to a team key or UUID. The installing agent should adapt the secret location for non-Claude hosts while preserving the CLI's environment contract.
+
+</details>
+
+### Slack
+
+[`slack`](skills/slack/SKILL.md) searches messages, reads channel history and threads, sends or schedules messages, edits posts, adds reactions, and manages status using a Slack **User OAuth Token**. Messages appear as the user, not a bot.
+
+Read-only operations run immediately. Sends, DMs, replies, and schedules are drafted and shown for confirmation before posting. Edit, delete, reaction, and status commands currently mutate Slack immediately; deletion is destructive.
+
+<details>
+<summary><strong>Slack app, scopes, and token setup</strong></summary>
+
+Requirements: `uv` and a Slack app installed to your workspace with these **User Token Scopes**:
+
+`chat:write`, `search:read`, `channels:history`, `channels:read`, `users:read`, `users.profile:write`, `groups:history`, `groups:read`, `reactions:write`, `im:history`.
+
+Create an app at [api.slack.com/apps](https://api.slack.com/apps), install it to the workspace, then store the `xoxp-...` User OAuth Token in `.claude/settings.local.json`:
+
+```json
+{
+  "env": {
+    "SLACK_USER_TOKEN": "xoxp-..."
+  }
+}
+```
+
+A cross-agent installation may use another secret store, but the CLI still needs `SLACK_USER_TOKEN` in its process environment. Workspace permissions and Slack rate limits remain in force.
+
+</details>
+
+### Gmail
+
+[`gmail`](skills/gmail/SKILL.md) gives an agent a narrow, read-only Gmail retrieval surface. It searches metadata and bounded snippets first, then fetches only selected messages or threads. Message content is not cached or logged, and attachments remain metadata-only.
+
+The Gmail integration is read-only. It cannot send, reply, delete, archive, change labels or read state, or download attachments. It also rejects broad mailbox dumps.
+
+<details>
+<summary><strong>Gmail setup and privacy boundaries</strong></summary>
+
+Requirements: `uv`, Gmail IMAP access, `GMAIL_USER`, and a Google app password in `GMAIL_APP_PASSWORD`.
+
+Supported source paths include:
+
+```dotenv
+# Project: .claude/gmail.env
+# User: ~/.claude/gmail/.env
+GMAIL_USER=you@example.com
+GMAIL_APP_PASSWORD=...
+```
+
+The CLI can also read supported agent `env.json` locations or process environment variables. Run its `config` command to inspect credential sources, then `doctor` to test read-only IMAP connectivity without returning email content.
+
+</details>
+
+---
+
+## Engineering quality and delivery
+
+### Review and verification
+
+- [`triage-pr-comments`](skills/triage-pr-comments/SKILL.md): Fetches unresolved GitHub review comments, checks each against actual code usage, domain docs, and linked tickets, then classifies it as act, defer, ignore, or investigate. It confirms decisions before replying, resolving, or creating follow-up work.
+- [`pr-qa-browser`](skills/pr-qa-browser/SKILL.md): Derives 5-8 risk-focused browser stories from a PR, runs feasible Agent Browser flows, and stores screenshots under `etc/mine/test-<branch>/`.
+  - This one is written specifically for `dashboard-web`, its `AGENTS.md`, local server, auth state, and fixtures. It needs adaptation before it can serve as generic browser QA.
+- [`audit-prompt`](skills/audit-prompt/SKILL.md): Audits changed prompt-bearing Markdown and YAML for token waste, positioning, specificity, and structural problems.
+- [`/verify`](commands/verify.md): Reconstructs intent, analyzes correctness and blast radius, runs tests, then resolves findings interactively before declaring issues.
+- [`/ripple-check`](commands/ripple-check.md): Looks for other code locations where a lesson from the latest fix genuinely transfers; "checked, does not apply" is an acceptable result.
+
+### Land the work
+
+- [`create-pr`](skills/create-pr/SKILL.md): Builds a reviewer-oriented PR description from the diff, conversation, tickets, PRDs, and domain docs; confirms branch/commit/push actions and the final body; returns a reusable Slack or release-note summary.
+- [`/tidy-commits`](commands/tidy-commits.md): Proposes squash and reorder groups for unpushed commits, confirms them, then compares the changed-file and line-count statistics with the pre-rebase baseline. That check is not content equivalence; inspect the final diff when the rewrite is sensitive.
+- [`/finalize-ticket`](commands/finalize-ticket.md): Commits, comments on a Linear issue, attaches the commit, and moves the ticket to Done.
+- [`/work-ticket`](commands/work-ticket.md): Runs diagnosis, design, implementation, and verification around a Linear ticket, with engineering checkpoints between phases. Before diagnosis, it moves the issue to In Progress and may create or check out a ticket branch.
+
+<details>
+<summary><strong>GitHub, browser, and delivery dependencies</strong></summary>
+
+- `create-pr`, `triage-pr-comments`, and PR-aware commands require authenticated [`gh`](https://cli.github.com/).
+- `create-pr` also references the `humanizer` skill from [`hobby-bundle/humanizer`](hobby-bundle/humanizer/). Install it and adapt the reference path with `create-pr`.
+- `triage-pr-comments` requires `linear` and credentials when the PR references tickets or a decision is deferred; `create-pr` has the same requirement when a ticket ID appears in its context.
+- `/work-ticket` and `/finalize-ticket` require the `linear` skill and its credentials.
+- `/finalize-ticket` invokes an external `/commit-commands:commit` resource that is **not included in this repository**. The installing agent must map it to an available commit workflow or report it as unmet.
+- `pr-qa-browser` requires `agent-browser`, authenticated `gh`, a running `dashboard-web`, appropriate auth/fixtures, and project-specific testing instructions.
+- History rewriting in `/tidy-commits` is destructive to commit identities. The command requires confirmation and is intended for unshared commits.
+
+</details>
+
+---
+
+## Complete skill index
+
+The repository currently has 19 top-level skills. Use this collapsed list when you know the name and want the source file.
+
+<details>
+<summary><strong>Show all 19 skills</strong></summary>
+
+### Create and maintain agent resources
+
+- [`create-engineering-skill`](skills/create-engineering-skill/SKILL.md): Turns an engineering failure mode, practice, or workflow into a vocabulary-dense skill with canonical grounding and falsifiable judgment rules.
+- [`readme-best-practices`](skills/readme-best-practices/SKILL.md): Supplies supporting guidance for scannable developer READMEs. It is not user-invocable by design.
+- [`audit-prompt`](skills/audit-prompt/SKILL.md): Reviews prompt-bearing changes against prompt-quality principles.
+
+### Search and evidence
+
+- [`research`](skills/research/SKILL.md): Runs current web research with verification and optional persistence.
+- [`product-research`](skills/product-research/SKILL.md): Produces a category masterclass and ranked buying recommendations.
+- [`brand-naming`](skills/brand-naming/SKILL.md): Produces screened brand-name finalists through research and isolated generation.
+- [`searchexa`](skills/searchexa/SKILL.md): Returns semantic search results with inline page text through EXA.
+- [`gmail`](skills/gmail/SKILL.md): Retrieves narrow, read-only Gmail evidence.
+
+### Project memory and delivery
+
+- [`new-project`](skills/new-project/SKILL.md): Captures product intent and default judgments in `PROJECT.md`.
+- [`bootstrap-goal-project`](skills/bootstrap-goal-project/SKILL.md): Creates or repairs the repository's durable autonomous-run foundation.
+- [`write-loop`](skills/write-loop/SKILL.md): Writes short, gradeable `/goal` prompts.
+- [`create-pr`](skills/create-pr/SKILL.md): Opens a PR with grounded motivation and verification notes.
+- [`triage-pr-comments`](skills/triage-pr-comments/SKILL.md): Separates valid review work from deferrals and false positives.
+- [`pr-qa-browser`](skills/pr-qa-browser/SKILL.md): Runs dashboard-web-specific browser QA.
+
+### Integrations and deployment
+
+- [`linear`](skills/linear/SKILL.md): Manages Linear work through a conversational CLI.
+- [`slack`](skills/slack/SKILL.md): Reads and writes Slack through a user token; sends and schedules confirm first, while edit/delete/react/status paths are immediate.
+- [`firebase-hosting-basics`](skills/firebase-hosting-basics/SKILL.md): Guides Firebase Hosting Classic configuration, emulation, previews, and deployment for static sites, SPAs, and simple microservices.
+  - It does not cover Firebase App Hosting, SSR, or ISR. It requires Node/npm, `firebase.json`, Firebase authentication and project access, and `npx firebase-tools@latest`. A live deploy changes an external service.
+
+### Creative workflows
+
+- [`app-icon-studio`](skills/app-icon-studio/SKILL.md): Generates, judges, revises, and presents app icon candidates through OpenAI and Gemini APIs.
+- [`nano-banana-app-icon`](skills/nano-banana-app-icon/SKILL.md): Writes and critiques app-icon prompts for a manual Gemini workflow.
+
+</details>
 
 ---
 
 ## Commands
 
-Slash commands you invoke directly in Claude Code.
+The repository contains 22 Claude-style command prompts. Another host may install them as prompt templates or agent-specific commands.
 
-### `/work-ticket`
+### Build, review, and ship
 
-Runs the full Linear-ticket loop end-to-end: diagnose → design → execute, with checkpoints where engineer judgment matters most.
-
-Use it when you want:
-
-- to start implementation on a known Linear ticket
-- a structured pass that separates "what's the root cause" from "which approach fits" from "is the change correct"
-- the LLM to handle information gathering between checkpoints while you stay in control of decisions
-
-Takes a ticket ID as its one argument. Fetches the ticket (including comments and parent) via the Linear CLI, moves it to **In Progress**, loads any matching domain skill, and runs three checkpoints: diagnosis, solution spectrum, and verification-before-commit. On final approval, hands off to [`/finalize-ticket`](#finalize-ticket).
-
-Examples:
-
-```bash
-/work-ticket MIN-42
+```text
+/work-ticket ABC-123
 ```
 
-Requires the [Linear](#linear) skill configured with `.linear.json` and `LINEAR_API_KEY`.
+Runs the full Linear-ticket workflow: orient, diagnose, choose a design, implement, and verify.
 
-### `/explain`
-
-Deeper, clearer explanation of the current issue, options, or behavior so you can make a confident decision.
-
-Use it when you want:
-
-- to understand *why* something is happening before picking a fix
-- to evaluate consequences of two or three alternatives Claude just proposed
-- to gauge whether an issue is worth addressing or is noise
-- architectural context on how a component fits into the larger system
-
-Takes an optional topic. If omitted, uses the current conversation context. Detects which shape of confusion is active (what's happening, which option, is this important, how does this fit), then explains in layers: plain-language summary, familiar-ground anchor, specifics, confidence check.
-
-Examples:
-
-```bash
-/explain why the middleware is rejecting the request
-/explain the difference between these two caching approaches
+```text
+/verify [commit range, plan path, or scope]
 ```
 
-Ends with an interactive confidence check — does not assume you're satisfied with the first pass.
+Provides an interactive second opinion on completed work.
 
-### `/verify`
-
-Second-opinion verification on completed work. Analyzes correctness, behavioral preservation, and completeness, then interrogates interactively before declaring anything an issue.
-
-Use it when you want:
-
-- a final pass after finishing a feature, fix, or refactor
-- a blast-radius sweep that greps the whole codebase for stale references the diff alone can't find
-- a structured conversation to distinguish real bugs from intentional omissions
-
-> [!NOTE]
-> Every finding is confirmed with you before being declared an issue. Nothing is fixed without explicit approval.
-
-Takes an optional scope argument: commit range, plan path, or a prose description. If omitted, asks once. Uses parallel Explore agents for analysis and runs tests when present. Ends with one of: **CLEAN**, **ISSUES FOUND**, or **NEEDS MANUAL TEST**.
-
-Examples:
-
-```bash
-/verify abc123..HEAD
-/verify .planning/0042-rate-limiter.md
-/verify the session timeout refactor
+```text
+/ripple-check
 ```
 
-Pairs well with [`/ripple-check`](#ripple-check) when a fix might apply in more places than you touched.
+Searches for other locations where the latest fix's underlying lesson applies.
 
-### `/ripple-check`
-
-After a fix or improvement, probes the codebase for other places where the same learning might apply.
-
-Use it when you want:
-
-- to check whether a bug pattern exists elsewhere (copy-paste lineage, same wrong assumption)
-- to propagate a better approach learned from a reference implementation
-- an honest assessment — not forced findings
-
-No arguments. Uses session context to extract the abstract pattern behind the recent change, then launches parallel Explore agents to find candidates. For each candidate, states explicitly whether the pattern transfers and why.
-
-"Checked X, Y, Z and the pattern doesn't apply because…" is a valid outcome — the command will not invent findings.
-
-### `/finalize-ticket`
-
-Commits pending changes, posts a solution summary comment, attaches the commit, and marks a Linear ticket as Done.
-
-Use it when you want:
-
-- to close out a completed ticket in one step instead of four manual Linear actions
-- the commit message to carry the `[TICKET-ID]` suffix automatically
-
-Takes a ticket ID. Commits using the repo's existing commit style (adds `[TICKET-ID]` to the first line), then runs the Linear CLI for comment, attach-commit, and state transition.
-
-Examples:
-
-```bash
-/finalize-ticket MIN-42
+```text
+/tidy-commits
 ```
 
-Usually invoked by [`/work-ticket`](#work-ticket) at the end of its execute phase, but safe to call directly.
+Cleans up unpushed history after showing and confirming the proposed rebase.
 
-### `/tidy-commits`
-
-Analyzes unpushed commits on the current branch and proposes squash/reorder groupings before executing an interactive rebase.
-
-Use it when you want:
-
-- to clean up "add X / fix X typo / refactor X" chains before pushing
-- to fold fixup commits into their originals
-- a safety-checked rebase that verifies the diff stat before and after
-
-> [!WARNING]
-> This rewrites history. The command captures a pre-rebase `git diff --stat` and confirms it matches post-rebase — but only run on branches you haven't shared yet.
-
-No arguments. Uses the upstream tracking branch, falling back to `origin/main`. Bails early if fewer than two unpushed commits exist. Identifies cross-cutting commits that might need splitting before folding, and warns about reorder conflicts based on file overlap.
-
-### `/create-pr`
-
-Creates a pull request against `main` with a summary that combines diff analysis, conversation context, and any referenced Linear ticket.
-
-Use it when you want:
-
-- a PR whose summary explains *why* — not just *what* — the changes happened
-- Linear ticket links woven into the narrative (primary, parent, related)
-- an optional auto-post to `#engineering-pr` after you confirm the message
-
-Takes optional extra context as an argument ("use the last 3 commits", "cherry-pick abc123"). Auto-detects whether to PR from the current branch, isolate uncommitted changes onto a new branch, or both. Every git operation (mode, branch name, push) confirms before running.
-
-Examples:
-
-```bash
-/create-pr use the last 2 commits only
-/create-pr this relates to ENG-1234
+```text
+/finalize-ticket ABC-123
 ```
 
-Posts to Slack via the [Slack](#slack) skill if configured; skips silently otherwise.
+Commits the solution, updates Linear, attaches the commit, and marks the issue Done.
 
-### `/reflect`
+### Understand and continue work
 
-Reviews recent work across commits and past conversations, extracts principles, and writes them to a destination you choose.
-
-Use it when you want:
-
-- to compound learnings from the past week into durable memory
-- to refresh CLAUDE.md with patterns that have proved out in practice
-- to start a new session with recent context already loaded
-
-Takes an optional timeframe (defaults to "past week"). Reads CHANGELOG, README, CLAUDE.md, and git log. Uses parallel Explore subagents to search JSONL conversation history for user-voiced principles (never loads JSONL into main context). Presents candidates tagged **NEW / UPDATE / STALE** before writing anywhere.
-
-Examples:
-
-```bash
-/reflect past 3 days
-/reflect past month
+```text
+/explain [topic]
 ```
 
-Asks before writing whether to target auto-memory, CLAUDE.md, or a custom path.
+Investigates and explains the issue, decision, severity, or architectural fit at the level needed to act.
 
-### `/handoff`
-
-Writes a `handoff.md` in the current directory capturing everything a fresh Claude Code session needs to continue this work.
-
-Use it when you want:
-
-- to bail out of a long conversation without losing context
-- to hand work to another session, machine, or collaborator
-- a structured snapshot of what's done, what's left, what was tried, and what's in-flight
-
-No arguments. Produces an XML-structured document with: `original_task`, `work_completed`, `work_remaining`, `attempted_approaches`, `critical_context`, `current_state`.
-
-### `/generate-readme`
-
-Walks through the codebase, asks clarifying questions, and writes a README that works as a standalone pitch.
-
-Use it when you want:
-
-- a README for a project that doesn't have one
-- to rewrite an existing README that has drifted from reality
-- structure tuned for scannability — top 20% pitches, below that is reference material
-
-Takes an optional path argument (defaults to the current directory). Uses parallel Explore agents to investigate project identity, core functionality, and existing docs, then uses AskUserQuestion to fill gaps (target audience, install method, features to highlight). Shows a summary of key changes before overwriting an existing README.
-
-Examples:
-
-```bash
-/generate-readme ./packages/api
+```text
+/handoff
 ```
 
-Enforces a banned-word list ("streamline", "seamlessly", "simply", "leverage"…) so output doesn't read as AI-generated.
+Writes `handoff.md` so a fresh session can continue with the original task, completed work, remaining work, failed approaches, and current state.
 
-### `/analyze-problem`
-
-Describe your situation and get a recommended framework to apply before diving into analysis.
-
-Use it when you want:
-
-- to pick the right lens for a decision rather than defaulting to one
-- a quick diagnostic before running a `/consider:*` command
-- guidance on whether to gather external information (via `/research`) before thinking it through
-
-Takes an optional problem description. If omitted, deduces the problem from conversation context. Matches signal words across 12 frameworks covering decision-making, problem-solving, focus, and strategy. Also recommends `/research` when external facts would change the analysis.
-
-Examples:
-
-```bash
-/analyze-problem should I migrate from Redux to Zustand now or after the launch
-/analyze-problem the backfill job keeps failing with different errors each time
+```text
+/reflect [timeframe]
 ```
 
-### `/consider:*`
+Extracts durable principles from recent commits and Claude Code conversation history, then writes approved findings to memory or project instructions. Its history lookup is Claude Code-specific and needs adaptation on other hosts.
 
-Twelve frameworks for structured analysis. Pick directly when you already know which lens fits, or run [`/analyze-problem`](#analyze-problem) for a recommendation.
-
-```
-/consider:first-principles
+```text
+/generate-readme [project path]
 ```
 
-Break a problem down to fundamentals and rebuild. Use when designing a new system or redesigning one with multiple constraints.
+Explores a project, asks for missing audience or positioning decisions, and writes a storefront-style README.
 
-```
-/consider:5-whys
-```
+### Choose a thinking framework
 
-Drill to root cause by asking "why" repeatedly. Use when a bug keeps resurfacing or CI keeps breaking in different ways.
-
-```
-/consider:inversion
+```text
+/analyze-problem [situation]
 ```
 
-Identify what would guarantee failure, then avoid it. Use when planning a migration, major refactor, or production rollout.
+Recommends the most relevant framework and whether external research would change the decision.
 
-```
-/consider:second-order
-```
+Twelve focused framework commands are available under [`commands/consider/`](commands/consider/):
 
-Map consequences of consequences. Use when choosing between approaches that both work today but diverge long-term.
-
-```
-/consider:pareto
-```
-
-Apply the 80/20 rule to find highest-impact actions. Use when many issues surfaced but you can only address a few.
-
-```
-/consider:eisenhower-matrix
-```
-
-Sort tasks by urgency and importance. Use when sprint planning with a mix of bugs, tech debt, features, and infra work.
-
-```
-/consider:10-10-10
-```
-
-Evaluate impact across three time horizons. Use when tempted to take a shortcut, like hardcoding a value, skipping tests, or merging without review.
-
-```
-/consider:swot
-```
-
-Map strengths, weaknesses, opportunities, and threats. Use when evaluating whether to adopt a new framework, library, or tool.
-
-```
-/consider:occams-razor
-```
-
-Find the explanation that fits all facts with fewest assumptions. Use when a bug has multiple plausible causes and you're tempted to chase the exotic one.
-
-```
-/consider:one-thing
-```
-
-Identify the single highest-leverage action. Use when a large project has stalled with too many open threads.
-
-```
-/consider:opportunity-cost
-```
-
-Analyze what you give up by choosing each option. Use when deciding between building in-house vs. using a third-party service.
-
-```
-/consider:via-negativa
-```
-
-Improve by removing rather than adding. Use when a prompt, config, or module feels bloated but you're unsure what to cut.
-
-## Skills
-
-### `bootstrap-goal-project`
-
-Set up or repair the repository-local memory and delivery system for independent autonomous runs: product intent, domain language, decisions, goal history, evidence, playbook, and fresh judging. Use when starting a durable project or adapting the `hobby-bundle` method to a different stack.
-
-### `create-skill`
-
-Build new SKILL.md files through collaborative conversation. Use when turning a workflow into a reusable skill.
-
-### `create-slash-command`
-
-Generate slash command files with YAML frontmatter, argument hints, and dynamic context. Use when building custom `/commands`.
-
-### `create-subagent`
-
-Configure subagent specs with tool restrictions and orchestration patterns. Use when defining agent types or launching specialized agents with the Task tool.
-
-### `create-hook`
-
-Write hook configurations for event-driven automation. Use when adding PreToolUse, PostToolUse, Stop, or other Claude Code lifecycle hooks.
-
-### `create-prompt`
-
-Create standalone prompts that another Claude can execute. Saves to `./prompts/` as numbered `.md` files.
-
-### `create-toolkit-installer`
-
-Generate `install.js` for Claude Code toolkit repos with manifest tracking, symlink/copy modes, and uninstall support.
-
-### `audit-prompt`
-
-Check prompt files for wasted tokens, poor positioning, and vague instructions. Use when reviewing changes to commands, skills, agents, or any file containing LLM instructions.
-
-### `readme-best-practices`
-
-Apply consistent structure, tone, and formatting to README files. Pairs with [`/generate-readme`](#generate-readme) — the command drafts, this skill polishes. Use when rewriting or reviewing a project README.
-
-### `triage-pr-comments`
-
-Fetches PR comments from GitHub, applies a fix-vs-ignore framework to each, resolves dismissed threads, and plans fixes. Deferred items log as tickets via the [Linear](#linear) skill. Use when addressing PR feedback or following up on code review.
-
-### `pr-qa-browser`
-
-Derives risk-focused browser QA stories from a dashboard-web PR, runs feasible Agent Browser checks, saves screenshots, and reports remaining manual follow-ups.
-
-### `nano-banana-app-icon`
-
-Interactive iOS/Android app icon design with Nano Banana 2. Runs a discovery brief, writes a JSON prompt you paste into gemini.google.com, then critiques the resulting PNG and outputs a refinement prompt.
-
-> [!NOTE]
-> This skill does not generate images itself. It produces prompts you paste into Gemini, then iterates based on the downloaded PNG.
-
-Use when making, replacing, or refining an app icon.
-
-### `searchexa`
-
-Semantic web search via EXA API that returns actual page content inline — search and fetch in one call. A cheaper alternative to the [Research](#research) skill when you want raw content rather than AI-synthesized answers.
-
-> [!NOTE]
-> Free tier is 1000 searches/month. Requires `EXA_API_KEY` in the same env-file chain as Research.
-
-Use when you need to find and read pages in one pass, and synthesis isn't required.
-
-## Reference guides
-
-- **`prompt-quality-guide.md`** -- How LLMs process instructions: finite capacity, interference, positional bias, context depletion.
-- **`docs/prompt-engineering-research-2025.md`** -- Academic research on instruction-following capacity and degradation patterns.
-- **`docs/writing-effective-claude-md.md`** -- Reference guide for writing effective CLAUDE.md files.
-- **`docs/readme-guide.md`** -- Writing effective READMEs (the principles behind `/generate-readme`).
-- **`docs/building-skills-guide.md`** -- Guide to building Claude Code skills.
-- **`docs/skill-description-guide.md`** -- Writing YAML skill descriptions that Claude Code reliably discovers.
-- **`docs/skill-discovery-pattern.md`** -- Adding reliable skill loading to commands.
-- **`docs/hooks-reference-official.md`** -- Reference for the Claude Code hooks system.
-- **`docs/skills-reference-official.md`** -- Reference for the Claude Code skills system.
+- [`/consider:first-principles`](commands/consider/first-principles.md)
+- [`/consider:5-whys`](commands/consider/5-whys.md)
+- [`/consider:inversion`](commands/consider/inversion.md)
+- [`/consider:second-order`](commands/consider/second-order.md)
+- [`/consider:pareto`](commands/consider/pareto.md)
+- [`/consider:eisenhower-matrix`](commands/consider/eisenhower-matrix.md)
+- [`/consider:10-10-10`](commands/consider/10-10-10.md)
+- [`/consider:swot`](commands/consider/swot.md)
+- [`/consider:occams-razor`](commands/consider/occams-razor.md)
+- [`/consider:one-thing`](commands/consider/one-thing.md)
+- [`/consider:opportunity-cost`](commands/consider/opportunity-cost.md)
+- [`/consider:via-negativa`](commands/consider/via-negativa.md)
 
 ---
 
-## Quick start
+## Optional bundles
 
-```bash
-git clone https://github.com/rolandtolnay/llm-toolkit.git ~/toolkits/llm-toolkit
-cd your-project && ~/toolkits/llm-toolkit/install.js
-```
+### Hobby bundle
 
-Requires Node.js 16.7+ and [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Open Claude Code and try `/verify`, or describe a Linear ticket to see the integrations auto-activate.
+[`hobby-bundle/`](hobby-bundle/) is the original goal-driven web-project example. Its reusable worked artifacts include an agent-instructions template, the stack-specific playbook, a judged goal loop, and a goal-writing guide. It also contains 10 optional bundled skills:
 
-For global install, copy mode, or uninstall, see [Install options](#install-options).
+- `agent-browser`
+- `deploy-to-vercel`
+- `diagnose`
+- `grill-with-docs`
+- `humanizer`
+- `improve-codebase-architecture`
+- `react-view-transitions`
+- `vercel-composition-patterns`
+- `vercel-react-best-practices`
+- `web-design-guidelines`
 
----
+Use [`bootstrap-goal-project`](#goal-driven-projects) to extract the general contracts for another stack. Install individual hobby skills only when their assumptions match the target project.
 
-## Install options
+### Business bundle
 
-The default install symlinks the toolkit into `./.claude/` of the current project. A `git pull` in `~/toolkits/llm-toolkit` then updates every project that points at it.
+[`business-bundle/`](business-bundle/) contains 12 offer and business-strategy lenses:
 
-```bash
-~/toolkits/llm-toolkit/install.js
-```
+- `market-research`
+- `business-model`
+- `productize`
+- `dfy-dwy-diy`
+- `hormozi-offer`
+- `audit-offer`
+- `pricing-strategy`
+- `landing-page-copy`
+- `offer-angles`
+- `objection-destroyer`
+- `value-perception`
+- `value-accelerator`
 
-**Global** — available in every project, installed into `~/.claude/`:
-
-```bash
-~/toolkits/llm-toolkit/install.js --global
-```
-
-**Copy mode** — copies files instead of symlinking, so they can be committed and shared with a team via git. Required on Windows since symlinks aren't supported.
-
-```bash
-cd your-project
-~/toolkits/llm-toolkit/install.js --copy
-```
-
-**Uninstall** — removes every toolkit file from the target scope (add `--global` to uninstall the global install):
-
-```bash
-cd your-project
-~/toolkits/llm-toolkit/install.js --uninstall
-```
+These are strategy lenses, not market evidence. Check pricing, demand, competitors, and channels against current research.
 
 ---
+
+## Guides and repository layout
+
+```text
+skills/           19 primary skills, with bundled references, scripts, and assets
+commands/         22 Claude-style command prompts, including 12 decision frameworks
+agents/           the research-subagent definition used by research workflows
+hobby-bundle/     goal-driven web-project example and optional web skills
+business-bundle/  curated offer and business-strategy skills
+docs/guides/      prompt, skill, agent, goal-loop, README, and web research guides
+docs/pi/          Pi migration and feature notes; some runtime validation remains incomplete
+site/             a small GitHub Pages/Jekyll reference site
+```
+
+### Prompting and agent design
+
+- [Frontier LLM Prompting Guide](docs/guides/frontier-llm-prompting-guide.md): outcome-first prompting, approval boundaries, stop rules, grounding, validation, and legacy-prompt audit criteria.
+- [GPT-5.5 Prompting Guide](docs/guides/gpt-5.5-prompting-guide.md)
+- [GPT-5.6 Prompting Guide](docs/guides/gpt-5.6-prompting-guide.md)
+- [Fable 5 Prompting Guide](docs/guides/fable-5-prompting-guide.md)
+- [Prompt Quality Guide](docs/guides/prompt-quality-guide.md)
+- [Skill Prompting Principles](docs/guides/skill-prompting-principles.md)
+- [Subagent Prompting Guide](docs/guides/subagent-prompting-guide.md)
+- [Building a Good Vertical Agent](docs/guides/building-good-vertical-agent.md)
+- [Finding Your Unknowns](docs/guides/finding-your-unknowns.md)
+
+### Skills, memory, and autonomous loops
+
+- [Building Skills Guide](docs/guides/building-skills-guide.md)
+- [Skill Description Guide](docs/guides/skill-description-guide.md)
+- [Skill Discovery Pattern](docs/guides/skill-discovery-pattern.md)
+- [Goal Loss Functions](docs/guides/goal-loss-functions.md)
+- [Loop Guide](docs/guides/loop-guide.md)
+- [Writing Effective CLAUDE.md](docs/guides/writing-effective-claude-md.md)
+
+### Artifacts and web work
+
+- [README Guide](docs/guides/readme-guide.md)
+- [Nano Banana 2 Prompting Guide](docs/guides/nano-banana-2-prompting-guide.md)
+- [The Unreasonable Effectiveness of HTML](docs/guides/the-unreasonable-effectiveness-of-html.md)
+- [Website Scrape Consolidation Principles](docs/guides/website-scrape-consolidation-principles.md)
+
+Additional official references, Pi notes, prompt snapshots, browser recording notes, and the YouTube upload-date ADR live under [`docs/`](docs/).
+
+## Compatibility and known limitations
+
+- Claude Code is the source format. Many skills refer to `~/.claude`, `.claude/settings.local.json`, Claude hooks, slash commands, `Task`, or `AskUserQuestion`. The install prompt asks the target agent to translate them, but some hosts will not have an equivalent.
+- Pi support is not fully validated. [`docs/pi/`](docs/pi/) contains migration notes, and `package.json` contains Pi package metadata, but the declared root `prompts/` directory does not exist yet. Treat Pi installation as a guided port, not a verified package install.
+- `install.js` remains for existing Claude Code setups. It needs Node 16.7 or newer and supports project or global scope, copy or symlink mode, conflict tracking, a manifest, and uninstall. It handles top-level agents, commands, skills, and a root `references/` directory when present. It does not install bundles, guides, or the site. This README uses the adaptive prompt instead.
+- Confirmation rules vary by resource. Slack sends and schedules, and PR-comment triage, confirm before writing. Slack edit, delete, react, and status commands run immediately, as do some Linear mutations and Firebase deployment instructions.
+- Research, image generation, Gmail, Linear, Slack, and EXA rely on credentials or external services. If an optional provider is missing, the skill should report reduced coverage instead of filling the gap with invented results.
+- Most Python CLIs use `uv`. Some research paths also use `yt-dlp` or `claude -p`. App Icon Studio needs Node 18 or newer and uses macOS utilities for presentation. Browser QA needs `agent-browser` and suitable project fixtures.
 
 ## Updating
 
-Symlink installs (the default) update automatically when you pull the toolkit repo:
+For symlink installs, pull from the stable checkout recorded in the installation manifest. Copied resources do not update automatically.
 
-```bash
-cd ~/toolkits/llm-toolkit && git pull
-```
-
-Copy installs need to be re-run after pulling:
-
-```bash
-cd ~/toolkits/llm-toolkit && git pull
-cd your-project && ~/toolkits/llm-toolkit/install.js --copy
-```
-
----
-
-## Usage examples
-
-**Verify completed work:**
-
-```
-/verify
-```
-
-Analyzes your changes across correctness, preservation, and completeness, then walks through findings interactively before declaring issues.
-
-**Pick the right mental framework for a decision:**
-
-```
-/analyze-problem
-```
-
-Describe your situation and get a recommendation for which of the 12 frameworks fits, then walk through the analysis.
-
-**Create a Linear ticket from a description:**
-
-```
-Users lose their draft when the app goes to background -- save it to local storage
-```
-
-Infers priority (High, degraded core flow), estimate (S, 1-2 files, known approach), matches the right project and labels, asks you to confirm, and creates the ticket.
-
-**Generate a README for a project:**
-
-```
-/generate-readme
-```
-
-Walks through the codebase, asks clarifying questions, and produces a README.
-
----
+Run the installation prompt again and ask the agent to compare the recorded source revision and checksums with the installed files, preserve local edits, refresh the selected resources, update the manifest, and re-run path and dependency checks.
 
 ## License
 
