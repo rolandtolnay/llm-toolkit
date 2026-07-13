@@ -1,0 +1,241 @@
+<!--
+  Page Template: Published Product Research
+
+  Generic HTML skeleton for published research pages.
+  Replace every {{PLACEHOLDER}}. Repeating components show one representative item.
+  Editorial rules live in section-mapping.md; class semantics live in design-system.md.
+-->
+<!DOCTYPE html>
+<html lang="{{LANGUAGE}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PAGE_TITLE}}</title>
+  {{CANONICAL_LINK}}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+  {{FAVICON_LINK}}
+  <link rel="stylesheet" href="{{STYLESHEET_HREF}}">
+</head>
+<body data-research-title="{{SITE_TITLE}}" data-research-subtitle="{{SITE_SUBTITLE}}" data-research-manifest="{{MANIFEST_URL}}" data-research-home="{{HOME_URL}}" data-research-locale="{{LOCALE}}">
+
+<div class="page-content">
+  <nav class="chip-nav" aria-label="Page sections">
+    <div class="chip-nav__bar">
+      <a class="chip" href="#picks"><span class="chip__dot chip__dot--green"></span>Picks</a>
+      <a class="chip" href="#criteria"><span class="chip__dot chip__dot--amber"></span>Criteria</a>
+      <a class="chip" href="#compare"><span class="chip__dot chip__dot--plum"></span>Compare</a>
+      <a class="chip" href="#all-products"><span class="chip__dot chip__dot--ink"></span>All products</a>
+      <a class="chip" href="#tradeoffs"><span class="chip__dot chip__dot--ink"></span>Tradeoffs</a>
+      <a class="chip" href="#ruled-out"><span class="chip__dot chip__dot--ink"></span>Ruled out</a>
+      <a class="chip" href="#evidence"><span class="chip__dot chip__dot--ink"></span>Evidence</a>
+    </div>
+  </nav>
+
+  <main class="container">
+    <header class="hero" id="hero">
+      <div class="eyebrow">{{CATEGORY}} Research &middot; {{MONTH YEAR}}</div>
+
+      <!-- Hero image sits between the eyebrow and the headline. Image step fills src
+           with the BEST pick's photo (hotlinked). See references/image-sourcing.md. -->
+      <div class="hero__media"><img src="{{HERO_IMG_URL}}" alt="{{BEST_PICK_NAME}}" loading="lazy" referrerpolicy="no-referrer"></div>
+
+      <h1 class="headline">{{EDITORIAL_HEADLINE}}</h1>
+      <p class="hero__lede">{{RESEARCH_APPROACH_LEDE}}</p>
+
+      <div class="tldr">
+        <div class="tldr__label">TL;DR picks</div>
+        <div class="tldr__rows">
+          <!-- REPEAT: one row per recommendation tier. Thumbnail first; tier chip sits
+               INSIDE .tldr__main above the name. Image step fills the thumb src. -->
+          <a class="tldr__row" href="#pick-best">
+            <span class="tldr__thumb"><img src="{{TLDR_IMG_URL}}" alt="{{MODEL_NAME}}" loading="lazy" referrerpolicy="no-referrer"></span>
+            <div class="tldr__main">
+              <span class="tldr__tier tldr__tier--best">{{TIER}}</span>
+              <div class="tldr__name">{{MODEL_NAME}}</div>
+              <div class="tldr__why">{{ONE_LINE_WHY}}</div>
+            </div>
+            <div class="tldr__price">{{PRICE}}<small class="{{in|out}}">{{STATUS}}</small></div>
+          </a>
+        </div>
+        <div class="tldr__cta btn-row">
+          <a class="btn btn--primary" href="#picks">See picks</a>
+          <a class="btn btn--ghost" href="#compare">Compare tradeoffs</a>
+        </div>
+      </div>
+
+      <div class="brief"><span class="brief__label">Context</span>{{CONTEXT_AND_SOURCE_SUMMARY}}</div>
+    </header>
+
+    <section id="criteria">
+      <div class="section-head">
+        <div class="section-num">01</div>
+        <h2 class="section-title">{{CRITERIA_SECTION_TITLE}}</h2>
+        <p class="section-deck">{{CRITERIA_KEY_INSIGHT}}</p>
+      </div>
+
+      <div class="criteria-stack">
+        <!-- REPEAT: one details.crit per criterion/aspect group -->
+        <details class="crit" id="crit-{{SLUG}}">
+          <summary>
+            <span class="crit__num">01</span>
+            <div class="crit__head">
+              <div class="crit__title">{{CRITERION_NAME}}</div>
+              <div class="crit__tldr">{{CRITERION_TLDR}}</div>
+            </div>
+            <span class="crit__expand">⌄</span>
+          </summary>
+          <div class="crit__body">
+            <p>{{SYNTHESIS_EXPLANATION_OR_MASTERCLASS_DETAIL}}</p>
+            <div class="crit__tradeoff"><strong>Key tradeoff:</strong> {{KEY_TRADEOFF}}</div>
+          </div>
+        </details>
+      </div>
+
+      <div class="myths">
+        <div class="myths__title">{{MYTHS_TITLE}}</div>
+        <!-- REPEAT: one myth -->
+        <div class="myth">
+          <div class="myth__head"><span class="myth__name">{{MYTH_CLAIM}}</span><span class="myth__tag">{{TAG}}</span></div>
+          <p>{{DEBUNKING_TEXT}}</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="compare">
+      <div class="section-head">
+        <div class="section-num">02</div>
+        <h2 class="section-title">{{COMPARE_TITLE}}</h2>
+        <p class="section-deck">{{COMPARE_DECK}}</p>
+      </div>
+      <div class="matrix matrix--{{PICK_COUNT}}">
+        <div class="matrix__head">
+          <div>Tier</div>
+          <!-- REPEAT: one recommended tier column. Image step fills the column shot (reuse the pick image). -->
+          <div><img class="matrix__img" src="{{PICK_IMG_URL}}" alt="{{MODEL}}" loading="lazy" referrerpolicy="no-referrer"><span class="tier tier--best">{{TIER}}</span><span class="name">{{MODEL}}</span><span class="price">{{PRICE}}</span></div>
+        </div>
+        <!-- REPEAT: one supported comparison row -->
+        <div class="matrix__row">
+          <div>{{ROW_LABEL}}</div>
+          <div class="matrix__cell">{{VALUE}}</div>
+          <div class="matrix__cell">{{VALUE}}</div>
+          <div class="matrix__cell">{{VALUE}}</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="picks">
+      <div class="section-head">
+        <div class="section-num">03</div>
+        <h2 class="section-title">{{PICKS_TITLE}}</h2>
+        <p class="section-deck">{{MARKET_REALITY_LEAD_IN}}</p>
+      </div>
+
+      <!-- REPEAT: one article.pick per recommendation tier -->
+      <article class="pick pick--best" id="pick-best">
+        <div class="pick__header">
+          <div class="pick__tier-block"><span class="pick__tier-num">01</span><span class="pick__tier">{{TIER_LABEL}}</span></div>
+          <span class="pick__price">{{PRICE}}</span>
+        </div>
+        <h3 class="pick__name">{{MODEL_NAME}}</h3>
+        <div class="pick__specs">{{SPECS}}</div>
+        <!-- Image step fills src with this pick's photo (hotlinked). -->
+        <div class="pick__media"><img src="{{PICK_IMG_URL}}" alt="{{MODEL_NAME}}" loading="lazy" referrerpolicy="no-referrer"></div>
+        <p class="pick__verdict">{{VERBATIM_VERDICT}}</p>
+        <div class="pc">
+          <div class="pc__col pc__col--pro"><h4>Why this one</h4><ul><li>{{PRO}} <a class="refer" data-deep-dive="crit-{{SLUG}}">→ {{REF_TEXT}}</a></li></ul></div>
+          <div class="pc__col pc__col--con"><h4>Watch out for</h4><ul><li>{{CON}}</li></ul></div>
+        </div>
+        <div class="btn-row"><a class="btn btn--primary" href="{{URL}}" target="_blank" rel="noopener">Buy at {{RETAILER}} — {{PRICE}}</a></div>
+        <p class="pick__meta">{{PRICE_VERIFICATION_STATUS}}</p>
+        <div class="pick__warning">{{OPTIONAL_WARNING}}</div>
+        <!-- Runner-up: thumbnail is the FIRST child of .pick__runner. One block per runner-up
+             (a pick may have several). If a runner says "None recommended" but names a product,
+             use that product's photo. Image step fills the thumb src. -->
+        <div class="pick__runner"><span class="pick__runner-media"><img src="{{RUNNER_IMG_URL}}" alt="{{MODEL}}" loading="lazy" referrerpolicy="no-referrer"></span><div class="pick__runner-label">Runner-up</div><strong>{{MODEL}}</strong> {{RUNNER_UP_REASON}} <a href="{{URL}}" target="_blank" rel="noopener">{{RETAILER}} →</a></div>
+      </article>
+
+      <hr class="pick__divider">
+      <!-- REPEAT: additional pick articles with hr.pick__divider between them -->
+    </section>
+
+    <section id="all-products">
+      <div class="section-head"><div class="section-num">04</div><h2 class="section-title">All Products Considered</h2><p class="section-deck">{{ALL_PRODUCTS_INTRO}}</p></div>
+      <div class="allp__legend">
+        <span><span class="sw sw--p"></span>Pick or strong runner-up</span>
+        <span><span class="sw sw--c"></span>Considered</span>
+        <span><span class="sw sw--a"></span>Ruled out</span>
+      </div>
+      <div class="allp" aria-label="All products considered">
+        <div class="allp__track">
+          <!-- REPEAT: one card per surfaced product. Media is the FIRST child.
+               If the product is also a pick/runner-up, reuse that image; otherwise use
+               the placeholder div: <div class="allp__media allp__media--placeholder"><span>No image</span></div> -->
+          <article class="allp__card allp__card--pick">
+            <div class="allp__media"><img src="{{ALLP_IMG_URL}}" alt="{{PRODUCT_NAME}}" loading="lazy" referrerpolicy="no-referrer"></div>
+            <div class="allp__rank">{{ROLE}}</div>
+            <h3 class="allp__name">{{PRODUCT_NAME}}</h3>
+            <div class="allp__meta">{{PRICE_STATUS}}</div>
+            <p class="allp__note">{{SOURCE_GROUNDED_NOTE}}</p>
+            <a class="allp__link" href="{{URL}}" target="_blank" rel="noopener">{{SOURCE_OR_RETAILER}}</a>
+          </article>
+        </div>
+      </div>
+      <p class="allp__hint">Scroll sideways to browse every product surfaced by the research.</p>
+    </section>
+
+    <section id="tradeoffs">
+      <div class="section-head"><div class="section-num">05</div><h2 class="section-title">{{TRADEOFFS_TITLE}}</h2></div>
+      <div class="tradeoffs">
+        <!-- REPEAT: one tier transition -->
+        <div class="trade">
+          <div class="trade__head"><span class="tier-tag">{{FROM_TIER}} · {{FROM_PRICE}}</span><span class="arrow">→</span><span class="tier-tag">{{TO_TIER}} · {{TO_PRICE}}</span><span class="delta">{{PRICE_DELTA}}</span></div>
+          <div class="trade__cols">
+            <div class="trade__col trade__col--gain"><span class="label">You gain</span>{{GAIN_TEXT}}</div>
+            <div class="trade__col trade__col--lose"><span class="label">You lose</span>{{LOSS_TEXT}}</div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-line"><div class="bottom-line__label">Bottom line</div>{{SUMMARY_ADVICE}}</div>
+    </section>
+
+    <section id="ruled-out">
+      <div class="section-head"><div class="section-num">06</div><h2 class="section-title">{{RULED_OUT_TITLE}}</h2></div>
+      <div class="ruled">
+        <!-- REPEAT: one discarded product -->
+        <div class="ruled-item"><span class="ruled-item__tag ruled-item__tag--red">{{TAG}}</span><div><h3>{{MODEL}}</h3><p>{{REJECTION_EXPLANATION}}</p></div></div>
+      </div>
+    </section>
+
+    <section id="evidence">
+      <div class="section-head"><div class="section-num">07</div><h2 class="section-title">The <em>evidence</em></h2><p class="section-deck">The research behind the recommendations. Open any section for sources, quotes, and data.</p></div>
+      <div class="drawers">
+        <!-- REPEAT: one evidence drawer (use letters A, B, C, D…) -->
+        <details class="drawer">
+          <summary><span class="drawer__icon">A</span><div><div class="drawer__title">{{DRAWER_TITLE}}</div><div class="drawer__sub">{{DRAWER_SUBTITLE}}</div></div><span class="drawer__sub">{{COUNT_HINT}}</span></summary>
+          <div class="drawer__body">
+            <h4>{{SUBSECTION}}</h4>
+            <p>{{CURATED_FINDING}}</p>
+            <blockquote>{{QUOTE}}<cite><a href="{{URL}}" target="_blank" rel="noopener">{{ATTRIBUTION}}</a></cite></blockquote>
+            <table><thead><tr><th>{{COL}}</th><th>{{COL}}</th></tr></thead><tbody><tr><td>{{VALUE}}</td><td>{{VALUE}}</td></tr></tbody></table>
+            <p><span class="source-link">Sources: <a href="{{URL}}" target="_blank" rel="noopener">{{SOURCE}}</a></span></p>
+            <div class="video-embed"><p class="video-embed__annotation">{{WHY_VIDEO_MATTERS}}</p><div class="video-embed__thumb" data-video-id="{{YOUTUBE_ID}}"><img src="https://img.youtube.com/vi/{{YOUTUBE_ID}}/mqdefault.jpg" alt="{{ALT}}" loading="lazy"><span class="video-embed__play"></span></div></div>
+          </div>
+        </details>
+        <!-- LAST DRAWER: interview Q&A (always the final letter) -->
+        <details class="drawer">
+          <summary><span class="drawer__icon">{{LETTER}}</span><div><div class="drawer__title">{{INTERVIEW_DRAWER_TITLE}}</div><div class="drawer__sub">{{N}} questions</div></div></summary>
+          <div class="drawer__body"><p class="aside">{{CONTEXT_SUMMARY}}</p><p><strong>{{QUESTION}}</strong></p><blockquote>{{ANSWER}}<cite>{{INTERVIEW_ATTRIBUTION}}</cite></blockquote></div>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer><div class="container"><p>{{RESEARCH_DATE_AND_PRICE_DISCLAIMER}}</p><p>{{AFFILIATE_DISCLOSURE}}</p><p class="made-with">{{FOOTER_SIGNOFF}}</p></div></footer>
+</div>
+
+<script src="{{NAV_SCRIPT_SRC}}"></script>
+<script src="{{ARTICLE_SCRIPT_SRC}}"></script>
+</body>
+</html>

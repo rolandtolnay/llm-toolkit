@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "researchDirectory": "~/Documents/Research",
+  "outputDirectory": "public",
+  "manifestPath": "public/manifest.json",
+  "manifestFormat": "array",
+  "site": {
+    "baseUrl": null,
+    "title": "Research library",
+    "subtitle": "Product decisions, researched.",
+    "language": "en",
+    "locale": "en-US",
+    "stylesheetPath": "public/shared/styles.css",
+    "stylesheetHref": "/shared/styles.css",
+    "navigationScriptPath": "public/shared/nav.js",
+    "navigationScriptSrc": "/shared/nav.js",
+    "articleScriptPath": "public/shared/article.js",
+    "articleScriptSrc": "/shared/article.js",
+    "manifestUrl": "/manifest.json",
+    "homeUrl": "/",
+    "articleUrlPrefix": "/",
+    "faviconUrl": null
+  },
+  "audience": {
+    "readerName": null,
+    "intervieweeName": null,
+    "voice": "A knowledgeable friend sharing careful research without sales pressure."
+  },
+  "footer": {
+    "affiliateDisclosure": null,
+    "signoff": null
+  },
+  "images": {
+    "mode": "placeholder",
+    "requireLightBackground": true
+  },
+  "referencePage": null,
+  "mockupPath": null,
+  "deployment": {
+    "command": null,
+    "workingDirectory": ".",
+    "publishPaths": ["public"],
+    "publicUrl": null
+  }
+}

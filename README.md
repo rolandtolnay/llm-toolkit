@@ -49,7 +49,7 @@ Use a stable checkout for symlinks, never a temporary clone. Prefer copy mode fo
 
 Adapt to this agent instead of assuming `~/.claude`, `.claude/`, Claude slash commands, `AskUserQuestion`, `Task`, or Claude hook syntax. Keep relative references intact when possible. Rewrite hardcoded paths only in installed copies; do not modify a shared source checkout to make a symlink work. If faithful adaptation is impossible, leave that resource uninstalled and explain the missing host capability.
 
-Inspect selected resources for hardcoded paths and dependencies before installing. In particular, account for the shared research infrastructure, the `research-subagent`, `bootstrap-goal-project` companions, GitHub/Linear dependencies in delivery workflows, and the `humanizer` dependency used by `create-pr`.
+Inspect selected resources for hardcoded paths and dependencies before installing. In particular, account for the shared research infrastructure, the `research-subagent`, `bootstrap-goal-project` companions, GitHub/Linear dependencies in delivery workflows, and the `humanizer` dependency used by `create-pr`. For `publish-research`, install its bundled assets and config example, then report the site profile values that still need customization. Do not copy example domains, audience names, or deployment targets into a live config.
 
 Do not install system packages, create provider accounts, write secrets, overwrite conflicts, delete prior installs, or wire externally mutating hooks without showing the action and getting confirmation. A request to install authorizes the selected local resource files and non-destructive validation; it does not authorize unrelated configuration changes.
 
@@ -70,6 +70,7 @@ The prompt is intentional. Claude Code, Pi, and other agents put skills, prompts
 |---|---|
 | Research a current topic with citations | [`research`](#research) |
 | Make a grounded buying decision | [`product-research`](#product-research) |
+| Turn completed product research into a website | [`publish-research`](#publish-research) |
 | Name a company, product, app, or feature | [`brand-naming`](#brand-naming) |
 | Generate and judge app icon candidates | [`app-icon-studio`](#app-icon-workflows) |
 | Prepare a repository for independent agent runs | [`new-project` → `bootstrap-goal-project` → `write-loop`](#goal-driven-projects) |
@@ -180,6 +181,66 @@ A full run expects:
 - write access to the configured research directory, defaulting to `~/Documents/Research/`
 
 Use the same env files as [Research](#research). Missing optional sources reduce coverage; missing Perplexity or Firecrawl prevents parts of the documented full pipeline and must be reported rather than hidden.
+
+</details>
+
+---
+
+## Publish research
+
+```text
+/publish-research ~/Documents/Research/YYYY-MM-DD-example-product-research
+```
+
+[`publish-research`](skills/publish-research/SKILL.md) turns a completed Product Research Skill run into a static article. It keeps the short recommendation up front, folds deeper research into evidence drawers, carries every considered product into a browsable inventory, and checks the page against the source before touching deployment.
+
+The skill comes with the article template, shared CSS, a generic navigation script, and a separate article script for sites that block inline JavaScript. The original version published to one Firebase site for one reader. This version has no built-in domain, Firebase project, personal name, or deployment command. Those values live in `.publish-research.json` inside the target site.
+
+The normal flow is local first: generate the article, run factual and structural reviews, humanize the editorial copy without changing specs or prices, add verified product images or placeholders, update the manifest, and inspect desktop and mobile layouts. Deployment runs only when the site profile contains a command and you confirm that exact external write.
+
+This is meant for the output shape produced by `product-research`, not arbitrary Markdown. The bundled design is opinionated, remote product images can disappear, and good visual verification still benefits from `agent-browser`. Local image mode is more durable but leaves image licensing and repository size with the publisher.
+
+<details>
+<summary><strong>Publish Research setup and site customization</strong></summary>
+
+Install the complete `publish-research` directory so its `assets/` and `references/` come with the skill. Then copy [`site-config.example.json`](skills/publish-research/references/site-config.example.json) to `.publish-research.json` in the target site's project root. The example leaves the public URL, footer disclosure, sign-off, and deployment unset, and starts with image placeholders.
+
+The profile asks for:
+
+- the research directory, static output directory, manifest path, and required array manifest format
+- the site's public base URL, home and article URL prefixes, title, language, locale, favicon, and shared asset URLs
+- optional reader and interviewee names plus the editorial voice
+- the real affiliate disclosure and footer sign-off
+- image mode: `hotlink`, `local`, or `placeholder`
+- optional reference and mockup pages
+- an optional deployment command, working directory, publish paths, and public URL
+
+Deployment is disabled by default:
+
+```json
+{
+  "deployment": {
+    "command": null,
+    "workingDirectory": ".",
+    "publishPaths": ["public"],
+    "publicUrl": null
+  }
+}
+```
+
+Keep it disabled until local generation works. Do not put tokens or service-account files in the profile. Provider credentials stay in the provider CLI or secret store.
+
+Other dependencies:
+
+- a completed Product Research Skill run with `00-synthesis.md`
+- fresh-context subagents or reviewers for content and structure checks
+- optional [`agent-browser`](hobby-bundle/agent-browser/) for desktop and mobile rendering
+- `curl` and `file` for remote image validation
+- Google Fonts access for the starter template, or a local-font customization for strict CSP/offline sites
+- optional [`humanizer`](hobby-bundle/humanizer/) for the editorial pass
+- a deployment CLI only when the configured command uses one
+
+The skill can copy its bundled `styles.css`, `nav.js`, and `article.js` into a new site. It will not overwrite an existing design system without approval. Full setup and the post-install checklist are in [`references/setup.md`](skills/publish-research/references/setup.md).
 
 </details>
 
@@ -442,10 +503,10 @@ The CLI can also read supported agent `env.json` locations or process environmen
 
 ## Complete skill index
 
-The repository currently has 19 top-level skills. Use this collapsed list when you know the name and want the source file.
+The repository currently has 20 top-level skills. Use this collapsed list when you know the name and want the source file.
 
 <details>
-<summary><strong>Show all 19 skills</strong></summary>
+<summary><strong>Show all 20 skills</strong></summary>
 
 ### Create and maintain agent resources
 
@@ -457,6 +518,7 @@ The repository currently has 19 top-level skills. Use this collapsed list when y
 
 - [`research`](skills/research/SKILL.md): Runs current web research with verification and optional persistence.
 - [`product-research`](skills/product-research/SKILL.md): Produces a category masterclass and ranked buying recommendations.
+- [`publish-research`](skills/publish-research/SKILL.md): Turns completed product research into a reviewed static article and optionally deploys it from an explicit site profile.
 - [`brand-naming`](skills/brand-naming/SKILL.md): Produces screened brand-name finalists through research and isolated generation.
 - [`searchexa`](skills/searchexa/SKILL.md): Returns semantic search results with inline page text through EXA.
 - [`gmail`](skills/gmail/SKILL.md): Retrieves narrow, read-only Gmail evidence.
@@ -616,7 +678,7 @@ These are strategy lenses, not market evidence. Check pricing, demand, competito
 ## Guides and repository layout
 
 ```text
-skills/           19 primary skills, with bundled references, scripts, and assets
+skills/           20 primary skills, with bundled references, scripts, and assets
 commands/         22 Claude-style command prompts, including 12 decision frameworks
 agents/           the research-subagent definition used by research workflows
 hobby-bundle/     goal-driven web-project example and optional web skills
@@ -661,7 +723,7 @@ Additional official references, Pi notes, prompt snapshots, browser recording no
 - Claude Code is the source format. Many skills refer to `~/.claude`, `.claude/settings.local.json`, Claude hooks, slash commands, `Task`, or `AskUserQuestion`. The install prompt asks the target agent to translate them, but some hosts will not have an equivalent.
 - Pi support is not fully validated. [`docs/pi/`](docs/pi/) contains migration notes, and `package.json` contains Pi package metadata, but the declared root `prompts/` directory does not exist yet. Treat Pi installation as a guided port, not a verified package install.
 - `install.js` remains for existing Claude Code setups. It needs Node 16.7 or newer and supports project or global scope, copy or symlink mode, conflict tracking, a manifest, and uninstall. It handles top-level agents, commands, skills, and a root `references/` directory when present. It does not install bundles, guides, or the site. This README uses the adaptive prompt instead.
-- Confirmation rules vary by resource. Slack sends and schedules, and PR-comment triage, confirm before writing. Slack edit, delete, react, and status commands run immediately, as do some Linear mutations and Firebase deployment instructions.
+- Confirmation rules vary by resource. Slack sends and schedules, PR-comment triage, and `publish-research` deployment confirm before writing. Slack edit, delete, react, and status commands run immediately, as do some Linear mutations and Firebase deployment instructions.
 - Research, image generation, Gmail, Linear, Slack, and EXA rely on credentials or external services. If an optional provider is missing, the skill should report reduced coverage instead of filling the gap with invented results.
 - Most Python CLIs use `uv`. Some research paths also use `yt-dlp` or `claude -p`. App Icon Studio needs Node 18 or newer and uses macOS utilities for presentation. Browser QA needs `agent-browser` and suitable project fixtures.
 

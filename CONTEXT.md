@@ -12,6 +12,14 @@ _Avoid_: Search script, web wrapper
 A staged buying-decision workflow that uses the Research Skill's source tools to produce product recommendations.
 _Avoid_: Shopping search, product scraper
 
+**Publish Research Skill**:
+A reusable skill that transforms one completed Product Research Skill run into a reviewed static article and optionally deploys it from an explicit site profile.
+_Avoid_: Site-specific publisher, Markdown converter
+
+**Published Research Page**:
+The static HTML article produced by the Publish Research Skill from one Product Research Skill run.
+_Avoid_: Research dump, generated landing page
+
 **YouTube Research CLI**:
 The command-line source tool that turns a YouTube query into selected video evidence with transcripts or extracted findings.
 _Avoid_: YouTube scraper, transcript script
@@ -43,6 +51,8 @@ _Avoid_: After date, exact date filter
 ## Relationships
 
 - The **Product Research Skill** uses the **Research Skill** source tools.
+- The **Publish Research Skill** transforms one Product Research Skill run into one **Published Research Page**.
+- The **Publish Research Skill** reads site identity, paths, image policy, audience defaults, and optional deployment behavior from the target project's `.publish-research.json`.
 - The **Research Skill** exposes the **YouTube Research CLI**.
 - The **YouTube Research CLI** has exactly one **Public CLI Contract**.
 - The **YouTube Research CLI** attempts the **Primary Backend** before the **Free Fallback Backend**.
