@@ -1132,7 +1132,7 @@ mutation ProjectMilestoneDelete($id: String!) {
 QUERY_CYCLES = """
 query Cycles($teamId: String!, $filter: CycleFilter, $first: Int) {
   team(id: $teamId) {
-    cycles(filter: $filter, first: $first, orderBy: startsAt) {
+    cycles(filter: $filter, first: $first) {
       nodes {
         id
         number
