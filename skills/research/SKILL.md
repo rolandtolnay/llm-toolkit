@@ -23,11 +23,12 @@ This skill handles **web research only**. Claude handles codebase exploration na
 <cli_cheatsheet>
 Quick syntax reference — all commands on one line each.
 
-Script path: `~/.claude/skills/research/scripts/research.py`
+Script path: `~/.agents/skills/research/scripts/research.py`
 
 ```
 uv run <script> ask "<query>"       [--site S] [--recency R] [--context C] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--no-cache]
 uv run <script> search "<query>"    [--site S] [--recency R] [--limit N] [--no-cache]
+uv run <script> google "<query>"    [--region CC] [--recency R] [--page N] [--no-cache]
 uv run <script> reason "<query>"    [--site S] [--recency R] [--context C] [--effort E] [--no-cache]
 uv run <script> docs <lib> "<query>" [--max-tokens N] [--no-cache]
 uv run <script> map <url>           [--search KW] [--limit N] [--no-cache]
@@ -39,26 +40,28 @@ uv run <script> prior "<query>"    [--since S] [--limit N] [--min-score N]
 
 --site: a real domain name like stripe.com or pay.uk (NOT topics/phrases). Repeatable.
 --recency: preset window — hour | day | week | month | year. For custom ranges use --after/--before with YYYY-MM-DD dates.
-Cost: search ~$0.005 | ask/reason ~$0.02 | docs free | map/scrape 1 FC credit each | prior free (local)
+Cost: search ~$0.005 | ask/reason ~$0.02 | google 1 SC credit | docs free | map/scrape 1 FC credit each | prior free (local)
 
 Also available: WebSearch (free, broad), WebFetch (free, page summary)
 All CLI calls and WebSearch/WebFetch usage are logged to ~/.cache/research/logs/YYYY-MM-DD.jsonl
 
-YouTube script: `~/.claude/skills/research/scripts/youtube.py`
+YouTube script: `~/.agents/skills/research/scripts/youtube.py`
 
 uv run <yt-script> search "<query>" [--question Q] [--max-videos N] [--after today|this_week|this_month|this_year] [--no-preprocess] [--no-select]
+uv run <yt-script> transcript <url> [--no-cache]
+uv run <yt-script> comments <url>   [--order top|newest] [--limit N] [--cursor C] [--no-cache]
 
-Cost: ScrapeCreators PAYG when `SCRAPECREATORS_API_KEY` is configured (search cached 24h, transcripts 30d); otherwise free fallback via yt-dlp + youtube-transcript-api. Pre-processing uses Claude subscription (claude -p).
-Requires: SCRAPECREATORS_API_KEY for the Primary Backend; yt-dlp installed (brew install yt-dlp) for the Free Fallback Backend.
+Cost: ScrapeCreators PAYG when `SCRAPECREATORS_API_KEY` is configured (search cached 24h, transcripts 30d); otherwise free fallback via yt-dlp + youtube-transcript-api (`comments` has no free fallback). Pre-processing uses Claude subscription (claude -p).
 Notes: `--after` only accepts `today`, `this_week`, `this_month`, `this_year`; `--max-videos` is a cap under ScrapeCreators first-page search; `metadata.backend` reports `scrapecreators`, `yt-dlp`, or `mixed`.
 
-Social script: `~/.claude/skills/research/scripts/social.py`
+Social script: `~/.agents/skills/research/scripts/social.py`
 
-uv run <social-script> reddit "<query>" [--question Q] [--subreddit S] [--no-cache]
+uv run <social-script> reddit "<query>" [--question Q] [--subreddit S] [--timeframe all|day|week|month|year] [--sort relevance|new|top|comment_count] [--max-threads N] [--no-cache]
+uv run <social-script> thread <url>     [--max-comments N] [--cursor C] [--no-cache]
 uv run <social-script> shortform "<query>" [--no-cache]
 
-Cost: ScrapeCreators PAYG (100 free calls, then pay-as-you-go). Condensing uses Claude subscription (claude -p).
-Requires: SCRAPECREATORS_API_KEY in ~/.claude/research/.env
+Reddit search defaults to the full archive (--timeframe all); narrow only when recency matters. `thread` fetches one thread at full fidelity (post body + nested comments).
+Requires: SCRAPECREATORS_API_KEY in ~/.claude/research/.env. ScrapeCreators credits are abundant — use SC-backed commands freely whenever they fit the question; every response reports actual credits used.
 ```
 </cli_cheatsheet>
 
@@ -67,35 +70,19 @@ Before executing, assess query complexity:
 
 **QUICK** — Simple factual question, single clear answer expected.
 Examples: "what version of X is latest?", "does Y support Z?", "what's the URL for X?"
-- No subagents. Run WebSearch directly (+ maybe one CLI call if WebSearch is insufficient).
-- Single authoritative source is sufficient.
+- No subagents. Answer from one or two direct lookups.
 
 **STANDARD** — Moderate question, 2-3 information angles.
 Examples: "how do I set up X?", "what tools exist for Y?", "how are people handling X?"
 - 2-3 subagents in parallel.
-- Source diversity rule applies (2+ sources per subagent).
 
 **DEEP** — Complex multi-faceted question, many angles.
 Examples: "best practices for X + Y", "evaluate X vs Y for our use case", "comprehensive guide to X"
 - 3-4 subagents in parallel.
-- Source diversity rule applies (2+ sources per subagent).
-
-**YouTube availability**: When SCRAPECREATORS_API_KEY is configured, subagents can search YouTube through the Primary Backend; when yt-dlp is installed, the Free Fallback Backend remains available if the key is missing or ScrapeCreators fails. Assign YouTube to subagents when the sub-question involves tutorials, demos, conference talks, developer workflows, product reviews, or practitioner opinions. Skip YouTube for API specs, pricing lookups, legal/compliance questions, or purely factual reference queries.
-
-**Social availability**: When SCRAPECREATORS_API_KEY is configured, subagents can search Reddit (`social reddit`) and short-form video (`social shortform`). Assign Reddit when community opinions or real-world experiences add value. Assign shortform when trending/viral/consumer content is relevant. Skip for official docs, compliance questions, or purely factual lookups.
 </complexity_assessment>
 
 <quick_mode>
-For QUICK complexity queries:
-
-1. Run **WebSearch** with a well-crafted query
-2. If the answer is clear and from an authoritative source (official docs, GitHub repo, well-known blog), **respond directly** — no subagents, no paid API calls
-3. If WebSearch result is ambiguous or the source isn't authoritative:
-   - Try `research search` for more targeted results
-   - Or `research ask` for a synthesized answer
-4. Verify any specific claims (version numbers, feature availability) against the primary source using WebFetch if needed
-
-**Goal:** Resolve simple lookups fast and free. Don't spin up subagents for questions that are one Google search away.
+For QUICK complexity queries, resolve the lookup directly — no subagents, no run directory. Start with the tool that best fits the question (WebSearch or `research google` for discovery, `research docs` for library APIs, WebFetch/`research scrape` for a known page), and verify version numbers or feature claims against the primary source before answering. Done means: the answer comes from an authoritative source and specific claims are verified.
 </quick_mode>
 
 <research_mode>
@@ -103,30 +90,21 @@ For STANDARD and DEEP complexity queries:
 
 ## STEP 1: DECOMPOSE
 
-Analyze the question and generate 2-4 specific sub-questions. For each, assign a source strategy.
+Analyze the question and generate 2-4 specific sub-questions. For each, assign a source strategy by fit — which surfaces would a capable human researcher actually consult for this sub-question? Combine official and community surfaces when both carry signal (e.g. legal research: official sources for the rules, communities for how they play out in practice).
 
-**Source assignment** — for each sub-question, consider which sources add unique value:
+**Source menu** (cost is not a selection criterion — ScrapeCreators credits are abundant and Perplexity calls cost cents; pick whatever fits):
 
-- **YouTube** (ScrapeCreators primary, free fallback): Would watching someone show, explain, or review this help?
-  Tutorials, reviews, travel vlogs, cooking demos, talks, product walkthroughs, "what is X actually like?"
-  Skip when: the answer is a fact, number, URL, or specification.
-- **Reddit** (ScrapeCreators): Would hearing what real people experienced or recommend help?
-  "Best X for Y", troubleshooting, honest opinions, local knowledge, community recommendations, "has anyone tried X?"
-  Skip when: you need official/authoritative info, or the topic is too niche for active communities.
-- **Short-form video** (ScrapeCreators): Is this about current trends, viral content, or quick visual takes?
-  Trending products, consumer sentiment, cultural moments, "what are people saying about X right now?"
-  Skip when: depth or nuance matters more than recency.
+- **Broad discovery**: WebSearch, `research google` (real Google SERP; `--region` for country-specific topics), `research search` (Perplexity ranking). Different engines surface different results — use a second engine when the first pass looks thin.
+- **Official/primary sources**: WebFetch a known page, `research scrape` when pages are JS-heavy or block fetching, `research map` to find pages on a site, `research docs` for library APIs.
+- **Synthesis and reasoning**: `research ask` / `research reason` (Perplexity). Useful as a supplementary triangulation pass — treat output as tertiary evidence, never as the sole source for a claim.
+- **YouTube**: `youtube search` when watching someone show, explain, or review would help (tutorials, talks, product reviews, "what is X actually like?"); `youtube transcript <url>` when a specific video is already known; `youtube comments <url>` for community corrections under a video you've used as evidence.
+- **Reddit**: `social reddit` when real people's experiences and recommendations matter ("best X for Y", troubleshooting, local knowledge, "has anyone tried X?"). Defaults to all-time search; add `--timeframe` only when recency genuinely matters. Follow up with `social thread <url>` to read a promising thread in full.
+- **Short-form video**: `social shortform` only when trends/viral consumer sentiment is clearly relevant.
 
-Priority: YouTube ≥ WebSearch > Reddit > short-form.
-YouTube uses ScrapeCreators when configured and falls back to free yt-dlp when available; prefer it when video evidence covers the sub-question.
-Use Reddit when community perspective adds value beyond what WebSearch captures.
-Short-form is supplementary — assign only when trends/viral dimension is clearly relevant.
-
-**Mandatory source rules:**
-- At least one subagent must run **WebSearch** (broad discovery, free)
-- Any finding about official features must be **verified against the canonical source**
-- Each subagent must use **2+ independent sources**
-- Trust hierarchy: **primary sources** (official docs, source code, author's post) > **secondary** (well-known blogs, curated lists) > **tertiary** (Perplexity synthesis, random forum posts)
+**Evidence rules** (apply to every subagent):
+- Use 2+ independent sources per sub-question; verify claims about official features, prices, or laws against the canonical source.
+- Trust hierarchy: **primary sources** (official docs, source code, author's post) > **secondary** (well-known blogs, curated lists) > **tertiary** (Perplexity synthesis, random forum posts).
+- Every run includes at least one broad discovery pass so unknown-unknowns can surface.
 
 ## STEP 2: CONSULT PRIOR RESEARCH
 
@@ -170,42 +148,21 @@ Each subagent prompt must include:
 ```
 You are a research subagent investigating: [specific sub-question]
 
-First, read ~/.claude/skills/research/references/cli-reference.md for full CLI details.
+First, read ~/.agents/skills/research/references/cli-reference.md for full CLI details.
 
 TARGET PATH: <absolute path, e.g. /Users/you/Documents/Research/<run-id>/0N-<angle-slug>.md>
 
-SOURCE STRATEGY: [which commands + built-in tools to use for THIS sub-question]
+SOURCE STRATEGY: [which commands + built-in tools fit THIS sub-question, and why]
 
 WRITE PROTOCOL:
-- After research is complete, WRITE your findings to TARGET PATH as a markdown file.
-- File must start with YAML frontmatter (schema in
-  ~/.claude/skills/research/references/persistence-format.md) and be followed by the
-  findings body with inline source citations, verbatim quotes where relevant, and
-  notes on searches that turned up empty.
-- Choose 3-7 specific, free-form tags that reflect the content (prefer specific
-  nouns like "google-pay-iframe" over generic categories like "web").
-- Your RETURN MESSAGE is a short summary only: one-line key finding, the tags you
-  chose, your confidence level, and the source URLs you relied on. Do NOT paste the
-  full findings body into your return — it lives in the file.
-
-RULES:
-- Use at least 2 independent sources
-- Verify claims about official features against canonical sources (WebFetch or research scrape)
-- If a CLI call fails, retry once with --no-cache, then note the failure and continue
-- Note confidence level: verified (checked against primary source), likely (multiple secondary sources agree), unverified (single source)
+- Write your findings to TARGET PATH: YAML frontmatter (schema in
+  ~/.agents/skills/research/references/persistence-format.md) followed by the findings
+  body with inline citations, verbatim quotes where relevant, and 3-7 specific tags.
+- Your RETURN MESSAGE is a short summary only: one-line key finding, tags, confidence
+  level, source URLs. Do NOT paste the full findings body — it lives in the file.
 ```
 
-**Cost escalation ladder** for assigning source strategies:
-
-| Tier | Tools | When to use |
-|------|-------|-------------|
-| FREE | WebSearch, WebFetch, `research docs` | Always start here. Sufficient for well-documented topics. |
-| PAYG/FREE | `youtube search` (ScrapeCreators primary, yt-dlp fallback) | Tutorials, demos, talks, practitioner workflows. Needs SCRAPECREATORS_API_KEY for primary backend or yt-dlp for fallback. |
-| PAYG | `social reddit`, `social shortform` (ScrapeCreators PAYG) | Community opinions, trending content. Needs SCRAPECREATORS_API_KEY. |
-| CHEAP | `research search` ($0.005), `research map` (1 FC credit), `research ask` (~$0.02) | When free sources lack depth or specificity. |
-| MEDIUM | `research reason` (~$0.02), `research scrape` (1 FC credit) | For complex comparisons, when you need the full page content. |
-
-Start subagents at the lowest cost tier that covers their sub-question. Escalate within the subagent only if cheaper sources are insufficient.
+Include relevant prior-research excerpts (from STEP 2) as verified context to extend. Source depth is not rationed — subagents should pull full transcripts, full threads, and scraped pages whenever that evidence fits the sub-question, and stop when the sub-question is answered with cited evidence, not when a budget runs out.
 
 ## STEP 4: SYNTHESIZE
 
@@ -232,7 +189,7 @@ After all subagents return:
 
 ## STEP 5: PERSIST
 
-After synthesis, persist the run to disk. **First run `research config`** — if `persistence` is `false`, skip this step. Read `~/.claude/skills/research/references/persistence-format.md` for full format details.
+After synthesis, persist the run to disk. **First run `research config`** — if `persistence` is `false`, skip this step. Read `~/.agents/skills/research/references/persistence-format.md` for full format details.
 
 The run directory already exists (created in STEP 3) and sub-agents have already written their angle files. Your job here is verification, synthesis, and indexing.
 
@@ -276,13 +233,10 @@ Run `research config` to see resolved configuration (which keys are set, persist
 
 <success_criteria>
 - [ ] Contradictions between sources are flagged, not silently resolved
-- [ ] Findings cite their sources
-- [ ] Official tooling claims are verified against primary sources
-- [ ] Every research run includes at least one WebSearch call (broad discovery)
+- [ ] Findings cite their sources; official claims verified against primary sources
+- [ ] Community surfaces (YouTube, Reddit) consulted wherever practitioner or owner experience adds value, not just web search
 - [ ] Standard/deep runs are persisted as per-run directories under the configured research directory (default: `~/Documents/Research/`) with angle files written by sub-agents, a decision-focused `00-synthesis.md` written by the orchestrator, and INDEX.md updated
 - [ ] Prior research consulted via `research.py prior` (when the configured research directory exists), with an explicit drop/keep/add mapping per sub-question before any subagent spawns
-- [ ] Quick lookups resolve without subagents when answer is clear
-- [ ] Graceful degradation when API keys are missing
-- [ ] YouTube search assigned to subagents where video content adds value
-- [ ] Reddit/shortform assigned to subagents where community/trending content adds value
+- [ ] Quick lookups resolve without subagents when the answer is clear
+- [ ] Provider failures are reported as failures — an errored source is never presented as "no evidence found"
 </success_criteria>

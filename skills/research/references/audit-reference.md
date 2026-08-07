@@ -24,8 +24,8 @@ Reads JSONL logs from `~/.cache/research/logs/` and produces a usage summary. Lo
 
 **Example:**
 ```bash
-uv run ~/.pi/agent/skills/research/scripts/research.py audit --days 30
-uv run ~/.pi/agent/skills/research/scripts/research.py audit --detail
+uv run ~/.agents/skills/research/scripts/research.py audit --days 30
+uv run ~/.agents/skills/research/scripts/research.py audit --detail
 ```
 
 ---
@@ -39,7 +39,8 @@ All CLI commands and Pi `web_search` / `web_fetch` calls are logged to `~/.cache
 | `timestamp` | ISO 8601 UTC |
 | `session_id` | Pi session ID for `web_search` / `web_fetch`; CLI calls use `CLAUDE_SESSION_ID` when present |
 | `type` | `cli` (research.py command) or `builtin` (`web_search` / `web_fetch`) |
-| `tool` | Tool name: `ask`, `search`, `reason`, `docs`, `map`, `scrape`, `youtube`, `web_search`, `web_fetch` |
+| `tool` | Tool name: `ask`, `search`, `google`, `reason`, `docs`, `map`, `scrape`, `youtube`, `reddit`, `thread`, `shortform`, `web_search`, `web_fetch` |
+| `command` | YouTube CLI subcommand: `search`, `transcript`, or `comments` (youtube entries only) |
 | `query` | The query string or URL |
 | `backend` | `perplexity`, `context7`, `firecrawl`, `scrapecreators`, `yt-dlp`, `mixed`, or `builtin` |
 | `model` | Perplexity model name (if applicable) |
@@ -51,7 +52,7 @@ All CLI commands and Pi `web_search` / `web_fetch` calls are logged to `~/.cache
 | `duration_ms` | API call duration in milliseconds |
 | `usage` | Token usage from Perplexity (prompt_tokens, completion_tokens) |
 | `cost_usd` | Estimated cost (0 for free/cached calls) |
-| `credits` | Firecrawl credits consumed, plus approximate non-cached ScrapeCreators endpoint requests for YouTube |
+| `credits` | Provider credits consumed: Firecrawl for `map`/`scrape`, ScrapeCreators for `google`/`youtube`/`reddit`/`thread`/`shortform` (actual `credits_charged` where the API reports it, otherwise 1 per request) |
 
 Logs are retained for 30 days and automatically cleaned up on the first write of each new day.
 

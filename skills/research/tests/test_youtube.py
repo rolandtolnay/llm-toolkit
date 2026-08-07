@@ -56,6 +56,109 @@ def fail_if_called(*args, **kwargs):
     raise AssertionError("unexpected call")
 
 
+def test_transcript_command_returns_full_text(monkeypatch):
+    module = load_youtube_module()
+    no_cache(monkeypatch, module)
+    monkeypatch.setattr(module, "SCRAPECREATORS_API_KEY", "key")
+
+    def fake_get(url, params, headers, timeout):
+        assert module.YOUTUBE_TRANSCRIPT_PATH in url
+        return FakeResponse({"transcript_only_text": "hello   world  transcript"})
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+
+    result = CliRunner().invoke(module.app, ["transcript", "https://www.youtube.com/watch?v=abc12345"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    assert data["success"] is True
+    assert data["transcript"] == "hello world transcript"
+    assert data["video_id"] == "abc12345"
+    assert data["metadata"]["backend"] == "scrapecreators"
+
+
+def test_transcript_command_falls_back_to_free_backend(monkeypatch):
+    module = load_youtube_module()
+    no_cache(monkeypatch, module)
+    monkeypatch.setattr(module, "SCRAPECREATORS_API_KEY", "key")
+
+    def fake_get(url, params, headers, timeout):
+        return FakeResponse({}, status_code=500)
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(module, "_fetch_transcript", lambda vid: ("free transcript text", None))
+
+    result = CliRunner().invoke(module.app, ["transcript", "https://youtu.be/abc12345"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    assert data["success"] is True
+    assert data["transcript"] == "free transcript text"
+    assert data["metadata"]["backend"] == "yt-dlp"
+    assert any("scrapecreators" in w for w in data["metadata"]["warnings"])
+
+
+def test_transcript_command_total_failure_is_error(monkeypatch):
+    module = load_youtube_module()
+    no_cache(monkeypatch, module)
+    monkeypatch.setattr(module, "SCRAPECREATORS_API_KEY", "key")
+
+    def fake_get(url, params, headers, timeout):
+        return FakeResponse({}, status_code=500)
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+    monkeypatch.setattr(module, "_fetch_transcript", lambda vid: (None, "no captions"))
+
+    result = CliRunner().invoke(module.app, ["transcript", "https://youtu.be/abc12345"])
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["success"] is False
+    assert data["error"]["code"] == "TRANSCRIPT_UNAVAILABLE"
+
+
+def test_comments_command_normalizes_and_caps(monkeypatch):
+    module = load_youtube_module()
+    no_cache(monkeypatch, module)
+    monkeypatch.setattr(module, "SCRAPECREATORS_API_KEY", "key")
+
+    def fake_get(url, params, headers, timeout):
+        assert module.YOUTUBE_COMMENTS_PATH in url
+        assert params["order"] == "top"
+        return FakeResponse({
+            "comments": [
+                {
+                    "content": f"comment {i}",
+                    "author": {"name": f"user{i}", "isCreator": i == 0},
+                    "engagement": {"likes": i, "replies": 0},
+                    "publishedTime": "2026-01-01T00:00:00Z",
+                }
+                for i in range(5)
+            ],
+            "continuationToken": "tok",
+        })
+
+    monkeypatch.setattr(module.requests, "get", fake_get)
+
+    result = CliRunner().invoke(
+        module.app, ["comments", "https://www.youtube.com/watch?v=abc12345", "--limit", "2"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    assert len(data["comments"]) == 2
+    assert data["comments"][0]["author"] == "user0"
+    assert data["comments"][0]["is_creator"] is True
+    assert data["metadata"]["continuation_token"] == "tok"
+
+
+def test_comments_command_requires_api_key(monkeypatch):
+    module = load_youtube_module()
+    no_cache(monkeypatch, module)
+    monkeypatch.setattr(module, "SCRAPECREATORS_API_KEY", "")
+
+    result = CliRunner().invoke(module.app, ["comments", "https://www.youtube.com/watch?v=abc12345"])
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["error"]["code"] == "MISSING_API_KEY"
+
+
 def test_scrapecreators_search_normalizes_video_fields(monkeypatch):
     module = load_youtube_module()
     no_cache(monkeypatch, module)

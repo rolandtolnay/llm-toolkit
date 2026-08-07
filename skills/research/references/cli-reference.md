@@ -1,8 +1,8 @@
 # Research CLI Reference
 
-**CLI script:** `~/.claude/skills/research/scripts/research.py`
+**CLI script:** `~/.agents/skills/research/scripts/research.py`
 
-Run with: `uv run ~/.claude/skills/research/scripts/research.py <command> [options]`
+Run with: `uv run ~/.agents/skills/research/scripts/research.py <command> [options]`
 
 All commands output JSON with a consistent envelope: `{ success, command, query, ..., metadata: { backend, cache_hit, ... } }`.
 
@@ -25,7 +25,7 @@ Perplexity sonar-pro. Returns a synthesized answer with inline citations.
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/research.py ask "what is the latest version of React"
+uv run ~/.agents/skills/research/scripts/research.py ask "what is the latest version of React"
 ```
 
 ---
@@ -45,7 +45,27 @@ Perplexity Search API. Returns URLs + titles + snippets. Best for broad discover
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/research.py search "shadcn claude code skill"
+uv run ~/.agents/skills/research/scripts/research.py search "shadcn claude code skill"
+```
+
+---
+
+### `google "<query>"` — Raw Google results (1 SC credit)
+
+ScrapeCreators Google Search. Returns the actual Google SERP — URLs + titles + snippets, no AI synthesis. Use when you want Google's ranking rather than Perplexity's selection, for region-specific results, or to cross-check Perplexity output.
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--region` | none | 2-letter country code (e.g., `US`, `RO`, `UK`) — essential for local/legal topics |
+| `--recency` / `-r` | none | Preset window: `hour`, `day`, `week`, `month`, `year` |
+| `--page` / `-p` | 1 | Result page (1-11) |
+| `--no-cache` | false | Bypass cache |
+
+**Output fields:** `results` (list of `{ url, title, snippet }`), `metadata.credits_charged`, `metadata.credits_remaining`
+
+**Example:**
+```bash
+uv run ~/.agents/skills/research/scripts/research.py google "ANAF microintreprindere impozit 2026" --region RO
 ```
 
 ---
@@ -66,7 +86,7 @@ Perplexity sonar-reasoning-pro. Chain-of-thought reasoning with web search. Use 
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/research.py reason "compare Redis vs DragonflyDB for caching"
+uv run ~/.agents/skills/research/scripts/research.py reason "compare Redis vs DragonflyDB for caching"
 ```
 
 ---
@@ -84,7 +104,7 @@ Context7 API. Version-aware, authoritative documentation. Use for API signatures
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/research.py docs react "useCallback signature"
+uv run ~/.agents/skills/research/scripts/research.py docs react "useCallback signature"
 ```
 
 ---
@@ -103,7 +123,7 @@ Firecrawl map. Discover all pages on a site, optionally filtered by keyword. Use
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/research.py map https://ui.shadcn.com --search "claude"
+uv run ~/.agents/skills/research/scripts/research.py map https://ui.shadcn.com --search "claude"
 ```
 
 ---
@@ -120,7 +140,7 @@ Firecrawl scrape. Extracts page content as clean markdown. Use to verify claims 
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/research.py scrape https://ui.shadcn.com/docs/skills
+uv run ~/.agents/skills/research/scripts/research.py scrape https://ui.shadcn.com/docs/skills
 ```
 
 ---
@@ -139,7 +159,7 @@ File-level token-overlap search across persisted research markdown files in the 
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/research.py prior "tap to pay onboarding friction"
+uv run ~/.agents/skills/research/scripts/research.py prior "tap to pay onboarding friction"
 ```
 
 Output:
@@ -175,9 +195,9 @@ Output:
 
 ## YouTube CLI
 
-**CLI script:** `~/.claude/skills/research/scripts/youtube.py`
+**CLI script:** `~/.agents/skills/research/scripts/youtube.py`
 
-Run with: `uv run ~/.claude/skills/research/scripts/youtube.py <command> [options]`
+Run with: `uv run ~/.agents/skills/research/scripts/youtube.py <command> [options]`
 
 **Prerequisite:** `SCRAPECREATORS_API_KEY` enables the Primary Backend. Install `yt-dlp` (`brew install yt-dlp`) to enable the Free Fallback Backend when the key is missing or ScrapeCreators fails.
 
@@ -211,16 +231,55 @@ Search YouTube via ScrapeCreators when `SCRAPECREATORS_API_KEY` is configured, f
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/youtube.py search "SwiftUI navigation patterns 2026" --question "What navigation patterns are recommended for complex SwiftUI apps?" --max-videos 10 --after this_year
+uv run ~/.agents/skills/research/scripts/youtube.py search "SwiftUI navigation patterns 2026" --question "What navigation patterns are recommended for complex SwiftUI apps?" --max-videos 10 --after this_year
+```
+
+---
+
+### `transcript <url>` — Single-video transcript
+
+Fetch the full transcript for one known video URL (watch, youtu.be, shorts, embed forms all accepted). ScrapeCreators primary, free yt-dlp/youtube-transcript-api fallback. Transcripts cached 30 days — repeat calls on the same URL are free. Use when you already know which video matters (a linked talk, a referenced review) and don't need search.
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--no-cache` | false | Bypass cache |
+
+**Output fields:** `transcript` (full plain text), `video_id`, `word_count`, `metadata` (`backend`, `credits_used`, `warnings`, `cache_hit`)
+
+On total failure returns `success: false` with error code `TRANSCRIPT_UNAVAILABLE` — a failed fetch is never reported as an empty transcript.
+
+**Example:**
+```bash
+uv run ~/.agents/skills/research/scripts/youtube.py transcript "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+```
+
+---
+
+### `comments <url>` — Video comments (ScrapeCreators only, no free fallback)
+
+Fetch comments for one video. Useful for community corrections and counterpoints on a video you've already transcribed (e.g. "this broke after 2 months" under a glowing review).
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--order` | `top` | `top` or `newest` |
+| `--limit` / `-l` | 30 | Max comments to return |
+| `--cursor` | none | Continuation token from a previous call (pagination) |
+| `--no-cache` | false | Bypass cache |
+
+**Output fields:** `comments` (list of `{ author, is_creator, content, likes, reply_count, published }`), `metadata` (`order`, `comments_returned`, `continuation_token`, `credits_used`, `cache_hit`)
+
+**Example:**
+```bash
+uv run ~/.agents/skills/research/scripts/youtube.py comments "https://www.youtube.com/watch?v=abc123" --limit 20
 ```
 
 ---
 
 ## Social CLI
 
-**CLI script:** `~/.claude/skills/research/scripts/social.py`
+**CLI script:** `~/.agents/skills/research/scripts/social.py`
 
-Run with: `uv run ~/.claude/skills/research/scripts/social.py <command> [options]`
+Run with: `uv run ~/.agents/skills/research/scripts/social.py <command> [options]`
 
 **Prerequisite:** `SCRAPECREATORS_API_KEY` must be set in `~/.claude/research/.env` or shell environment.
 
@@ -228,14 +287,19 @@ Run with: `uv run ~/.claude/skills/research/scripts/social.py <command> [options
 
 ### `reddit "<query>"` — Reddit thread search + comments (ScrapeCreators PAYG)
 
-Search Reddit globally or within a subreddit. Returns up to 7 top threads ranked by blended relevance + upvote score, each with up to 10 quality-filtered comments. Optionally condenses findings via `claude -p` when content exceeds 2500 words.
+Search Reddit globally or within a subreddit. Returns top threads ranked by blended relevance + upvote score, each with up to 10 quality-filtered comments. Optionally condenses findings via `claude -p` when content exceeds 2500 words. Searches all of Reddit history by default (`--timeframe all`) — narrow the window only when recency genuinely matters.
 
 When no `--subreddit` is passed, a discovery pass scores which subreddits the global hits cluster into and runs targeted follow-up searches inside the top 3, merging the results before ranking. Costs 1 ScrapeCreators credit per discovered sub (so a typical call uses 4 search credits + 1 per thread enriched with comments).
+
+A provider failure returns `success: false` with error code `PROVIDER_ERROR` — it is never silently reported (or cached) as zero results.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--question` / `-q` | none | Research question — triggers condensing when comment volume is high |
 | `--subreddit` / `-s` | none | Limit search to a specific subreddit (without `r/` prefix). Also disables the discovery pass. |
+| `--timeframe` / `-t` | `all` | Post age window: `all`, `day`, `week`, `month`, `year` |
+| `--sort` | `relevance` | Sort order: `relevance`, `new`, `top`, `comment_count` |
+| `--max-threads` / `-n` | 7 | Max threads to return with comments |
 | `--no-cache` | false | Bypass cache |
 
 **Comment filter:** Comments shorter than 30 characters or matching low-value patterns (`this`, `agreed`, `lol`, `thanks`, etc.) are dropped before the top-10 selection, so returned `comments[]` slots aren't wasted on one-word reactions.
@@ -249,11 +313,33 @@ When no `--subreddit` is passed, a discovery pass scores which subreddits the gl
     - `author`, `score`, `excerpt` (300 chars at word boundary)
     - `top_reply` — highest-scored reply (`{ author, score, excerpt }`) or `null`
 - `condensed` — bulleted findings string (when condensing triggered) or `null`
-- `metadata` — `backend`, `threads_found`, `threads_returned`, `discovered_subreddits` (list of sub names searched in the follow-up pass), `discovery_skipped` (bool — true when `--subreddit` was passed), `condensed` (bool), `cache_hit`
+- `metadata` — `backend`, `timeframe`, `sort`, `threads_found`, `threads_returned`, `discovered_subreddits` (list of sub names searched in the follow-up pass), `discovery_skipped` (bool — true when `--subreddit` was passed), `condensed` (bool), `credits_used`, `warnings` (partial failures, e.g. a discovery sub-search that errored), `cache_hit`
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/social.py reddit "best React navigation library" --question "What do developers recommend?" --subreddit reactjs
+uv run ~/.agents/skills/research/scripts/social.py reddit "best React navigation library" --question "What do developers recommend?" --subreddit reactjs
+```
+
+---
+
+### `thread <url>` — Full Reddit thread (ScrapeCreators PAYG)
+
+Fetch one thread at full fidelity: complete post body plus the nested comment tree with reply structure preserved (`depth` field). Comments keep near-full bodies (capped at 2000 chars each) instead of the search command's 300-char excerpts. Use after `reddit` search surfaces a promising thread, or when the user links a thread directly.
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--max-comments` / `-n` | 50 | Max comments to return (nested replies count toward the cap) |
+| `--cursor` | none | Pagination cursor from a previous `thread` call |
+| `--no-cache` | false | Bypass cache |
+
+**Output fields:**
+- `post` — `title`, `url`, `subreddit`, `date`, `score`, `num_comments`, full `selftext`
+- `comments` — depth-first flattened list, each with `author`, `score`, `depth` (0 = top-level), `date`, `body`
+- `metadata` — `comments_returned`, `has_more`, `next_cursor` (pass back via `--cursor` for more), `credits_used`, `cache_hit`
+
+**Example:**
+```bash
+uv run ~/.agents/skills/research/scripts/social.py thread "https://www.reddit.com/r/fans/comments/abc123/best_quiet_fan/" --max-comments 30
 ```
 
 ---
@@ -271,11 +357,11 @@ Search TikTok and Instagram Reels in parallel, interleave top 3 from each, and f
   - `platform` (`tiktok` | `instagram`), `video_id`, `text` (description), `url`, `author`
   - `views`, `likes`, `duration` (seconds)
   - `caption` — transcript or description, max 500 words
-- `metadata` — `backend`, `tiktok_found`, `instagram_found`, `items_returned`, `captions_fetched`, `cache_hit`
+- `metadata` — `backend`, `tiktok_found`, `instagram_found`, `items_returned`, `captions_fetched`, `credits_used`, `cache_hit`
 
 **Example:**
 ```bash
-uv run ~/.claude/skills/research/scripts/social.py shortform "trending AI tools"
+uv run ~/.agents/skills/research/scripts/social.py shortform "trending AI tools"
 ```
 
 ---
@@ -301,7 +387,9 @@ No flags. Returns resolved API key status, persistence setting, and which env fi
 - `--site`: a real domain name like `stripe.com` or `pay.uk` (NOT topics/phrases). Repeatable.
 - `--recency`: preset window — `hour` | `day` | `week` | `month` | `year`. For custom ranges use `--after`/`--before` with YYYY-MM-DD dates.
 - Also available as built-in tools: **WebSearch** (free, broad) and **WebFetch** (free, page summary).
-- YouTube search uses ScrapeCreators as the Primary Backend when `SCRAPECREATORS_API_KEY` is configured; install `yt-dlp` locally (`brew install yt-dlp`) for the Free Fallback Backend.
+- ScrapeCreators credits are abundant — treat SC-backed commands (`google`, reddit, thread, youtube, shortform) as freely usable when they fit the question. Every SC-backed response reports actual `credits_used`/`credits_charged` in metadata.
+- YouTube search and transcript use ScrapeCreators as the Primary Backend when `SCRAPECREATORS_API_KEY` is configured; install `yt-dlp` locally (`brew install yt-dlp`) for the Free Fallback Backend. `comments` is ScrapeCreators-only.
+- Reddit search defaults to `--timeframe all` (full history); pass a narrower window only when recency matters.
 - YouTube `--after` accepts only `today`, `this_week`, `this_month`, or `this_year`; exact `YYYY-MM-DD` values are rejected.
 - YouTube video selection uses `claude -p` (Opus, Claude subscription). Pass `--no-select` to skip.
 - YouTube transcript pre-processing uses `claude -p --model sonnet` (Claude subscription, no API key). Pass `--no-preprocess` to skip.

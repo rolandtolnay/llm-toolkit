@@ -16,6 +16,8 @@ Long transcripts are pre-processed via `claude -p` for directed extraction.
 
 Usage:
     uv run youtube.py search "<query>" [--question Q] [--max-videos N] [--after this_month] [--no-preprocess] [--no-select]
+    uv run youtube.py transcript <url> [--no-cache]
+    uv run youtube.py comments <url> [--order top|newest] [--limit N] [--cursor C] [--no-cache]
 """
 
 from __future__ import annotations
@@ -51,8 +53,12 @@ LOG_RETENTION_DAYS = 30
 SCRAPECREATORS_BASE_URL = "https://api.scrapecreators.com"
 YOUTUBE_SEARCH_PATH = "/v1/youtube/search"
 YOUTUBE_TRANSCRIPT_PATH = "/v1/youtube/video/transcript"
+YOUTUBE_COMMENTS_PATH = "/v1/youtube/video/comments"
 SC_API_TIMEOUT = 30
 UPLOAD_DATE_FILTERS = {"today", "this_week", "this_month", "this_year"}
+COMMENT_ORDERS = {"top", "newest"}
+CACHE_TTL_YOUTUBE_COMMENTS = 12 * 3600
+DEFAULT_MAX_COMMENTS = 30
 
 WORD_THRESHOLD = 1500  # Transcripts above this get pre-processed
 MAX_PREPROCESS_WORKERS = 3  # Max concurrent claude --bare -p calls
@@ -157,6 +163,7 @@ def _cleanup_old_logs() -> None:
 def _log_call(
     query: str,
     *,
+    command: str = "search",
     success: bool = True,
     duration_ms: int | None = None,
     error: str | None = None,
@@ -179,6 +186,7 @@ def _log_call(
             "session_id": os.environ.get("CLAUDE_SESSION_ID", ""),
             "type": "cli",
             "tool": "youtube",
+            "command": command,
             "query": query,
             "backend": backend,
             "cache_hit": cache_hit,
@@ -440,14 +448,17 @@ def _normalize_sc_transcript(data: Any) -> str | None:
     return text or None
 
 
-def _scrapecreators_fetch_transcript(video_url: str) -> tuple[str | None, bool, int, str | None]:
+def _scrapecreators_fetch_transcript(
+    video_url: str, use_cache: bool = True
+) -> tuple[str | None, bool, int, str | None]:
     """Return (plain_text, cache_hit, credits_used, error_reason)."""
     if not SCRAPECREATORS_API_KEY:
         return None, False, 0, "missing_api_key"
 
-    cached = _cache_get("transcript", video_url, "en")
-    if cached is not None:
-        return cached, True, 0, None
+    if use_cache:
+        cached = _cache_get("transcript", video_url, "en")
+        if cached is not None:
+            return cached, True, 0, None
 
     try:
         resp = requests.get(
@@ -467,6 +478,59 @@ def _scrapecreators_fetch_transcript(video_url: str) -> tuple[str | None, bool, 
 
     _cache_set("transcript", video_url, "en", value=text, ttl=CACHE_TTL_YOUTUBE_TRANSCRIPT)
     return text, False, 1, None
+
+
+def _video_id_from_url(url: str) -> str | None:
+    """Extract the video id from watch/short/embed/youtu.be URL forms."""
+    m = re.search(r"(?:v=|youtu\.be/|shorts/|embed/|live/)([A-Za-z0-9_-]{6,})", url)
+    return m.group(1) if m else None
+
+
+def _scrapecreators_fetch_comments(
+    video_url: str, order: str, cursor: str | None
+) -> tuple[list[dict], str | None, int, str | None]:
+    """Fetch YouTube comments via ScrapeCreators.
+
+    Returns (comments, continuation_token, credits_used, error_reason).
+    """
+    if not SCRAPECREATORS_API_KEY:
+        return [], None, 0, "missing_api_key"
+
+    params: dict[str, Any] = {"url": video_url, "order": order}
+    if cursor:
+        params["continuationToken"] = cursor
+
+    try:
+        resp = requests.get(
+            f"{SCRAPECREATORS_BASE_URL}{YOUTUBE_COMMENTS_PATH}",
+            params=params,
+            headers=_sc_headers(),
+            timeout=SC_API_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        return [], None, 1, f"api_error: {exc}"
+
+    comments = []
+    for item in data.get("comments", []):
+        if not isinstance(item, dict):
+            continue
+        content = (item.get("content") or "").strip()
+        if not content:
+            continue
+        author = item.get("author") or {}
+        engagement = item.get("engagement") or {}
+        comments.append({
+            "author": author.get("name", ""),
+            "is_creator": bool(author.get("isCreator")),
+            "content": content,
+            "likes": engagement.get("likes", 0) or 0,
+            "reply_count": engagement.get("replies", 0) or 0,
+            "published": item.get("publishedTime") or item.get("publishedTimeText"),
+        })
+
+    return comments, data.get("continuationToken"), 1, None
 
 
 # ---------------------------------------------------------------------------
@@ -1360,6 +1424,167 @@ def search(
     )
     if error_msg:
         _log_stderr(f"⚠ {error_msg}")
+
+
+@app.command()
+def transcript(
+    url: str = typer.Argument(..., help="YouTube video URL"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Bypass cache"),
+) -> None:
+    """Fetch the full transcript for a single video URL."""
+    t0 = time.monotonic()
+    warnings: list[str] = []
+
+    text, cache_hit, credits_used, sc_error = _scrapecreators_fetch_transcript(
+        url, use_cache=not no_cache
+    )
+    backend = "scrapecreators"
+
+    if text is None:
+        if sc_error and sc_error != "missing_api_key":
+            warnings.append(f"scrapecreators: {sc_error}")
+        video_id = _video_id_from_url(url)
+        if video_id:
+            text, free_error = _fetch_transcript(video_id)
+            backend = "yt-dlp"
+            if text is None and free_error:
+                warnings.append(f"free_fallback: {free_error}")
+        elif sc_error == "missing_api_key":
+            warnings.append("missing_api_key and could not parse video id for free fallback")
+
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    success = text is not None
+    word_count = len(text.split()) if text else 0
+
+    _log_call(
+        url,
+        command="transcript",
+        success=success,
+        error="; ".join(warnings) if not success else None,
+        duration_ms=duration_ms,
+        backend=backend,
+        cache_hit=cache_hit,
+        credits=credits_used,
+        transcripts_fetched=1 if success else 0,
+    )
+
+    if not success:
+        _emit(
+            {
+                "success": False,
+                "command": "transcript",
+                "url": url,
+                "error": {
+                    "code": "TRANSCRIPT_UNAVAILABLE",
+                    "message": "; ".join(warnings) or "transcript fetch failed",
+                    "suggestions": [
+                        "Verify the URL points to a video with captions",
+                        "Retry with --no-cache",
+                    ],
+                },
+                "metadata": {"backend": backend, "credits_used": credits_used, "cache_hit": cache_hit},
+            }
+        )
+        raise typer.Exit(code=1)
+
+    _emit(
+        {
+            "success": True,
+            "command": "transcript",
+            "url": url,
+            "video_id": _video_id_from_url(url),
+            "transcript": text,
+            "word_count": word_count,
+            "metadata": {
+                "backend": backend,
+                "credits_used": credits_used,
+                "warnings": warnings,
+                "cache_hit": cache_hit,
+            },
+        }
+    )
+
+
+@app.command()
+def comments(
+    url: str = typer.Argument(..., help="YouTube video URL"),
+    order: str = typer.Option("top", "--order", help="Comment order: top, newest"),
+    limit: int = typer.Option(DEFAULT_MAX_COMMENTS, "--limit", "-l", help="Max comments to return"),
+    cursor: Optional[str] = typer.Option(
+        None, "--cursor", help="Continuation token from a previous comments call"
+    ),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Bypass cache"),
+) -> None:
+    """Fetch comments for a single video URL (ScrapeCreators only)."""
+    if order not in COMMENT_ORDERS:
+        raise typer.BadParameter(f"--order must be one of: {', '.join(sorted(COMMENT_ORDERS))}")
+    if not SCRAPECREATORS_API_KEY:
+        _emit(
+            {
+                "success": False,
+                "command": "comments",
+                "url": url,
+                "error": {
+                    "code": "MISSING_API_KEY",
+                    "message": "SCRAPECREATORS_API_KEY not set — comments has no free fallback",
+                    "suggestions": ["Add SCRAPECREATORS_API_KEY=... to ~/.claude/research/.env"],
+                },
+            }
+        )
+        raise typer.Exit(code=1)
+
+    t0 = time.monotonic()
+    cache_parts = ("comments", url, order, cursor, limit)
+
+    if not no_cache:
+        cached = _cache_get(*cache_parts)
+        if cached is not None:
+            duration_ms = int((time.monotonic() - t0) * 1000)
+            _log_call(url, command="comments", duration_ms=duration_ms, backend="scrapecreators", cache_hit=True)
+            cached["metadata"]["cache_hit"] = True
+            _emit(cached)
+            return
+
+    raw_comments, continuation, credits_used, error = _scrapecreators_fetch_comments(url, order, cursor)
+    duration_ms = int((time.monotonic() - t0) * 1000)
+
+    if error:
+        _log_call(
+            url, command="comments", success=False, error=error,
+            duration_ms=duration_ms, backend="scrapecreators", credits=credits_used,
+        )
+        _emit(
+            {
+                "success": False,
+                "command": "comments",
+                "url": url,
+                "error": {"code": "PROVIDER_ERROR", "message": error},
+                "metadata": {"backend": "scrapecreators", "credits_used": credits_used},
+            }
+        )
+        raise typer.Exit(code=1)
+
+    result = {
+        "success": True,
+        "command": "comments",
+        "url": url,
+        "comments": raw_comments[:limit],
+        "metadata": {
+            "backend": "scrapecreators",
+            "order": order,
+            "comments_returned": min(len(raw_comments), limit),
+            "continuation_token": continuation,
+            "credits_used": credits_used,
+            "cache_hit": False,
+        },
+    }
+
+    _cache_set(*cache_parts, value=result, ttl=CACHE_TTL_YOUTUBE_COMMENTS)
+    _log_call(
+        url, command="comments", duration_ms=duration_ms,
+        backend="scrapecreators", credits=credits_used,
+    )
+    _emit(result)
 
 
 if __name__ == "__main__":

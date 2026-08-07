@@ -14,7 +14,8 @@ and optionally condensed via `claude -p`. Short-form results are interleaved
 TikTok + Instagram with transcript/caption extraction.
 
 Usage:
-    uv run social.py reddit "<query>" [--question Q] [--subreddit S] [--no-cache]
+    uv run social.py reddit "<query>" [--question Q] [--subreddit S] [--timeframe T] [--sort S] [--max-threads N] [--no-cache]
+    uv run social.py thread <url> [--max-comments N] [--cursor C] [--no-cache]
     uv run social.py shortform "<query>" [--no-cache]
 """
 
@@ -50,6 +51,14 @@ REDDIT_CONDENSE_THRESHOLD = 2500  # words
 REDDIT_DISCOVERY_SUBS = 3  # subs to drill into after global search
 REDDIT_MIN_COMMENT_LEN = 30  # filter out one-liners ("this", "agreed", etc.)
 
+REDDIT_TIMEFRAMES = frozenset({"all", "day", "week", "month", "year"})
+REDDIT_SORTS = frozenset({"relevance", "new", "top", "comment_count"})
+REDDIT_DEFAULT_TIMEFRAME = "all"
+REDDIT_DEFAULT_SORT = "relevance"
+
+THREAD_MAX_COMMENTS = 50
+THREAD_COMMENT_MAX_CHARS = 2000  # per-comment body cap in `thread` (word boundary)
+
 # Subs that match keywords but aren't discussion communities.
 _UTILITY_SUBS = frozenset({
     'namethatsong', 'findthatsong', 'tipofmytongue', 'whatisthissong',
@@ -71,6 +80,7 @@ RELEVANCE_THRESHOLD = 0.25  # Minimum relevance score to keep a result
 
 CACHE_DIR = Path.home() / ".cache" / "research"
 CACHE_TTL_REDDIT = 2 * 3600  # 2h
+CACHE_TTL_THREAD = 2 * 3600  # 2h
 CACHE_TTL_SHORTFORM = 4 * 3600  # 4h
 
 LOG_DIR = Path.home() / ".cache" / "research" / "logs"
@@ -390,43 +400,63 @@ def _parse_date(created_utc: Any) -> str | None:
         return None
 
 
-def _reddit_global_search(query: str) -> list[dict]:
-    """Search Reddit globally via ScrapeCreators."""
+def _credits_charged(data: Any) -> int:
+    """Read credits_charged from a ScrapeCreators response, defaulting to 1."""
+    if isinstance(data, dict):
+        charged = data.get("credits_charged")
+        if isinstance(charged, (int, float)):
+            return int(charged)
+    return 1
+
+
+def _reddit_global_search(
+    query: str, sort: str, timeframe: str
+) -> tuple[list[dict], int, str | None]:
+    """Search Reddit globally via ScrapeCreators.
+
+    Returns (posts, credits_used, error). error is None on success so callers
+    can distinguish a provider failure from a genuinely empty result set.
+    """
     try:
         resp = requests.get(
             f"{REDDIT_API_BASE}/search",
-            params={"query": query, "sort": "relevance", "timeframe": "month"},
+            params={"query": query, "sort": sort, "timeframe": timeframe},
             headers=_sc_headers(),
             timeout=API_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
-        return data.get("posts", data.get("data", []))
+        return data.get("posts", data.get("data", [])), _credits_charged(data), None
     except Exception as e:
         _log_stderr(f"Reddit global search failed: {e}")
-        return []
+        return [], 1, str(e)
 
 
-def _reddit_subreddit_search(subreddit: str, query: str) -> list[dict]:
-    """Search within a specific subreddit via ScrapeCreators."""
+def _reddit_subreddit_search(
+    subreddit: str, query: str, sort: str, timeframe: str
+) -> tuple[list[dict], int, str | None]:
+    """Search within a specific subreddit via ScrapeCreators.
+
+    Returns (posts, credits_used, error) like _reddit_global_search.
+    """
     try:
         resp = requests.get(
             f"{REDDIT_API_BASE}/subreddit/search",
             params={
                 "subreddit": subreddit,
                 "query": query,
-                "sort": "relevance",
-                "timeframe": "month",
+                "sort": sort,
+                "timeframe": timeframe,
             },
             headers=_sc_headers(),
             timeout=API_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
-        return data.get("posts", data.get("data", []))
+        return data.get("posts", data.get("data", [])), _credits_charged(data), None
     except Exception as e:
         _log_stderr(f"Subreddit search failed for r/{subreddit}: {e}")
-        return []
+        return [], 1, str(e)
 
 
 def _reddit_normalize_post(post: dict) -> dict:
@@ -507,8 +537,12 @@ def _truncate_at_word(text: str, max_chars: int) -> str:
     return truncated + "..."
 
 
-def _reddit_fetch_comments(post_url: str) -> list[dict]:
-    """Fetch and normalize top comments for a Reddit post."""
+def _reddit_fetch_comments(post_url: str) -> tuple[list[dict], int]:
+    """Fetch and normalize top comments for a Reddit post.
+
+    Returns (comments, credits_used). Comment failures are partial — logged
+    to stderr but not fatal to the surrounding search.
+    """
     try:
         resp = requests.get(
             f"{REDDIT_API_BASE}/post/comments",
@@ -519,9 +553,10 @@ def _reddit_fetch_comments(post_url: str) -> list[dict]:
         resp.raise_for_status()
         data = resp.json()
         raw_comments = data.get("comments", data.get("data", []))
+        credits = _credits_charged(data)
     except Exception as e:
         _log_stderr(f"Comment fetch failed for {post_url}: {e}")
-        return []
+        return [], 1
 
     # Filter out deleted/removed/AutoModerator
     filtered = []
@@ -581,7 +616,77 @@ def _reddit_fetch_comments(post_url: str) -> list[dict]:
             "top_reply": top_reply,
         })
 
-    return results
+    return results, credits
+
+
+def _reddit_fetch_thread(post_url: str, cursor: str | None) -> tuple[dict | None, int, str | None]:
+    """Fetch a full Reddit thread (post + nested comments) via ScrapeCreators.
+
+    Returns (raw_response, credits_used, error).
+    """
+    params: dict[str, Any] = {"url": post_url}
+    if cursor:
+        params["cursor"] = cursor
+    try:
+        resp = requests.get(
+            f"{REDDIT_API_BASE}/post/comments",
+            params=params,
+            headers=_sc_headers(),
+            timeout=API_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data, _credits_charged(data), None
+    except Exception as e:
+        _log_stderr(f"Thread fetch failed for {post_url}: {e}")
+        return None, 1, str(e)
+
+
+def _is_junk_comment(author: str, body: str) -> bool:
+    """True for deleted/removed/bot comments not worth returning."""
+    if author.lower() in ("[deleted]", "[removed]", "automoderator"):
+        return True
+    stripped = body.strip()
+    return not stripped or stripped.lower() in ("[deleted]", "[removed]")
+
+
+def _flatten_thread_comments(raw_comments: list, max_comments: int) -> list[dict]:
+    """Flatten nested thread comments depth-first, preserving reply structure.
+
+    Each entry carries `depth` so the conversation tree stays reconstructable.
+    Bodies are kept near-full (capped at THREAD_COMMENT_MAX_CHARS).
+    """
+    out: list[dict] = []
+
+    def walk(items: list, depth: int) -> None:
+        for c in items:
+            if len(out) >= max_comments:
+                return
+            if not isinstance(c, dict):
+                continue
+            author = c.get("author", "") or ""
+            body = c.get("body", "") or ""
+            if _is_junk_comment(author, body):
+                continue
+            out.append({
+                "author": author,
+                "score": c.get("score", 0) or 0,
+                "depth": c.get("depth", depth) or depth,
+                "date": _parse_date(c.get("created_utc", c.get("created"))),
+                "body": _truncate_at_word(body.strip(), THREAD_COMMENT_MAX_CHARS),
+            })
+            replies = c.get("replies")
+            if isinstance(replies, dict):
+                children = replies.get("items", [])
+            elif isinstance(replies, list):
+                children = replies
+            else:
+                children = []
+            if children:
+                walk(children, depth + 1)
+
+    walk(raw_comments, 0)
+    return out
 
 
 def _reddit_condense(threads: list[dict], question: str) -> str | None:
@@ -873,16 +978,36 @@ def reddit(
     subreddit: Optional[str] = typer.Option(
         None, "--subreddit", "-s", help="Limit search to specific subreddit"
     ),
+    timeframe: str = typer.Option(
+        REDDIT_DEFAULT_TIMEFRAME, "--timeframe", "-t",
+        help="Post age window: all, day, week, month, year",
+    ),
+    sort: str = typer.Option(
+        REDDIT_DEFAULT_SORT, "--sort",
+        help="Sort order: relevance, new, top, comment_count",
+    ),
+    max_threads: int = typer.Option(
+        REDDIT_MAX_THREADS, "--max-threads", "-n",
+        help="Max threads to return with comments",
+    ),
     no_cache: bool = typer.Option(
         False, "--no-cache", help="Bypass cache"
     ),
 ) -> None:
     """Search Reddit threads and fetch top comments."""
     _check_api_key("reddit")
+    if timeframe not in REDDIT_TIMEFRAMES:
+        _emit_error("reddit", "INVALID_ARGUMENT",
+                    f"--timeframe must be one of: {', '.join(sorted(REDDIT_TIMEFRAMES))}")
+    if sort not in REDDIT_SORTS:
+        _emit_error("reddit", "INVALID_ARGUMENT",
+                    f"--sort must be one of: {', '.join(sorted(REDDIT_SORTS))}")
     t0 = time.monotonic()
+    credits_used = 0
+    warnings: list[str] = []
 
     # Check cache
-    cache_parts = ("reddit", query, subreddit or "")
+    cache_parts = ("reddit", query, subreddit or "", timeframe, sort, str(max_threads), question or "")
     if not no_cache:
         cached = _cache_get(*cache_parts)
         if cached is not None:
@@ -894,9 +1019,20 @@ def reddit(
 
     # Search
     if subreddit:
-        raw_posts = _reddit_subreddit_search(subreddit, query)
+        raw_posts, credits, search_error = _reddit_subreddit_search(subreddit, query, sort, timeframe)
     else:
-        raw_posts = _reddit_global_search(query)
+        raw_posts, credits, search_error = _reddit_global_search(query, sort, timeframe)
+    credits_used += credits
+
+    # Provider failure with nothing to show is an error, not an empty result.
+    if search_error and not raw_posts:
+        _log_call("reddit", query, success=False, error=search_error, credits=credits_used)
+        _emit_error(
+            "reddit",
+            "PROVIDER_ERROR",
+            f"Reddit search failed: {search_error}",
+            ["Retry; if it persists, check SCRAPECREATORS_API_KEY and network access"],
+        )
 
     # Subreddit discovery + targeted follow-up (skipped on explicit --subreddit)
     discovered_subs: list[str] = []
@@ -910,11 +1046,15 @@ def reddit(
         if discovered_subs:
             with ThreadPoolExecutor(max_workers=len(discovered_subs)) as executor:
                 futures = {
-                    executor.submit(_reddit_subreddit_search, sub, query): sub
+                    executor.submit(_reddit_subreddit_search, sub, query, sort, timeframe): sub
                     for sub in discovered_subs
                 }
                 for future in as_completed(futures):
-                    raw_posts.extend(future.result())
+                    sub_posts, credits, sub_error = future.result()
+                    credits_used += credits
+                    raw_posts.extend(sub_posts)
+                    if sub_error:
+                        warnings.append(f"subreddit_search_failed: r/{futures[future]}: {sub_error}")
 
     # Normalize, deduplicate, score relevance, filter, rank
     seen_ids: set[str] = set()
@@ -945,11 +1085,12 @@ def reddit(
         key=lambda p: p["_relevance"] * 0.5 + (p["score"] / max_score) * 0.5,
         reverse=True,
     )
-    posts = posts[:REDDIT_MAX_THREADS]
+    posts = posts[:max_threads]
 
     # Fetch comments for each thread
     for post in posts:
-        post["comments"] = _reddit_fetch_comments(post["url"])
+        post["comments"], credits = _reddit_fetch_comments(post["url"])
+        credits_used += credits
         # Remove internal fields
         post.pop("id", None)
         post.pop("_relevance", None)
@@ -973,11 +1114,15 @@ def reddit(
         "condensed": condensed,
         "metadata": {
             "backend": "scrapecreators",
+            "timeframe": timeframe,
+            "sort": sort,
             "threads_found": threads_found,
             "threads_returned": len(posts),
             "discovered_subreddits": discovered_subs,
             "discovery_skipped": bool(subreddit),
             "condensed": did_condense,
+            "credits_used": credits_used,
+            "warnings": warnings,
             "cache_hit": False,
         },
     }
@@ -988,10 +1133,92 @@ def reddit(
         "reddit",
         query,
         duration_ms=duration_ms,
+        credits=credits_used,
         threads_found=threads_found,
         threads_returned=len(posts),
         discovered_subs=discovered_subs,
         condensed=did_condense,
+    )
+
+    _emit(result)
+
+
+@app.command()
+def thread(
+    url: str = typer.Argument(..., help="Full Reddit post URL"),
+    max_comments: int = typer.Option(
+        THREAD_MAX_COMMENTS, "--max-comments", "-n", help="Max comments to return (nested replies count)"
+    ),
+    cursor: Optional[str] = typer.Option(
+        None, "--cursor", help="Pagination cursor from a previous thread call"
+    ),
+    no_cache: bool = typer.Option(
+        False, "--no-cache", help="Bypass cache"
+    ),
+) -> None:
+    """Fetch a full Reddit thread: post body + nested comment tree."""
+    _check_api_key("thread")
+    t0 = time.monotonic()
+
+    cache_parts = ("thread", url, cursor or "", str(max_comments))
+    if not no_cache:
+        cached = _cache_get(*cache_parts)
+        if cached is not None:
+            duration_ms = int((time.monotonic() - t0) * 1000)
+            _log_call("thread", url, duration_ms=duration_ms, cache_hit=True)
+            cached["metadata"]["cache_hit"] = True
+            _emit(cached)
+            return
+
+    data, credits_used, error = _reddit_fetch_thread(url, cursor)
+    if error or data is None:
+        _log_call("thread", url, success=False, error=error, credits=credits_used)
+        _emit_error(
+            "thread",
+            "PROVIDER_ERROR",
+            f"Thread fetch failed: {error}",
+            ["Check the post URL is a full Reddit permalink", "Retry once; then fall back to `reddit` search"],
+        )
+
+    raw_post = data.get("post") or {}
+    post = _reddit_normalize_post(raw_post) if raw_post else {}
+    # The thread command is the full-fidelity surface: keep the whole post body.
+    if raw_post.get("selftext"):
+        post["selftext"] = raw_post["selftext"]
+    post.pop("id", None)
+
+    raw_comments = data.get("comments", data.get("data", []))
+    comments = _flatten_thread_comments(raw_comments, max_comments)
+
+    more = data.get("more") or {}
+    has_more = bool(more.get("has_more")) or bool(data.get("cursor"))
+    next_cursor = more.get("cursor") or data.get("cursor")
+
+    duration_ms = int((time.monotonic() - t0) * 1000)
+
+    result = {
+        "success": True,
+        "command": "thread",
+        "url": url,
+        "post": post,
+        "comments": comments,
+        "metadata": {
+            "backend": "scrapecreators",
+            "comments_returned": len(comments),
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+            "credits_used": credits_used,
+            "cache_hit": False,
+        },
+    }
+
+    _cache_set(*cache_parts, value=result, ttl=CACHE_TTL_THREAD)
+    _log_call(
+        "thread",
+        url,
+        duration_ms=duration_ms,
+        credits=credits_used,
+        comments_returned=len(comments),
     )
 
     _emit(result)
@@ -1064,7 +1291,9 @@ def shortform(
 
     # Fetch transcripts/captions sequentially
     captions_fetched = 0
+    credits_used = 2  # one search per platform
     for item in items:
+        credits_used += 1
         if item["platform"] == "tiktok":
             caption = _tiktok_fetch_transcript(item["url"])
         else:
@@ -1100,6 +1329,7 @@ def shortform(
             "instagram_found": instagram_found,
             "items_returned": len(items),
             "captions_fetched": captions_fetched,
+            "credits_used": credits_used,
             "cache_hit": False,
         },
     }
@@ -1110,6 +1340,7 @@ def shortform(
         "shortform",
         query,
         duration_ms=duration_ms,
+        credits=credits_used,
         tiktok_found=tiktok_found,
         instagram_found=instagram_found,
         items_returned=len(items),

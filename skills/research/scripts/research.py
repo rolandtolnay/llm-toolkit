@@ -93,6 +93,7 @@ CACHE_DIR = Path.home() / ".cache" / "research"
 CACHE_TTL = {
     "ask": 6 * 3600,       # 6h
     "search": 2 * 3600,    # 2h
+    "google": 2 * 3600,    # 2h
     "reason": 6 * 3600,    # 6h
     "docs": 24 * 3600,     # 24h
     "map": 24 * 3600,      # 24h
@@ -103,6 +104,7 @@ CACHE_TTL = {
 TIMEOUTS = {
     "ask": 60.0,
     "search": 30.0,
+    "google": 30.0,
     "reason": 90.0,
     "docs": 60.0,
     "map": 30.0,
@@ -142,16 +144,18 @@ MAX_PRIOR_SOURCES = 5
 COST_USD = {
     "ask": 0.02,
     "search": 0.005,
+    "google": 0.0,
     "reason": 0.02,
     "docs": 0.0,
     "map": 0.0,
     "scrape": 0.0,
 }
 
-# Firecrawl credits consumed per call
+# Provider credits consumed per call (Firecrawl for map/scrape, ScrapeCreators for google)
 CREDIT_COST = {
     "map": 1,
     "scrape": 1,
+    "google": 1,
 }
 
 
@@ -1119,6 +1123,87 @@ def firecrawl_credits() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# ScrapeCreators backend (Google SERP)
+# ---------------------------------------------------------------------------
+
+SCRAPECREATORS_BASE_URL = "https://api.scrapecreators.com"
+
+GOOGLE_RECENCY_MAP = {
+    "hour": "last-hour",
+    "day": "last-day",
+    "week": "last-week",
+    "month": "last-month",
+    "year": "last-year",
+}
+
+
+def _check_scrapecreators_key() -> None:
+    if not SCRAPECREATORS_API_KEY:
+        raise ResearchError(
+            ErrorCode.MISSING_API_KEY,
+            "SCRAPECREATORS_API_KEY not set",
+            suggestions=[
+                "Add SCRAPECREATORS_API_KEY=... to ~/.claude/research/.env",
+                "Get a key at https://scrapecreators.com",
+            ],
+        )
+
+
+def scrapecreators_google(
+    query: str,
+    *,
+    region: str | None = None,
+    recency: str | None = None,
+    page: int = 1,
+) -> dict:
+    """Raw Google search results via ScrapeCreators."""
+    _check_scrapecreators_key()
+    if recency is not None and recency not in GOOGLE_RECENCY_MAP:
+        raise ResearchError(
+            ErrorCode.API_ERROR,
+            f"Invalid --recency value: '{recency}'. Expected one of: {', '.join(GOOGLE_RECENCY_MAP)}",
+        )
+
+    params: dict[str, Any] = {"query": query}
+    if region:
+        params["region"] = region
+    if recency:
+        params["date_posted"] = GOOGLE_RECENCY_MAP[recency]
+    if page != 1:
+        params["page"] = page
+
+    try:
+        with httpx.Client(timeout=TIMEOUTS["google"]) as client:
+            resp = client.get(
+                f"{SCRAPECREATORS_BASE_URL}/v1/google/search",
+                headers={"x-api-key": SCRAPECREATORS_API_KEY, "Accept": "application/json"},
+                params=params,
+            )
+            resp.raise_for_status()
+            data = _safe_json(resp, "ScrapeCreators")
+    except httpx.HTTPStatusError as e:
+        raise _handle_http_error(e, "ScrapeCreators")
+    except httpx.RequestError as e:
+        raise ResearchError(ErrorCode.NETWORK_ERROR, f"Network error connecting to ScrapeCreators: {e}")
+
+    results = []
+    for item in data.get("results", []):
+        if not isinstance(item, dict):
+            continue
+        results.append({
+            "url": item.get("url", ""),
+            "title": item.get("title", ""),
+            "snippet": item.get("description", item.get("snippet", "")),
+        })
+
+    return {
+        "results": results,
+        "credits_charged": data.get("credits_charged"),
+        "credits_remaining": data.get("credits_remaining"),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Typer CLI
 # ---------------------------------------------------------------------------
 
@@ -1222,6 +1307,53 @@ def search(
         emit(response)
     except ResearchError as e:
         _log_call(cmd, query, backend="perplexity", success=False, error=str(e))
+        emit(output_error(cmd, e))
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def google(
+    query: str = typer.Argument(..., help="Google search query"),
+    region: Optional[str] = typer.Option(None, "--region", help="2-letter country code (e.g., US, RO, UK)"),
+    recency: Optional[str] = typer.Option(None, "--recency", "-r", help="Preset window: hour, day, week, month, year"),
+    page: int = typer.Option(1, "--page", "-p", help="Result page (1-11)"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Bypass cache"),
+) -> None:
+    """Raw Google search results via ScrapeCreators (1 SC credit/query)."""
+    cmd = "google"
+    cache_parts = [query, str(region), str(recency), str(page)]
+
+    if not no_cache:
+        cached = cache_get(cmd, *cache_parts)
+        if cached is not None:
+            cached["metadata"]["cache_hit"] = True
+            _log_call(cmd, query, backend="scrapecreators", cache_hit=True)
+            emit(cached)
+            return
+
+    try:
+        t0 = time.monotonic()
+        result = scrapecreators_google(query, region=region, recency=recency, page=page)
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        response = output_success(
+            cmd,
+            query,
+            metadata={
+                "backend": "scrapecreators",
+                "region": region,
+                "page": page,
+                "credits_charged": result.get("credits_charged"),
+                "credits_remaining": result.get("credits_remaining"),
+                "cache_hit": False,
+            },
+            results=result["results"],
+        )
+        if not no_cache:
+            cache_set(cmd, *cache_parts, value=response)
+        _log_call(cmd, query, backend="scrapecreators", duration_ms=duration_ms)
+        emit(response)
+    except ResearchError as e:
+        _log_call(cmd, query, backend="scrapecreators", success=False, error=str(e))
         emit(output_error(cmd, e))
         raise typer.Exit(code=1)
 
@@ -1470,7 +1602,7 @@ def audit(
 ) -> None:
     """Analyze research API usage and costs from logs.
 
-    Full reference: ~/.claude/skills/research/references/audit-reference.md
+    Full reference: ~/.agents/skills/research/references/audit-reference.md
     """
     entries = _load_log_entries(days)
     if session:
