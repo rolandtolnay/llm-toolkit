@@ -14,7 +14,7 @@ Resolve the findings source. Default: the open PR for the current branch — rea
 
 Gather the context the judgments depend on: the PR body, linked tickets when referenced (fetch via the linear skill, including parent epic and blockers), and the project's domain docs (`CONTEXT.md`, `docs/adr/`) when present.
 
-Present a numbered inventory — number, source, `file:line`, one-line summary — and keep those numbers stable for the rest of the triage. Merge duplicates: one decision per issue.
+Begin each numbered finding's analysis section with its source, exact `file:line`, and the original review comment quoted verbatim; keep those numbers stable for the rest of the triage. Merge duplicates: one decision per issue.
 
 ## Analyze each finding
 
