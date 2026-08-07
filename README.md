@@ -4,7 +4,7 @@
 
 `llm-toolkit` is my working collection of resources for coding agents. Some are small, like a command for explaining a difficult change. Others run full research, naming, buying, review, or project-memory workflows. I keep them together because they solve jobs I run into repeatedly, and because their dependencies and awkward edges are worth documenting.
 
-The source format is Claude Code. The install prompt below can adapt selected resources to Pi or another agent with comparable skills, prompts, hooks, and subagents. That adaptation is a port, and some Claude-specific paths or tools will need translation.
+The source format is Claude Code. The install prompt below adapts selected resources to whatever the user runs — Claude Code, Pi, Codex, another agent with comparable skills, prompts, hooks, and subagents, or several of these side by side. That adaptation is a port, and some Claude-specific paths or tools will need translation.
 
 ## Quickstart
 
@@ -15,49 +15,40 @@ The source format is Claude Code. The install prompt below can adapt selected re
 <summary><strong>Install prompt: click to expand</strong></summary>
 
 ```text
-Install selected resources from the llm-toolkit repository into this coding agent.
+Install selected resources from the llm-toolkit repository into the coding agent setup I name.
 
 Repository: https://github.com/rolandtolnay/llm-toolkit.git
 
-# Goal
+# Intent
 
-Give me a working, selective installation that follows THIS agent's discovery conventions and THIS operating system. Preserve each installed resource's behavior while adapting Claude-specific paths, tool names, hooks, prompts, and subagent references where this agent has an equivalent.
+This repository is a personal toolkit of skills, commands, subagents, and references, authored in Claude Code format. I may be installing into Claude Code, Pi, Codex, another agent, or several of these on one machine. The goal is equivalent behavior in every harness I name — understand each selected resource and adapt it to its target, rather than copying files literally.
 
 # Success criteria
 
-- I choose the scope (project or user), resources, and install mode (copy or symlink) before files are installed.
-- Every installed skill, command/prompt, agent, script, hook, and local reference resolves from its final location.
-- Cross-resource dependencies are installed with the selected resource or reported as unmet.
-- No installed file points at a temporary checkout or an unavailable agent tool.
+- I confirm the target harness(es), scope (project or user), resources, and install mode (copy or symlink) before files are written.
+- Each installed resource is discoverable through its harness's own conventions and preserves the behavior documented in this repository.
+- Every reference inside an installed resource resolves from its final location. Source files address their own scripts and reference files through `~/.agents/skills/<skill>/...` as a harness-neutral stand-in; Claude-specific paths, tool names, hook syntax, and subagent references appear throughout. Adapt all of these to what each target harness actually supports, choosing the mechanism that fits this system — a shared resolvable location, symlinks, or rewrites in installed copies — without modifying a shared source checkout.
+- When several harnesses share one machine, they share one stable source rather than drifting per-harness copies, wherever the chosen mode allows.
+- Cross-resource dependencies are installed with the selected resource or reported as unmet. Notable couplings: the research skill, its CLI scripts, and the `research-subagent`; the `bootstrap-goal-project` companions; GitHub/Linear dependencies in delivery workflows; the `humanizer` dependency of `create-pr`; `publish-research` needs its bundled assets and config example, and example domains or deployment targets are never copied into a live config.
 - Existing unmanaged files and local modifications are preserved unless I approve a specific overwrite or removal.
-- A local manifest records the source URL and revision, stable checkout path when applicable, selected resources, source and destination paths, install mode, rewrites, and checksums where practical.
-- The final report names installed resources, destinations, invocation names, rewrites, runtime dependencies, API keys and expected config paths, validation performed, and remaining limitations. Never print secret values.
+- A local manifest records the source revision, selected resources, destinations per harness, install mode, and rewrites, so a later run can update or uninstall cleanly.
+- The final report leads with what now works where: resources and invocation names per harness, rewrites made, runtime dependencies and expected key locations, validation performed, and anything left unmet. Never print secret values.
 
-# Installation decisions
+# Decisions
 
-Inspect the repository and this agent's local documentation or conventions first. Then ask one compact round of questions for any decision not already known:
+Inspect the repository and each target harness's conventions first, then ask one compact round of questions covering only what is still unknown: harness(es), scope, resources, mode. Present the repository by use case (research and buying decisions; autonomous project foundations; engineering quality and delivery; integrations; creative workflows; commands and decision frameworks; optional bundles) and recommend a small starting set for my intent rather than installing everything by default.
 
-- project scope or user/global scope
-- the resources or groups I want
-- copy or symlink mode
+Use a stable checkout for symlinks, never a temporary clone. Prefer copy mode for project/team installs, resources that need path rewrites, and environments where symlinks are impractical. Install whole skill directories so bundled references, scripts, assets, and agent metadata stay together.
 
-Present the repository by use case: research and buying decisions; autonomous project foundations; engineering quality and delivery; integrations; creative workflows; commands and decision frameworks; the optional hobby and business bundles. Recommend a small starting set based on my intended use rather than installing everything by default.
+# Approval boundaries
 
-Use a stable checkout for symlinks, never a temporary clone. Prefer copy mode for project/team installs, resources that need path rewrites, and Windows environments where symlinks are unavailable or impractical. Install whole skill directories so bundled references, scripts, assets, and agent metadata stay together.
+A request to install authorizes cloning to a stable location, writing the selected resource files into the agreed destinations, and non-destructive validation. Show the action and get confirmation before overwriting or deleting existing files, installing system packages, writing secrets, or wiring hooks that mutate anything beyond the install itself. If a resource cannot be faithfully adapted to a harness, leave it uninstalled there and name the missing capability.
 
-# Constraints and approval boundaries
+# Validation and stopping
 
-Adapt to this agent instead of assuming `~/.claude`, `.claude/`, Claude slash commands, `AskUserQuestion`, `Task`, or Claude hook syntax. Keep relative references intact when possible. Rewrite hardcoded paths only in installed copies; do not modify a shared source checkout to make a symlink work. If faithful adaptation is impossible, leave that resource uninstalled and explain the missing host capability.
+Use the minimum checks that prove the installation works: resolve final paths, search installed files for stale checkout or wrong-harness references, verify discovery names in each harness, and run one safe `--help` or `config` command for script-backed resources when the runtime is available. Do not make paid API calls or send external messages as a test.
 
-Inspect selected resources for hardcoded paths and dependencies before installing. In particular, account for the shared research infrastructure, the `research-subagent`, `bootstrap-goal-project` companions, GitHub/Linear dependencies in delivery workflows, and the `humanizer` dependency used by `create-pr`. For `publish-research`, install its bundled assets and config example, then report the site profile values that still need customization. Do not copy example domains, audience names, or deployment targets into a live config.
-
-Do not install system packages, create provider accounts, write secrets, overwrite conflicts, delete prior installs, or wire externally mutating hooks without showing the action and getting confirmation. A request to install authorizes the selected local resource files and non-destructive validation; it does not authorize unrelated configuration changes.
-
-# Validation and stop rules
-
-Use the minimum checks that prove the selected installation works: inspect final paths, search for stale checkout and host-specific references, verify discovery names, and run one safe `--help`, `config`, or dry-run command for script-backed resources when its runtime is available. Do not make paid API calls or send external messages as a test.
-
-When enough information is available, perform the installation rather than continuing to survey options. Stop when the selected resources are installed and verified, or when a missing host capability, dependency, credential, or user decision blocks safe progress.
+When enough is known, install rather than continuing to survey options. Stop when the selected resources are installed and verified in every target harness, or when a missing capability, dependency, credential, or user decision blocks safe progress.
 ```
 
 </details>
@@ -724,7 +715,7 @@ Additional official references, Pi notes, prompt snapshots, browser recording no
 
 - Claude Code is the source format. Many skills refer to `~/.claude`, `.claude/settings.local.json`, Claude hooks, slash commands, `Task`, or `AskUserQuestion`. The install prompt asks the target agent to translate them, but some hosts will not have an equivalent.
 - Pi support is not fully validated. [`docs/pi/`](docs/pi/) contains migration notes, and `package.json` contains Pi package metadata, but the declared root `prompts/` directory does not exist yet. Treat Pi installation as a guided port, not a verified package install.
-- `install.js` remains for existing Claude Code setups. It needs Node 16.7 or newer and supports project or global scope, copy or symlink mode, conflict tracking, a manifest, and uninstall. It handles top-level agents, commands, skills, and a root `references/` directory when present. It does not install bundles, guides, or the site. This README uses the adaptive prompt instead.
+- Installation is prompt-driven; there is no installer script. Source files reference their own scripts through the harness-neutral `~/.agents/skills/<skill>/...` convention, and the installing agent decides per system how to satisfy it — a resolvable shared location, symlinks, or rewritten paths in installed copies.
 - Confirmation rules vary by resource. Slack sends and schedules, PR-comment triage, and `publish-research` deployment confirm before writing. Slack edit, delete, react, and status commands run immediately, as do some Linear mutations and Firebase deployment instructions.
 - Research, image generation, Gmail, Linear, Slack, and EXA rely on credentials or external services. If an optional provider is missing, the skill should report reduced coverage instead of filling the gap with invented results.
 - Most Python CLIs use `uv`. Some research paths also use `yt-dlp` or `claude -p`. App Icon Studio needs Node 18 or newer and uses macOS utilities for presentation. Browser QA needs `agent-browser` and suitable project fixtures.
