@@ -1,7 +1,6 @@
 ---
 name: create-pr
 description: Open a pull request whose description explains why the change exists, then hand back a reusable summary for Slack or release notes. Use when changes are ready to ship.
-disable-model-invocation: true
 argument-hint: "[commit instructions or additional context]"
 ---
 
