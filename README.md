@@ -66,6 +66,7 @@ The prompt is intentional. Claude Code, Pi, and other agents put skills, prompts
 | Generate and judge app icon candidates | [`app-icon-studio`](#app-icon-workflows) |
 | Prepare a repository for independent agent runs | [`new-project` → `bootstrap-goal-project` → `write-loop`](#goal-driven-projects) |
 | Turn a vague request into a bounded task | [`scope`](#engineering-quality-and-delivery) |
+| Get a dense answer restated in plain language | [`plain`](#complete-skill-index) |
 | Verify finished code or triage review feedback | [`/verify`](#engineering-quality-and-delivery) or [`triage-pr-comments`](#engineering-quality-and-delivery) |
 | Work from a Linear ticket | [`/work-ticket`](#commands) |
 | Search Gmail or Slack from an agent | [`gmail`](#gmail), [`slack`](#slack), or [`linear`](#linear) |
@@ -496,10 +497,10 @@ The CLI can also read supported agent `env.json` locations or process environmen
 
 ## Complete skill index
 
-The repository currently has 21 top-level skills. Use this collapsed list when you know the name and want the source file.
+The repository currently has 22 top-level skills. Use this collapsed list when you know the name and want the source file.
 
 <details>
-<summary><strong>Show all 21 skills</strong></summary>
+<summary><strong>Show all 22 skills</strong></summary>
 
 ### Create and maintain agent resources
 
@@ -515,6 +516,7 @@ The repository currently has 21 top-level skills. Use this collapsed list when y
 - [`brand-naming`](skills/brand-naming/SKILL.md): Produces screened brand-name finalists through research and isolated generation.
 - [`searchexa`](skills/searchexa/SKILL.md): Returns semantic search results with inline page text through EXA.
 - [`gmail`](skills/gmail/SKILL.md): Retrieves narrow, read-only Gmail evidence.
+- [`plain`](skills/plain/SKILL.md): Rephrases a dense explanation in plain language while preserving every decision-relevant fact. Explicit-only.
 
 ### Project memory and delivery
 
