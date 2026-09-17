@@ -57,7 +57,7 @@ write_fallback: false
 
 # <Descriptive heading>
 
-<Findings written by the sub-agent, with inline source citations, verbatim quotes where relevant, and methodological notes (what was searched and found empty). Length is not bounded — angle files are the evidence layer.>
+<Findings written by the sub-agent, with inline source citations, verbatim quotes where relevant, and methodological notes (what was searched and found empty; candidates surfaced but not evaluated, and why). Length is not bounded — angle files are the evidence layer.>
 ```
 
 **Frontmatter field rules:**

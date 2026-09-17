@@ -104,7 +104,7 @@ Analyze the question and generate 2-4 specific sub-questions. For each, assign a
 **Evidence rules** (apply to every subagent):
 - Use 2+ independent sources per sub-question; verify claims about official features, prices, or laws against the canonical source.
 - Trust hierarchy: **primary sources** (official docs, source code, author's post) > **secondary** (well-known blogs, curated lists) > **tertiary** (Perplexity synthesis, random forum posts).
-- Every run includes at least one broad discovery pass so unknown-unknowns can surface.
+- Every run includes at least one broad discovery pass so unknown-unknowns can surface, and what it surfaces is accounted for: in a comparison or recommendation, a candidate the pass turned up but didn't evaluate is named with the reason it was set aside. A cap on candidates bounds how many are evaluated in depth, not which ones may be considered.
 
 ## STEP 2: CONSULT PRIOR RESEARCH
 
@@ -135,7 +135,7 @@ Without the explicit mapping, this step degenerates into a glance.
 
 ## STEP 3: SPAWN SUBAGENTS
 
-One **research-subagent** per sub-question, launched in **parallel** (use `subagent_type: "research-subagent"`). This agent type has PostToolUse hooks that log WebSearch/WebFetch calls for audit.
+One **research-subagent** per retained sub-question, launched in parallel with the harness's delegation tools and its locally configured agent definition.
 
 Sub-agents write their findings directly to files you assign. Do path coordination BEFORE spawning:
 
@@ -154,6 +154,9 @@ TARGET PATH: <absolute path, e.g. /Users/you/Documents/Research/<run-id>/0N-<ang
 
 SOURCE STRATEGY: [which commands + built-in tools fit THIS sub-question, and why]
 
+DONE WHEN: [the concrete comparison or decision this evidence must support]
+BOUNDS: [scope and exclusions the user actually stated; what uncertainty to report rather than chase]
+
 WRITE PROTOCOL:
 - Write your findings to TARGET PATH: YAML frontmatter (schema in
   ~/.agents/skills/research/references/persistence-format.md) followed by the findings
@@ -164,9 +167,13 @@ WRITE PROTOCOL:
 
 Include relevant prior-research excerpts (from STEP 2) as verified context to extend. Source depth is not rationed — subagents should pull full transcripts, full threads, and scraped pages whenever that evidence fits the sub-question, and stop when the sub-question is answered with cited evidence, not when a budget runs out.
 
+The parent owns local baseline/history and synthesis, not a duplicate discovery pass over delegated angles. Fetch shared live data once and pass it to the children.
+
 ## STEP 4: SYNTHESIZE
 
-After all subagents return:
+After all subagents return, read the final angle files before drafting synthesis; synthesize only from files whose writers have finished.
+
+Then:
 
 1. **Cross-reference findings:**
    - When sources conflict, primary sources override secondary/tertiary
@@ -234,6 +241,7 @@ Run `research config` to see resolved configuration (which keys are set, persist
 <success_criteria>
 - [ ] Contradictions between sources are flagged, not silently resolved
 - [ ] Findings cite their sources; official claims verified against primary sources
+- [ ] A recommendation names the candidates it considered; a candidate surfaced but not evaluated has a stated reason
 - [ ] Community surfaces (YouTube, Reddit) consulted wherever practitioner or owner experience adds value, not just web search
 - [ ] Standard/deep runs are persisted as per-run directories under the configured research directory (default: `~/Documents/Research/`) with angle files written by sub-agents, a decision-focused `00-synthesis.md` written by the orchestrator, and INDEX.md updated
 - [ ] Prior research consulted via `research.py prior` (when the configured research directory exists), with an explicit drop/keep/add mapping per sub-question before any subagent spawns

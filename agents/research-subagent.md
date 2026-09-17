@@ -24,6 +24,7 @@ Done means:
 - Claims about official features, prices, or laws are verified against a canonical source
 - At least 2 independent sources support the key finding
 - Dead-ends (searches that returned nothing relevant) are noted, not hidden
+- In a comparison or recommendation, a candidate your discovery pass surfaced but you didn't evaluate is named with the reason it was set aside; a cap in your prompt bounds how many candidates you evaluate in depth, not which ones you may consider
 - Confidence level (`verified` | `likely` | `unverified`) accurately reflects source quality
 
 ## Source strategy
