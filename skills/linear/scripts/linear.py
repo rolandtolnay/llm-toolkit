@@ -22,6 +22,7 @@ Commands:
     break           Break down an issue into sub-issues
     relate          Create a relation between issues
     comment         Post a comment on an issue
+    update-comment  Replace an existing comment's body in place
     attach          Attach a file to an issue
     document        Create a document linked to an issue
     attach-commit   Attach the latest git commit to an issue
@@ -922,6 +923,23 @@ mutation DocumentCreate($input: DocumentCreateInput!) {
 MUTATION_CREATE_COMMENT = """
 mutation CommentCreate($input: CommentCreateInput!) {
   commentCreate(input: $input) {
+    success
+    comment {
+      id
+      body
+      url
+      issue {
+        identifier
+        title
+      }
+    }
+  }
+}
+"""
+
+MUTATION_UPDATE_COMMENT = """
+mutation CommentUpdate($id: String!, $input: CommentUpdateInput!) {
+  commentUpdate(id: $id, input: $input) {
     success
     comment {
       id
@@ -2773,6 +2791,21 @@ class LinearClient:
             raise LinearError(
                 code=ErrorCode.API_ERROR,
                 message="Failed to create comment",
+            )
+
+        return result.get("comment", {})
+
+    def update_comment(self, comment_id: str, body: str) -> dict[str, Any]:
+        """Replace a comment's Markdown body in place, addressed by its UUID."""
+        data = self._request(
+            MUTATION_UPDATE_COMMENT, {"id": comment_id, "input": {"body": body}}
+        )
+        result = data.get("commentUpdate", {})
+
+        if not result.get("success"):
+            raise LinearError(
+                code=ErrorCode.API_ERROR,
+                message="Failed to update comment",
             )
 
         return result.get("comment", {})
@@ -5483,6 +5516,41 @@ def comment(
             command=command,
             result={
                 "identifier": result.get("issue", {}).get("identifier", issue_id),
+                "title": result.get("issue", {}).get("title"),
+                "commentId": result.get("id"),
+                "url": result.get("url"),
+            },
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command("update-comment")
+def update_comment_cmd(
+    comment_id: str = typer.Argument(..., help="Comment UUID to update"),
+    body: str = typer.Argument(..., help="Full replacement body (markdown supported)"),
+) -> None:
+    """Replace a comment's body in place, preserving its UUID.
+
+    The comment UUID can be found in the output of `get --comments`.
+
+    Examples:
+        linear.py update-comment "a1b2c3d4-e5f6-7890-abcd-ef1234567890" "Updated resolution"
+    """
+    command = "update-comment"
+
+    try:
+        client = LinearClient()
+        result = client.update_comment(comment_id, body)
+
+        response = format_success(
+            command=command,
+            result={
+                "identifier": result.get("issue", {}).get("identifier"),
                 "title": result.get("issue", {}).get("title"),
                 "commentId": result.get("id"),
                 "url": result.get("url"),

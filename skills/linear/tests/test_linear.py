@@ -422,3 +422,85 @@ def test_break_derives_team_from_parent_without_config(monkeypatch):
     create_calls = [v for q, v in calls if "issueCreate" in q]
     assert len(create_calls) == 2
     assert all(v["input"]["teamId"] == "team-eng-uuid" for v in create_calls)
+
+
+# ---------------------------------------------------------------------------
+# CLI: update-comment edits in place and surfaces API failures
+# ---------------------------------------------------------------------------
+
+
+def test_update_comment_replaces_body_in_place(monkeypatch):
+    module = load_linear_module()
+    monkeypatch.setenv("LINEAR_API_KEY", "test")
+    comment_id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    body = '## Revised decision\n\nKeep **café** and "quoted text".\n'
+    calls = []
+
+    def fake_post(self, url, *, headers, json):
+        calls.append(json)
+        assert url == module.LINEAR_API_URL
+        assert headers["Authorization"] == "test"
+        assert "commentUpdate(id: $id, input: $input)" in json["query"]
+        assert "commentCreate" not in json["query"]
+        assert "commentDelete" not in json["query"]
+        assert json["variables"] == {"id": comment_id, "input": {"body": body}}
+        return module.httpx.Response(200, json={
+            "data": {"commentUpdate": {
+                "success": True,
+                "comment": {
+                    "id": comment_id,
+                    "body": body,
+                    "url": "https://linear.app/x/issue/ABC-123#comment",
+                    "issue": {"identifier": "ABC-123", "title": "Parent title"},
+                },
+            }},
+        })
+
+    monkeypatch.setattr(module.httpx.Client, "post", fake_post)
+
+    result = CliRunner().invoke(module.app, ["update-comment", comment_id, body])
+
+    assert result.exit_code == 0, result.stdout
+    data = json.loads(result.stdout)
+    assert data["success"] is True
+    assert data["command"] == "update-comment"
+    assert data["result"]["commentId"] == comment_id
+    assert data["result"]["identifier"] == "ABC-123"
+    assert data["result"]["url"] == "https://linear.app/x/issue/ABC-123#comment"
+    assert len(calls) == 1  # No lookup, deletion, or replacement comment creation.
+
+
+@pytest.mark.parametrize("response", [
+    {"data": {"commentUpdate": {"success": False}}},
+    {"errors": [{"message": "You do not have permission to edit this comment"}]},
+])
+def test_update_comment_api_failure_returns_json_and_nonzero_exit(monkeypatch, response):
+    module = load_linear_module()
+    monkeypatch.setenv("LINEAR_API_KEY", "test")
+    monkeypatch.setattr(
+        module.httpx.Client, "post",
+        lambda *args, **kwargs: module.httpx.Response(200, json=response),
+    )
+
+    result = CliRunner().invoke(module.app, ["update-comment", "comment-uuid", "New body"])
+
+    assert result.exit_code == 1, result.stdout
+    data = json.loads(result.stdout)
+    assert data["success"] is False
+    assert data["command"] == "update-comment"
+    assert data["error"]["code"] == "API_ERROR"
+    assert "result" not in data
+
+
+def test_update_comment_requires_body_without_making_request(monkeypatch):
+    module = load_linear_module()
+
+    def unexpected_post(*args, **kwargs):
+        pytest.fail("Missing body must not trigger an API request")
+
+    monkeypatch.setenv("LINEAR_API_KEY", "test")
+    monkeypatch.setattr(module.httpx.Client, "post", unexpected_post)
+
+    result = CliRunner().invoke(module.app, ["update-comment", "comment-uuid"])
+
+    assert result.exit_code == 2

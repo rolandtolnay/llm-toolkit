@@ -2,7 +2,7 @@
 name: linear
 description: >
   Create, update, and comment on Linear tickets. Use when creating issues,
-  adding comments, changing status, assigning work, or referencing issue IDs
+  adding or editing comments, changing status, assigning work, or referencing issue IDs
   like ABC-123. Examples: "create a ticket", "add a comment", "mark done",
   "my issues".
 ---
@@ -42,6 +42,7 @@ Use `-V` only when the user:
 | `relate` | `relate <ID> <type> <target>` | Create relation (blocks, blocked-by, relates-to, duplicates) |
 | `unrelate` | `unrelate <ID> <target>` | Remove relation between two issues |
 | `comment` | `comment <ID> "<body>"` | Post a comment on an issue |
+| `update-comment` | `update-comment <comment-uuid> "<body>"` | Replace the full Markdown body in place, preserving the comment UUID (from `get --comments`) |
 | `delete-comment` | `delete-comment <comment-uuid>` | Delete a comment by UUID (from `get --comments`) |
 | `attach` | `attach <ID> <file_path> [-t title] [-s subtitle]` | Upload binary file (image, PDF) as download link |
 | `attach-commit` | `attach-commit <ID> [commit-sha]` | Link git commit to issue (defaults to HEAD) |
@@ -185,6 +186,7 @@ When `.linear.json` is present but the team is overridden to a *different* team 
 | `relate <ID> blocks/blocked-by/relates-to/duplicates <ID>` | Create relation | Execute `relate` directly |
 | `<ID> blocks/depends on <ID>`, `link <ID> to <ID>` | Create relation | Parse relation type and execute `relate` |
 | `comment on <ID>`, `leave a comment on <ID>`, `add a note to <ID>`, `post comment` | Post comment | Execute `comment` with body text |
+| `"edit comment"`, `"update comment"` + comment UUID | Edit comment in place | Execute `update-comment` with UUID and full replacement body; use `get <ID> --comments` to find the UUID if needed |
 | `"delete comment"`, `"remove comment"` + comment UUID | Delete comment | Execute `delete-comment` with UUID |
 | `attach <ID> <file_path>` | Attach file | Execute `attach` directly |
 | `attach-commit <ID> [sha]`, "add commit reference to <ID>", "link commit to <ID>" | Link git commit | Execute `attach-commit` directly (pass SHA for non-HEAD commits) |
@@ -240,7 +242,7 @@ The CLI's `--assignee` accepts only an exact email or the `@me` sentinel. Fuzzy 
 </step>
 
 <step name="direct_commands">
-**For direct commands (done, state, get, states, projects, create-project, delete-project, update-project, milestones, create-milestone, delete-milestone, cycles, cycle, create-cycle, update-cycle, labels, create-label, delete-label, update-label, views, create-view, delete-view, update, comment, delete-comment, attach-commit, members):**
+**For direct commands (done, state, get, states, projects, create-project, delete-project, update-project, milestones, create-milestone, delete-milestone, cycles, cycle, create-cycle, update-cycle, labels, create-label, delete-label, update-label, views, create-view, delete-view, update, comment, update-comment, delete-comment, attach-commit, members):**
 
 Execute CLI and format output.
 
