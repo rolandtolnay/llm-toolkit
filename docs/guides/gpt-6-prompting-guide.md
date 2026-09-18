@@ -36,7 +36,7 @@ GPT-6 Astra is more intelligent and capable than prior models like GPT-5.6 Sol, 
 ### GPT-6 Astra behavior
 
 - [Initiative and follow-through](#initiative-and-follow-through) – The model is designed to be a more effective collaborator and is thus more likely to ask the user a question when additional input could materially change the result. This can cause it to stop when the user may expect it to make reasonable assumptions and persist.
-- [Instruction following](#instruction-following) – GPT-6 Astra is stronger at general instruction following than our previous models, giving you greater control over its behavior. It can be more sensitive to instructions contained in skills and other files, such as `AGENTS.md`. We **strongly recommend** auditing skills and other files accessible to your model for instructions that could influence its behavior.
+- [Instruction following](#instruction-following) – GPT-6 Astra is stronger at general instruction following than our previous models, giving you greater control over its behavior. It can be more sensitive to instructions contained in skills and other files, such as `AGENTS.md`. We **strongly recommend** auditing skills and other files accessible to your model for instructions that could influence its behavior. See [Rethinking skills and prompts](#rethinking-skills-and-prompts-for-gpt-6-astra) for what to look for.
 - [Personality and writing style](#personality-and-writing-style) – The model tends toward detailed, formatted responses and may use recurring phrases across sessions. Specify the writing style and structure your application needs.
 - [Subagent delegation](#subagent-delegation) – The model may delegate less often than desired for your workflow. Specify when and how much it should use subagents for parallel work.
 - [Testing and verification](#testing-and-verification) – For coding tasks, the model tends to be thorough in testing before considering a task complete. For smaller tasks, this can result in broader tests than the task requires.
@@ -158,3 +158,65 @@ Set `model` to `gpt-6-astra`, then check the following:
 - **Changing reasoning effort:** If your application changes effort between responses, use `configuration_update` items in standard, single-agent requests. Keep request-level `reasoning.effort` unchanged to preserve the prompt prefix for caching. Check the [compatibility limits](https://developers.openai.com/api/docs/guides/reasoning#change-reasoning-mid-conversation) before adopting this feature.
 - **Prompt caching:** When migrating from GPT-5.5 or earlier, replace `prompt_cache_retention` with `prompt_cache_options.ttl` set to `"30m"`. Review the [prompt caching changes](https://developers.openai.com/api/docs/guides/prompt-caching#summary-of-model-differences), including cache boundaries and cache-write billing.
 - **Unnecessary approval pauses:** If you run into issues where the model keeps asking for approval before proceeding, use the [initiative and follow-through guidance](#initiative-and-follow-through) to prompt for more autonomous execution. See the rest of [Prompting best practices](#prompting-best-practices) for guidance on instruction following, writing style, subagent delegation, and testing.
+
+## Rethinking skills and prompts for GPT-6 Astra
+
+Coding agents have come a long way, and best practices are changing fast. With more capable models, what used to require a lot of handholding and scaffolding no longer does.
+
+If you've been using agents like Codex for your projects over the last year, you've likely accumulated a lot of instructions as you worked to steer the models toward good outcomes. With each release, it's been worth revisiting those assumptions, but with GPT-6 Astra, it's more important than ever.
+
+These instructions can take many forms: skills, `AGENTS.md`, and your task prompts are all shaping how the model gets work done.
+
+### Better skills
+
+Skills are essentially prompts stored as Markdown files that can also be packaged with resources and bundled scripts. Generally, they are most useful for guidance around a specific workflow, or when using certain apps.
+
+People now default to packaging a lot of skills into their projects, and each skill comes with a name and description that are loaded into the model's context so it knows when to use them. But many descriptions are far too long, and when you add too many skills, Codex starts shortening their descriptions to fit. The model ends up seeing less of each description, making it harder to know which skill to pick.
+
+What's worse is that descriptions can often contradict each other or over-emphasize when skills should be used, leading the model to load instructions that don't actually help the task.
+
+A common workflow to create skills is to use the `$skill-creator` skill. We recently updated its guidance to help mitigate many of the failure modes we've seen in practice.
+
+First, skill descriptions should be as short as possible while making it clear when the model should use them:
+
+> Illustration: Skill descriptions. Bad: Create and validate Postgres schema migrations. Use when working with databases, queries, models, or persistence. Good: Create and validate Postgres schema migrations. Use when adding or changing a migration, or reviewing its rollout.
+
+_Here, the bad skill description can push the model to use it anytime it touches anything related to a database, rather than only when it has to handle a migration._
+
+Second, one of the key markers of a useful skill is progressive disclosure. Reading a skill takes up context, bringing you closer to compaction and introducing guidance that may not apply to the task. For skills with multiple workflows, make the root document a minimal router that points to supporting docs and scripts. Give the model enough guidance to know where to look without forcing it to read things that don't matter in the moment.
+
+Third, many skills were written as elaborate itineraries or recipes. Models have gotten much better at understanding nuance and ambiguity, so overly specific guidance can now hinder results where it previously helped.
+
+Repository skills also guide other contributors' agents, which may use different models. Guidance that helps Sol or Luna may overconstrain GPT-6 Astra, so consider which models will use the instructions you leave behind.
+
+### Up-to-date AGENTS.md
+
+Because [`AGENTS.md`](https://agents.md) applies whenever the model works in your repository, you should frequently revisit each instruction and ask yourself whether it's still needed.
+
+Requiring a stack of docs or a full repo map before every edit is excessive for a typo fix. GPT-6 Astra can work out what it needs to read without being pushed to review the whole project before every change.
+
+> Illustration: AGENTS.md context. Bad: Before every edit, read architecture.md, database.md, and deployment.md. Good: Use architecture.md for service boundaries, database.md for schema changes, and deployment.md when preparing a deployment.
+
+_Prompting the model to read files before every edit is a great way to burn context and slow work down. Pointing to some docs can still be helpful, however, so long as it is contextual. Be sure to keep your docs updated too!_
+
+Previous models needed encouragement to run tests and check their work. GPT-6 Astra does that on its own, so the same instructions can lead to unnecessary testing.
+
+You can use `AGENTS.md` to give it permission for a specific workflow you know is safe, such as a local test suite:
+
+> The local tests use disposable fixtures and have no production access. Run them, fix failures caused by the requested change, and rerun affected tests without asking for approval at each step.
+
+### Decision boundaries
+
+Pay careful attention to how you describe boundaries. If a previous model did things on your behalf without permission, you may have added strong language to make it ask first. That can be useful, but GPT-6 Astra has much better judgment and will not perform tasks unless it knows it is safe – so you should treat it as such.
+
+Consider updating that language: Astra could take it too seriously and may stop work where you'd actually be happy for it to continue.
+
+### Persistence
+
+GPT-6 Astra may reach a first implementation and come back for your review while there's still work to do.
+
+This is where it helps to define completion before starting. If the task includes getting the implementation running, inspecting the result, and fixing what fails, make that part of the request. A requirement to stop for review after the first implementation will pull the model toward an earlier stopping point, so check whether that's a decision you actually need to make.
+
+If you want it to keep exploring beyond a first pass, say what you want explored and where it should stop. The prompts in [Initiative and follow-through](#initiative-and-follow-through) encourage this more autonomous behavior.
+
+A new model is a good opportunity to clean your house, but you don't need to review everything manually: ask GPT-6 Astra to do an audit based on what was discussed in this section, then go build something you wouldn't have attempted before!
