@@ -46,6 +46,8 @@ Commands:
     delete-label    Delete a label by name
     views           List custom views
     create-view     Create a custom view
+    update-view     Update a custom view in place
+    view-issues     Preview one page of a saved view's matching issues
     delete-view     Delete a custom view
 """
 
@@ -60,6 +62,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
+from uuid import UUID
 
 import httpx
 import typer
@@ -186,6 +189,59 @@ def graphql_error_suggestions(errors: list[dict[str, Any]]) -> list[str]:
         validation_details(extensions.get("validationErrors") or [])
         validation_details((extensions.get("exception") or {}).get("validationErrors") or [])
     return list(dict.fromkeys(suggestions))
+
+
+def parse_view_filter(value: str | None) -> dict[str, Any] | None:
+    """Accept an IssueFilter object; let GraphQL validate its field semantics."""
+    if value is None:
+        return None
+    try:
+        result = json.loads(value)
+    except json.JSONDecodeError as e:
+        raise LinearError(code=ErrorCode.INVALID_INPUT, message=f"Invalid filter JSON: {e}")
+    if not isinstance(result, dict):
+        raise LinearError(code=ErrorCode.INVALID_INPUT, message="--filter-json must be a JSON object")
+    return result
+
+
+def validate_view_text(name: str | None, description: str | None) -> None:
+    if name is not None and not name.strip():
+        raise LinearError(code=ErrorCode.INVALID_INPUT, message="View name must not be empty")
+    if description is not None and len(description) > 255:
+        raise LinearError(code=ErrorCode.INVALID_INPUT, message="View description must be at most 255 characters")
+
+
+def format_issue_page(connection: dict[str, Any]) -> dict[str, Any]:
+    """Keep list and saved-view output identical, including completeness evidence."""
+    page_info = connection.get("pageInfo", {})
+    if not isinstance(page_info.get("hasNextPage"), bool) or (
+        page_info["hasNextPage"] and not page_info.get("endCursor")
+    ):
+        raise LinearError(code=ErrorCode.INVALID_RESPONSE, message="Missing issue pagination information")
+    priority_labels = {0: "None", 1: "Urgent", 2: "High", 3: "Normal", 4: "Low"}
+    formatted_issues = []
+    for issue in connection.get("nodes", []):
+        formatted = {
+            "identifier": issue.get("identifier"),
+            "title": issue.get("title"),
+            "state": issue.get("state", {}).get("name"),
+            "priority": priority_labels.get(issue.get("priority", 0), "Unknown"),
+            "estimate": issue.get("estimate"),
+        }
+        assignee_data = issue.get("assignee")
+        if assignee_data:
+            formatted["assignee"] = assignee_data.get("name")
+        label_nodes = issue.get("labels", {}).get("nodes", [])
+        if label_nodes:
+            formatted["labels"] = [l["name"] for l in label_nodes]
+        cycle_data = issue.get("cycle")
+        if cycle_data:
+            formatted["cycle"] = f"#{cycle_data.get('number')} {cycle_data.get('name', '')}".strip()
+        formatted_issues.append(formatted)
+    return {
+        "issues": formatted_issues,
+        "pageInfo": {"hasNextPage": page_info["hasNextPage"], "endCursor": page_info.get("endCursor")},
+    }
 
 
 def has_next_page(connection: dict[str, Any]) -> bool:
@@ -784,23 +840,42 @@ query {
 }
 """
 
-QUERY_ISSUES = """
-query Issues($filter: IssueFilter, $first: Int) {
-  issues(filter: $filter, first: $first) {
-    nodes {
-      id
-      identifier
-      title
-      priority
-      estimate
-      state { id name type }
-      assignee { id name email }
-      creator { id name email }
-      project { id name }
-      projectMilestone { id name }
-      cycle { id number name }
-      labels { nodes { id name } }
-      team { id key name }
+ISSUE_LIST_FIELDS = """
+fragment IssueListFields on Issue {
+  id
+  identifier
+  title
+  priority
+  estimate
+  state { id name type }
+  assignee { id name email }
+  creator { id name email }
+  project { id name }
+  projectMilestone { id name }
+  cycle { id number name }
+  labels { nodes { id name } }
+  team { id key name }
+}
+"""
+
+QUERY_ISSUES = ISSUE_LIST_FIELDS + """
+query Issues($filter: IssueFilter, $first: Int, $after: String) {
+  issues(filter: $filter, first: $first, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    nodes { ...IssueListFields }
+  }
+}
+"""
+
+QUERY_CUSTOM_VIEW_ISSUES = ISSUE_LIST_FIELDS + """
+query CustomViewIssues($id: String!, $first: Int, $after: String) {
+  customView(id: $id) {
+    id
+    name
+    modelName
+    issues(first: $first, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes { ...IssueListFields }
     }
   }
 }
@@ -1331,6 +1406,39 @@ query {
 }
 """
 
+QUERY_CUSTOM_VIEW = """
+query CustomView($id: String!) {
+  customView(id: $id) { id name modelName }
+}
+"""
+
+QUERY_CUSTOM_VIEWS_BY_NAME = """
+query CustomViewsByName($name: String!) {
+  customViews(first: 2, filter: {name: {eqIgnoreCase: $name}}) {
+    pageInfo { hasNextPage }
+    nodes { id name modelName }
+  }
+}
+"""
+
+MUTATION_UPDATE_CUSTOM_VIEW = """
+mutation CustomViewUpdate($id: String!, $input: CustomViewUpdateInput!) {
+  customViewUpdate(id: $id, input: $input) {
+    success
+    customView {
+      id
+      name
+      description
+      shared
+      filterData
+      color
+      icon
+      team { id key name }
+    }
+  }
+}
+"""
+
 MUTATION_CREATE_CUSTOM_VIEW = """
 mutation CustomViewCreate($input: CustomViewCreateInput!) {
   customViewCreate(input: $input) {
@@ -1835,6 +1943,50 @@ class LinearClient:
             suggestions=[f"Available views: {available}"] if available else ["No custom views exist yet"],
         )
 
+    def resolve_custom_view(self, name_or_id: str) -> dict[str, Any]:
+        """Resolve a UUID or unique exact name, without first-page fuzzy matching."""
+        try:
+            view_id = str(UUID(name_or_id))
+        except ValueError:
+            data = self._request(QUERY_CUSTOM_VIEWS_BY_NAME, {"name": name_or_id})
+            connection = data.get("customViews", {})
+            matches = connection.get("nodes", [])
+            if len(matches) > 1 or has_next_page(connection):
+                raise LinearError(
+                    code=ErrorCode.INVALID_INPUT,
+                    message=f"Multiple views named '{name_or_id}'; use a UUID",
+                    suggestions=[f"{v['name']}: {v['id']}" for v in matches],
+                )
+            view = matches[0] if matches else None
+        else:
+            view = self._request(QUERY_CUSTOM_VIEW, {"id": view_id}).get("customView")
+        if not view:
+            raise LinearError(code=ErrorCode.VIEW_NOT_FOUND, message=f"View '{name_or_id}' not found")
+        return view
+
+    def update_custom_view(self, view_id: str, input_data: dict[str, Any]) -> dict[str, Any]:
+        """Update only supplied fields; preserve the existing view and other settings."""
+        data = self._request(MUTATION_UPDATE_CUSTOM_VIEW, {"id": view_id, "input": input_data})
+        result = data.get("customViewUpdate", {})
+        if not result.get("success"):
+            raise LinearError(code=ErrorCode.API_ERROR, message="Failed to update custom view")
+        return result.get("customView", {})
+
+    def get_custom_view_issues(
+        self, view_id: str, limit: int = 25, after: str | None = None,
+    ) -> dict[str, Any]:
+        """Let Linear evaluate saved filters and team scope; never approximate them."""
+        data = self._request(QUERY_CUSTOM_VIEW_ISSUES, {"id": view_id, "first": limit, "after": after})
+        view = data.get("customView")
+        if not view:
+            raise LinearError(code=ErrorCode.VIEW_NOT_FOUND, message=f"View '{view_id}' not found")
+        if view.get("modelName") != "Issue":
+            raise LinearError(
+                code=ErrorCode.INVALID_INPUT,
+                message=f"View '{view['name']}' is not an issue view (model: {view.get('modelName')})",
+            )
+        return view
+
     def create_custom_view(
         self,
         name: str,
@@ -2212,8 +2364,9 @@ class LinearClient:
         milestone_name: str | None = None,
         cycle_id: str | None = None,
         limit: int = 25,
-    ) -> list[dict[str, Any]]:
-        """List issues with optional filters.
+        after: str | None = None,
+    ) -> dict[str, Any]:
+        """List one page of issues with optional filters.
 
         All filters combine with AND logic.
 
@@ -2231,9 +2384,10 @@ class LinearClient:
             milestone_name: Filter by milestone name (exact match)
             cycle_id: Filter by cycle ID
             limit: Maximum number of results (default 25)
+            after: End cursor from the preceding page, with the same filters
 
         Returns:
-            List of issue dicts
+            Issue connection with nodes and pageInfo
         """
         filter_obj: dict[str, Any] = {}
 
@@ -2272,12 +2426,12 @@ class LinearClient:
         if cycle_id:
             filter_obj["cycle"] = {"id": {"eq": cycle_id}}
 
-        variables: dict[str, Any] = {"first": limit}
+        variables: dict[str, Any] = {"first": limit, "after": after}
         if filter_obj:
             variables["filter"] = filter_obj
 
         data = self._request(QUERY_ISSUES, variables)
-        return data.get("issues", {}).get("nodes", [])
+        return data.get("issues", {})
 
     def create_issue(
         self,
@@ -5041,7 +5195,11 @@ def list_cmd(
         25,
         "--limit",
         "-l",
-        help="Max results (default 25)",
+        min=1,
+        help="Max results per page (default 25)",
+    ),
+    after: Optional[str] = typer.Option(
+        None, "--after", help="Continue from pageInfo.endCursor using the same filters",
     ),
     team: Optional[str] = typer.Option(
         None,
@@ -5222,7 +5380,7 @@ def list_cmd(
             cycle_id = resolved_cycle["id"]
 
         # Fetch issues
-        issues = client.list_issues(
+        connection = client.list_issues(
             team_id=team_id,
             assignee_id=assignee_id,
             creator_id=creator_id,
@@ -5236,32 +5394,12 @@ def list_cmd(
             milestone_name=milestone,
             cycle_id=cycle_id,
             limit=limit,
+            after=after,
         )
-
-        # Format output
-        priority_labels = {0: "None", 1: "Urgent", 2: "High", 3: "Normal", 4: "Low"}
-        formatted_issues = []
-        for issue in issues:
-            formatted = {
-                "identifier": issue.get("identifier"),
-                "title": issue.get("title"),
-                "state": issue.get("state", {}).get("name"),
-                "priority": priority_labels.get(issue.get("priority", 0), "Unknown"),
-                "estimate": issue.get("estimate"),
-            }
-            assignee_data = issue.get("assignee")
-            if assignee_data:
-                formatted["assignee"] = assignee_data.get("name")
-            label_nodes = issue.get("labels", {}).get("nodes", [])
-            if label_nodes:
-                formatted["labels"] = [l["name"] for l in label_nodes]
-            cycle_data = issue.get("cycle")
-            if cycle_data:
-                formatted["cycle"] = f"#{cycle_data.get('number')} {cycle_data.get('name', '')}".strip()
-            formatted_issues.append(formatted)
+        result = format_issue_page(connection)
 
         # Build metadata
-        metadata: dict[str, Any] = {"count": len(issues), "limit": limit}
+        metadata: dict[str, Any] = {"count": len(result["issues"]), "limit": limit}
         filters_applied = []
         if mine:
             filters_applied.append("mine")
@@ -5290,7 +5428,7 @@ def list_cmd(
 
         response = format_success(
             command=command,
-            result={"issues": formatted_issues},
+            result=result,
             metadata=metadata,
         )
         typer.echo(output_json(response))
@@ -5777,24 +5915,14 @@ def create_view_cmd(
 
     Examples:
         linear.py create-view "My Urgent" --filter-json '{"priority":{"in":[1,2]}}'
-        linear.py create-view "Team Bugs" --filter-json '{"label":{"name":{"in":["bug"]}}}' --shared
+        linear.py create-view "Team Bugs" --filter-json '{"labels":{"name":{"in":["bug"]}}}' --shared
     """
     command = "create-view"
 
     try:
+        validate_view_text(name, description)
+        filter_data = parse_view_filter(filter_json)
         client = LinearClient()
-
-        # Parse filter JSON if provided
-        filter_data = None
-        if filter_json:
-            try:
-                filter_data = json.loads(filter_json)
-            except json.JSONDecodeError as e:
-                raise LinearError(
-                    code=ErrorCode.INVALID_INPUT,
-                    message=f"Invalid filter JSON: {e}",
-                    suggestions=["Ensure --filter-json is valid JSON"],
-                )
 
         # Use config team if --team not specified
         effective_team_id = team_id
@@ -5837,6 +5965,64 @@ def create_view_cmd(
     except LinearError as e:
         error_response = format_error(command, e)
         typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command("update-view")
+def update_view_cmd(
+    name_or_id: str = typer.Argument(..., help="Unique exact view name (case-insensitive) or UUID"),
+    name: Optional[str] = typer.Option(None, "--name", help="New view name"),
+    description: Optional[str] = typer.Option(None, "--description", "-d", help="Description (max 255 characters)"),
+    filter_json: Optional[str] = typer.Option(None, "--filter-json", help="Replacement IssueFilter JSON object"),
+    shared: Optional[bool] = typer.Option(None, "--shared/--private", help="Change view visibility"),
+    team_id: Optional[str] = typer.Option(None, "--team", "-t", help="Team UUID"),
+    color: Optional[str] = typer.Option(None, "--color", help="Hex icon color"),
+    icon: Optional[str] = typer.Option(None, "--icon", help="Icon name"),
+) -> None:
+    """Update a view in place. Omitted fields are unchanged; filters replace, not merge."""
+    command = "update-view"
+    try:
+        validate_view_text(name, description)
+        filter_data = parse_view_filter(filter_json)
+        input_data = {key: value for key, value in {
+            "name": name, "description": description, "filterData": filter_data,
+            "shared": shared, "teamId": team_id, "color": color, "icon": icon,
+        }.items() if value is not None}
+        if not input_data:
+            raise LinearError(code=ErrorCode.INVALID_INPUT, message="Provide at least one field to update")
+        client = LinearClient()
+        view = client.resolve_custom_view(name_or_id)
+        if filter_data is not None and view.get("modelName") != "Issue":
+            raise LinearError(code=ErrorCode.INVALID_INPUT, message="--filter-json only supports issue views")
+        updated = client.update_custom_view(view["id"], input_data)
+        typer.echo(output_json(format_success(command, {
+            "id": updated.get("id"), "name": updated.get("name"), "shared": updated.get("shared"),
+        })))
+    except LinearError as e:
+        typer.echo(output_json(format_error(command, e)))
+        raise typer.Exit(code=1)
+
+
+@app.command("view-issues")
+def view_issues_cmd(
+    name_or_id: str = typer.Argument(..., help="Unique exact view name (case-insensitive) or UUID"),
+    limit: int = typer.Option(25, "--limit", "-l", min=1, help="Max results per page (default 25)"),
+    after: Optional[str] = typer.Option(None, "--after", help="Continue from pageInfo.endCursor for the same view"),
+) -> None:
+    """Preview an issue view using Linear's saved filter, not local approximations.
+
+    Returns one page in API order, not the UI's grouping or display preferences.
+    """
+    command = "view-issues"
+    try:
+        client = LinearClient()
+        view = client.resolve_custom_view(name_or_id)
+        page = client.get_custom_view_issues(view["id"], limit, after)
+        result = format_issue_page(page["issues"])
+        result["view"] = {"id": page["id"], "name": page["name"]}
+        typer.echo(output_json(format_success(command, result)))
+    except LinearError as e:
+        typer.echo(output_json(format_error(command, e)))
         raise typer.Exit(code=1)
 
 

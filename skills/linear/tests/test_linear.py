@@ -123,6 +123,7 @@ def route(query, variables, *, teams, calls):
     if "issues(filter:" in query:
         return {
             "issues": {
+                "pageInfo": {"hasNextPage": False, "endCursor": "issue-uuid"},
                 "nodes": [
                     {
                         "id": "issue-uuid",

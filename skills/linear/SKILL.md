@@ -48,7 +48,7 @@ Use `-V` only when the user:
 | `attach-commit` | `attach-commit <ID> [commit-sha]` | Link git commit to issue (defaults to HEAD) |
 | `document` | `document <ID> "<title>" [-c content] [-f file] [--project name]` | Create native markdown document viewable inline |
 | `get` | `get <ID> [-c/--comments]` | Fetch details (add -c for comments) |
-| `list` | `list [--mine] [--assignee X] [--creator X] [--priority X] [--project X] [--state X] [--estimate X] [--label name] [--cycle <number-or-"active">] [--limit N]` | List/filter issues |
+| `list` | `list [--mine] [--assignee X] [--creator X] [--priority X] [--project X] [--state X] [--estimate X] [--label name] [--cycle <number-or-"active">] [--limit N] [--after cursor]` | List/filter issues |
 | `states` | `states` | List workflow states |
 | `projects` | `projects` | List available projects |
 | `create-project` | `create-project "<name>" [-d desc] [--color hex] [--icon id] [--state state] [--start-date date] [--target-date date]` | Create project |
@@ -68,6 +68,8 @@ Use `-V` only when the user:
 | `update-label` | `update-label "<name>" [--name new] [--color hex] [-d desc]` | Update label (preserves issue associations) |
 | `views` | `views [--team ID] [-V]` | List custom views (-V adds filterData, icon, color, timestamps) |
 | `create-view` | `create-view "<name>" [--filter-json '{...}'] [--shared] [--team ID] [--color hex] [--icon name] [-d desc]` | Create custom view |
+| `update-view` | `update-view "<name-or-id>" [--name new] [-d desc] [--filter-json '{...}'] [--shared/--private] [--team ID] [--color hex] [--icon name]` | Update supplied fields in place |
+| `view-issues` | `view-issues "<name-or-id>" [--limit N] [--after cursor]` | Preview saved issue-view membership |
 | `delete-view` | `delete-view "<name-or-id>"` | Delete custom view by name or UUID |
 
 **Priority values:** 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
@@ -82,9 +84,10 @@ Use `-V` only when the user:
 - `--estimate` / `-e`: By estimate (number or 'none' for unestimated)
 - `--label`: By label name (repeatable for AND logic)
 - `--cycle`: By cycle number or "active" for current cycle
-- `--limit` / `-l`: Max results (default 25)
+- `--limit` / `-l`: Max results per page (default 25)
+- `--after`: Continue from the previous page's `pageInfo.endCursor`
 
-Filters combine with AND logic.
+Filters combine with AND logic. `list` and `view-issues` always return `result.pageInfo`. When `hasNextPage` is true, pass `endCursor` as `--after` with the same filters/view. Counts describe the returned page, not the total; pages are live reads, not a frozen snapshot.
 
 **T-shirt to estimate mapping:**
 - XS → 1, S → 2, M → 3, L → 5, XL → 8
@@ -176,6 +179,8 @@ When `.linear.json` is present but the team is overridden to a *different* team 
 | `"update label"`, `"rename label"`, `"change label color"` | Update label | Execute `update-label` directly |
 | `views`, `"list views"`, `"show views"`, `"my views"`, `"custom views"` | List views | Execute `views` directly |
 | `"create a view"`, `"new view"`, `"set up views"`, `"help me organize my Linear"`, `"I want to see [X] issues"`, `"surface [X]"`, `"help me stay on top of"`, `"I need visibility into"` | Create view | Read `references/views.md`, then follow the view creation process |
+| `"update view"`, `"edit view"`, `"rename view"` | Update view | Use `update-view`; read `references/views.md` when changing filters |
+| `"preview view"`, `"issues in view"` | Preview view | Execute `view-issues` with the view's exact name or UUID |
 | `"delete view"`, `"remove view"` | Delete view | Execute `delete-view` directly |
 | `list [filters]`, `my issues`, `show issues` | List/filter issues | Execute `list` with filters |
 | `assign <ID> to <name>`, `reassign <ID> to <name>` | Assign/reassign | Resolve per `resolve_assignee`, then `update <ID> --assignee <email-or-@me>` |
@@ -242,7 +247,7 @@ The CLI's `--assignee` accepts only an exact email or the `@me` sentinel. Fuzzy 
 </step>
 
 <step name="direct_commands">
-**For direct commands (done, state, get, states, projects, create-project, delete-project, update-project, milestones, create-milestone, delete-milestone, cycles, cycle, create-cycle, update-cycle, labels, create-label, delete-label, update-label, views, create-view, delete-view, update, comment, update-comment, delete-comment, attach-commit, members):**
+**For direct commands (done, state, get, states, projects, create-project, delete-project, update-project, milestones, create-milestone, delete-milestone, cycles, cycle, create-cycle, update-cycle, labels, create-label, delete-label, update-label, views, create-view, update-view, view-issues, delete-view, update, comment, update-comment, delete-comment, attach-commit, members):**
 
 Execute CLI and format output.
 

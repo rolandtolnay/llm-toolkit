@@ -6,7 +6,13 @@
 |---------|-------|---------|
 | `views` | `views [--team ID] [-V]` | List custom views. `-V` adds filterData, icon, color, timestamps |
 | `create-view` | `create-view "<name>" [--filter-json '{...}'] [--shared] [--team ID] [--color hex] [--icon name] [-d desc]` | Create custom view |
+| `update-view` | `update-view "<name-or-id>" [--name new] [-d desc] [--filter-json '{...}'] [--shared/--private] [--team ID] [--color hex] [--icon name]` | Update supplied fields in place |
+| `view-issues` | `view-issues "<name-or-id>" [--limit N] [--after cursor]` | Preview matching issues through Linear's native saved-view query |
 | `delete-view` | `delete-view "<name-or-id>"` | Delete custom view by name or UUID |
+
+`update-view` and `view-issues` accept a UUID or a unique exact name (case-insensitive), not a partial name. Use a UUID if names collide. Updates preserve identity and omitted settings; `--filter-json` replaces the entire filter (`{}` clears it), and `-d ""` clears the description. Create/update descriptions are limited to 255 characters.
+
+`view-issues` returns one page in API order, not the UI's grouping or display preferences. Non-issue views fail explicitly. Use `result.pageInfo.hasNextPage` and `endCursor` to continue with `--after` for the same view; saved filters are evaluated live on each page. A page count is not the view's total count.
 
 ## View Creation Process
 
@@ -43,12 +49,12 @@ Construct `--filter-json` using **ONLY** values returned by these commands. Neve
 | Field path | Type | Values / notes |
 |---|---|---|
 | `priority` | number | 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low |
-| `state.type` | string | `backlog`, `unstarted`, `started`, `completed`, `cancelled` |
+| `state.type` | string | `backlog`, `unstarted`, `started`, `completed`, `canceled` |
 | `state.name` | string | Exact state name from `states` command |
 | `assignee.email` | string | User email address |
 | `assignee.isMe` | boolean | `{"eq": true}` = current API key owner |
 | `assignee` | null check | `{"null": true}` = unassigned |
-| `label.name` | string | Exact label name from `labels` command |
+| `labels.name` | string | Exact label name from `labels` command |
 | `project.name` | string | Exact project name from `projects` command |
 | `cycle.number` | number | Cycle number |
 | `estimate` | number | Point value |
@@ -82,7 +88,7 @@ Construct `--filter-json` using **ONLY** values returned by these commands. Neve
 - **Top-level keys = AND.** All conditions must match.
 - **OR:** `"or": [condition1, condition2, ...]` — any must match.
 - **Explicit AND:** `"and": [condition1, condition2, ...]` — all must match (useful for grouping).
-- **Collections** (label, etc.): default = any match. Use `"every": {...}` for all-must-match.
+- **Collections** (labels, etc.): default = any match. Use `"every": {...}` for all-must-match.
 
 ## Examples
 
@@ -91,14 +97,14 @@ Construct `--filter-json` using **ONLY** values returned by these commands. Neve
 {
   "assignee": {"isMe": {"eq": true}},
   "priority": {"in": [1, 2]},
-  "state": {"type": {"nin": ["completed", "cancelled"]}}
+  "state": {"type": {"nin": ["completed", "canceled"]}}
 }
 ```
 
 **Bugs in progress:**
 ```json
 {
-  "label": {"name": {"in": ["bug"]}},
+  "labels": {"name": {"in": ["bug"]}},
   "state": {"type": {"in": ["started"]}}
 }
 ```
@@ -115,7 +121,7 @@ Construct `--filter-json` using **ONLY** values returned by these commands. Neve
 ```json
 {
   "dueDate": {"lt": "P0D"},
-  "state": {"type": {"nin": ["completed", "cancelled"]}}
+  "state": {"type": {"nin": ["completed", "canceled"]}}
 }
 ```
 
@@ -124,9 +130,9 @@ Construct `--filter-json` using **ONLY** values returned by these commands. Neve
 {
   "or": [
     {"priority": {"in": [1, 2]}},
-    {"label": {"name": {"in": ["blocker"]}}}
+    {"labels": {"name": {"in": ["blocker"]}}}
   ],
-  "state": {"type": {"nin": ["completed", "cancelled"]}}
+  "state": {"type": {"nin": ["completed", "canceled"]}}
 }
 ```
 
@@ -134,6 +140,6 @@ Construct `--filter-json` using **ONLY** values returned by these commands. Neve
 ```json
 {
   "createdAt": {"gt": "-P2W"},
-  "state": {"type": {"nin": ["completed", "cancelled"]}}
+  "state": {"type": {"nin": ["completed", "canceled"]}}
 }
 ```
