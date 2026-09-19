@@ -34,15 +34,15 @@ Use `-V` only when the user:
 **Commands:**
 | Command | Usage | Purpose |
 |---------|-------|---------|
-| `create` | `create "<title>" [-d desc] [-p priority] [-e estimate] [--parent ID] [--project name] [--no-project] [--label name] [--assignee <email-or-@me>] [--cycle <number-or-"active">] [--team <key-or-uuid>]` | Create issue |
-| `update` | `update <ID> [-t title] [-d desc] [-p priority] [-e estimate] [--parent ID] [--label name] [--no-labels] [--assignee <email-or-@me>] [--no-assignee] [--project name] [--no-project] [--cycle <number-or-"active">] [--no-cycle] [--team <key-or-uuid>]` | Update fields |
+| `create` | `create "<title>" [-d desc / --description-file path] [-p priority] [-e estimate] [--parent ID] [--project name] [--no-project] [--label name] [--assignee <email-or-@me>] [--cycle <number-or-"active">] [--team <key-or-uuid>]` | Create issue |
+| `update` | `update <ID> [-t title] [-d desc / --description-file path] [-p priority] [-e estimate] [--parent ID] [--label name] [--no-labels] [--assignee <email-or-@me>] [--no-assignee] [--project name] [--no-project] [--cycle <number-or-"active">] [--no-cycle] [--team <key-or-uuid>]` | Update fields |
 | `done` | `done <ID>` | Mark completed |
 | `state` | `state <ID> "<name>"` | Change state |
 | `break` | `break <ID> --issues '[{...}]' [--project name] [--no-project] [--label name] [--no-labels]` | Create sub-issues |
 | `relate` | `relate <ID> <type> <target>` | Create relation (blocks, blocked-by, relates-to, duplicates) |
 | `unrelate` | `unrelate <ID> <target>` | Remove relation between two issues |
-| `comment` | `comment <ID> "<body>"` | Post a comment on an issue |
-| `update-comment` | `update-comment <comment-uuid> "<body>"` | Replace the full Markdown body in place, preserving the comment UUID (from `get --comments`) |
+| `comment` | `comment <ID> ["<body>" / --body-file path]` | Post a comment on an issue |
+| `update-comment` | `update-comment <comment-uuid> ["<body>" / --body-file path]` | Replace the full Markdown body in place, preserving the comment UUID (from `get --comments`) |
 | `delete-comment` | `delete-comment <comment-uuid>` | Delete a comment by UUID (from `get --comments`) |
 | `attach` | `attach <ID> <file_path> [-t title] [-s subtitle]` | Upload binary file (image, PDF) as download link |
 | `attach-commit` | `attach-commit <ID> [commit-sha]` | Link git commit to issue (defaults to HEAD) |
@@ -250,7 +250,11 @@ Execute CLI and format output.
 uv run ~/.claude/skills/linear/scripts/linear.py [command] [args]
 ```
 
-**Description round-trip sanitization:** When updating a description fetched from `get`, strip Linear's auto-linked URLs before sending — the API rejects angle-bracket URLs as "invalid issue description". Example: `[**state.md**](<http://state.md>)` → `**state.md**`. Match the regex `\[([^\]]+)\]\(<http://[^>]+>\)` and replace with capture group 1.
+**Long Markdown:** Use `create`/`update --description-file path` or `comment`/`update-comment --body-file path` instead of shell interpolation. Files are UTF-8 and sent unchanged; file and inline inputs are mutually exclusive. An empty description file clears the description on `update`.
+
+**Partial edits:** Fetch the current text before replacing it; preserve unchanged sections. For multi-issue work, keep successful receipts and retry only failed operations, not the whole batch. After an uncertain create/comment outcome, check Linear before retrying to avoid duplicates.
+
+**Round trips:** Linear may normalize bullets, blank lines, and email links; these alone do not indicate lost content. If an angle-bracket link is rejected, convert `[text](<URL>)` to `[text](URL)`, encoding spaces and parentheses in the destination. Preserve the URL—do not strip the link.
 
 Parse JSON response and present result:
 - Success: Show identifier, title, new state, and URL

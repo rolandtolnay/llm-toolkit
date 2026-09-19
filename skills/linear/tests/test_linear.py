@@ -71,6 +71,16 @@ def route(query, variables, *, teams, calls):
                 },
             }
         }
+    for operation in ("commentCreate", "commentUpdate"):
+        if operation in query:
+            return {operation: {
+                "success": True,
+                "comment": {
+                    "id": "comment-uuid",
+                    "url": "https://linear.app/x/issue/ABC-123#comment",
+                    "issue": {"identifier": "ABC-123", "title": "Parent title"},
+                },
+            }}
     if "issue(id: $id)" in query:
         return {"issue": parent_issue()}
     if "teams {" in query:
@@ -362,6 +372,18 @@ def test_update_label_uses_linear_team_env_for_name_resolution(monkeypatch):
 
     update_input = next(v["input"] for q, v in calls if "issueUpdate" in q)
     assert update_input["labelIds"] == ["label-ops-uuid"]
+    assert "removedLabelIds" not in update_input
+
+
+def test_update_clears_labels_without_fetching_current_issue(monkeypatch):
+    module = load_linear_module()
+    calls = install_cli_request(monkeypatch, module)
+
+    result = CliRunner().invoke(module.app, ["update", "ABC-123", "--no-labels"])
+
+    assert result.exit_code == 0, result.stdout
+    assert len(calls) == 1
+    assert calls[0][1]["input"] == {"labelIds": []}
 
 
 def test_list_cycle_uses_linear_team_env_for_cycle_resolution(monkeypatch):
@@ -504,3 +526,97 @@ def test_update_comment_requires_body_without_making_request(monkeypatch):
     result = CliRunner().invoke(module.app, ["update-comment", "comment-uuid"])
 
     assert result.exit_code == 2
+
+
+@pytest.mark.parametrize("args,flag,operation,field", [
+    (["create", "New ticket", "--parent", "ABC-123"], "--description-file", "issueCreate", "description"),
+    (["update", "ABC-123"], "--description-file", "issueUpdate", "description"),
+    (["comment", "ABC-123"], "--body-file", "commentCreate", "body"),
+    (["update-comment", "comment-uuid"], "--body-file", "commentUpdate", "body"),
+])
+def test_markdown_file_reaches_mutation_unchanged(monkeypatch, tmp_path, args, flag, operation, field):
+    module = load_linear_module()
+    calls = install_cli_request(monkeypatch, module)
+    # Include Linear's link serialization, literal shell syntax, Unicode and CRLF.
+    text = '## Café\r\n\r\n- [ ] Keep `$HOME` and "quotes".\r\n[doc](<https://example.com/a_(b)>)\r\n\r\n'
+    source = tmp_path / "body with spaces.md"
+    source.write_bytes(text.encode("utf-8"))
+
+    result = CliRunner().invoke(module.app, args + [flag, str(source)])
+
+    assert result.exit_code == 0, result.stdout
+    assert json.loads(result.stdout)["success"] is True
+    mutations = [v["input"] for q, v in calls if operation in q]
+    assert len(mutations) == 1
+    assert mutations[0][field] == text
+
+
+def test_empty_description_file_explicitly_clears_description(monkeypatch, tmp_path):
+    module = load_linear_module()
+    calls = install_cli_request(monkeypatch, module)
+    source = tmp_path / "empty.md"
+    source.write_bytes(b"")
+
+    result = CliRunner().invoke(module.app, ["update", "ABC-123", "--description-file", str(source)])
+
+    assert result.exit_code == 0, result.stdout
+    assert calls[0][1]["input"] == {"description": ""}
+
+
+@pytest.mark.parametrize("case,code", [
+    ("both", "INVALID_INPUT"), ("missing", "FILE_NOT_FOUND"), ("invalid-utf8", "INVALID_INPUT"),
+])
+def test_invalid_text_source_fails_before_any_request(monkeypatch, tmp_path, case, code):
+    module = load_linear_module()
+    calls = install_cli_request(monkeypatch, module)
+    source = tmp_path / "body.md"
+    args = ["update", "ABC-123", "--description-file", str(source)]
+    if case == "both":
+        source.write_text("file text", encoding="utf-8")
+        args += ["-d", "inline text"]
+    elif case == "invalid-utf8":
+        source.write_bytes(b"\xff")
+
+    result = CliRunner().invoke(module.app, args)
+
+    assert result.exit_code == 1, result.stdout
+    assert json.loads(result.stdout)["error"]["code"] == code
+    assert calls == []
+
+
+def test_graphql_validation_diagnostics_exclude_values_and_targets(monkeypatch):
+    module = load_linear_module()
+    monkeypatch.setenv("LINEAR_API_KEY", "test")
+    response = {"errors": [{
+        "message": "Argument Validation Error",
+        "extensions": {
+            "userPresentableMessage": "Choose one label update mode",
+            "exception": {"validationErrors": [{
+                "property": "input",
+                "target": {"description": "private ticket contents"},
+                "children": [{
+                    "property": "labelIds", "value": "private field value",
+                    "constraints": {"exclusive": "Cannot combine labelIds and removedLabelIds"},
+                }],
+            }]},
+        },
+    }, {"message": "Additional validation failure"}]}
+    calls = []
+
+    def fake_post(*args, **kwargs):
+        calls.append(kwargs)
+        return module.httpx.Response(400, json=response)
+
+    monkeypatch.setattr(module.httpx.Client, "post", fake_post)
+
+    result = CliRunner().invoke(module.app, ["update", "ABC-123", "-p", "2"])
+
+    assert result.exit_code == 1, result.stdout
+    error = json.loads(result.stdout)["error"]
+    assert error["code"] == "API_ERROR"
+    assert "Argument Validation Error" in error["message"]
+    assert "Additional validation failure" in error["message"]
+    assert "Choose one label update mode" in error["suggestions"]
+    assert "input.labelIds: Cannot combine labelIds and removedLabelIds" in error["suggestions"]
+    assert "private" not in result.stdout
+    assert len(calls) == 1  # Surface the failure; never retry mutations automatically.

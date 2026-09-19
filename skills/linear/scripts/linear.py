@@ -145,6 +145,49 @@ def output_json(data: dict[str, Any]) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
+def read_markdown_input(
+    inline: str | None, path: Path | None, inline_name: str, file_flag: str,
+) -> str | None:
+    """Read one text source without shell interpolation or Markdown rewriting."""
+    if path is None:
+        return inline
+    if inline is not None:
+        raise LinearError(
+            code=ErrorCode.INVALID_INPUT,
+            message=f"Use either {inline_name} or {file_flag}, not both",
+        )
+    try:
+        return path.read_bytes().decode("utf-8")
+    except FileNotFoundError:
+        raise LinearError(code=ErrorCode.FILE_NOT_FOUND, message=f"File not found: {path}")
+    except (OSError, UnicodeError):
+        raise LinearError(
+            code=ErrorCode.INVALID_INPUT,
+            message=f"Cannot read UTF-8 file: {path}",
+            suggestions=["Provide a readable UTF-8 text file"],
+        )
+
+
+def graphql_error_suggestions(errors: list[dict[str, Any]]) -> list[str]:
+    """Extract actionable diagnostics, not validation values or target objects."""
+    suggestions: list[str] = []
+
+    def validation_details(entries: list[dict[str, Any]], prefix: str = "") -> None:
+        for entry in entries:
+            field = ".".join(filter(None, [prefix, entry.get("property", "")]))
+            for message in (entry.get("constraints") or {}).values():
+                suggestions.append(f"{field}: {message}" if field else message)
+            validation_details(entry.get("children") or [], field)
+
+    for error in errors:
+        extensions = error.get("extensions") or {}
+        if extensions.get("userPresentableMessage"):
+            suggestions.append(extensions["userPresentableMessage"])
+        validation_details(extensions.get("validationErrors") or [])
+        validation_details((extensions.get("exception") or {}).get("validationErrors") or [])
+    return list(dict.fromkeys(suggestions))
+
+
 def has_next_page(connection: dict[str, Any]) -> bool:
     """Check if a Relay connection has more pages."""
     return connection.get("pageInfo", {}).get("hasNextPage", False)
@@ -1386,8 +1429,8 @@ class LinearClient:
                 message="Invalid JSON response from Linear",
             )
 
-        if "errors" in data:
-            error_msg = data["errors"][0].get("message", "Unknown error")
+        if data.get("errors"):
+            error_msg = "; ".join(error.get("message", "Unknown error") for error in data["errors"])
             if "Authentication" in error_msg:
                 raise LinearError(
                     code=ErrorCode.MISSING_API_KEY,
@@ -1406,6 +1449,7 @@ class LinearClient:
             raise LinearError(
                 code=ErrorCode.API_ERROR,
                 message=error_msg,
+                suggestions=graphql_error_suggestions(data["errors"]),
             )
 
         return data.get("data", {})
@@ -2336,9 +2380,14 @@ class LinearClient:
             input_data["estimate"] = estimate
         if parent_id is not None:
             input_data["parentId"] = parent_id or None
+        if label_ids is not None and removed_label_ids:
+            raise LinearError(
+                code=ErrorCode.INVALID_INPUT,
+                message="Cannot combine label replacement with label removal",
+            )
         if removed_label_ids:
             input_data["removedLabelIds"] = removed_label_ids
-        if label_ids:
+        if label_ids is not None:
             input_data["labelIds"] = label_ids
         if assignee_id is not None:
             input_data["assigneeId"] = assignee_id or None
@@ -2876,6 +2925,9 @@ def create(
         "-d",
         help="Issue description (markdown)",
     ),
+    description_file: Optional[Path] = typer.Option(
+        None, "--description-file", help="Read description from a UTF-8 file instead of -d",
+    ),
     priority: Optional[int] = typer.Option(
         None,
         "--priority",
@@ -2941,6 +2993,7 @@ def create(
     command = "create"
 
     try:
+        description = read_markdown_input(description, description_file, "-d", "--description-file")
         client = LinearClient()
 
         # If creating a sub-issue, fetch the parent first so the child uses the
@@ -3085,6 +3138,9 @@ def update(
         "-d",
         help="New description",
     ),
+    description_file: Optional[Path] = typer.Option(
+        None, "--description-file", help="Read replacement description from a UTF-8 file instead of -d",
+    ),
     priority: Optional[int] = typer.Option(
         None,
         "--priority",
@@ -3188,6 +3244,7 @@ def update(
     command = "update"
 
     try:
+        description = read_markdown_input(description, description_file, "-d", "--description-file")
         client = LinearClient()
 
         # The team is only needed to resolve --label/--project/--cycle *names*.
@@ -3203,7 +3260,7 @@ def update(
             if "team_id" not in _cache:
                 issue_team_id = None
                 # Only fetch the issue for its team when higher-precedence sources
-                # are absent. Label removal/milestone logic may still fetch it for
+                # are absent. Milestone logic may still fetch it for
                 # other fields, but project/cycle resolution can use --team/env alone.
                 if not (team or os.environ.get("LINEAR_TEAM")):
                     issue_team_id = get_current_issue().get("team", {}).get("id")
@@ -3227,22 +3284,13 @@ def update(
             parent_issue = client.get_issue(parent)
             parent_id = parent_issue.get("id")
 
-        # Handle label updates
+        # labelIds replaces the whole set; [] clears it. Do not also send
+        # removedLabelIds, which Linear rejects alongside a replacement.
         label_ids = None
-        removed_label_ids = None
-        if no_labels or label:
-            # Fetch current issue to get existing labels
-            current = get_current_issue()
-            current_labels = current.get("labels", {}).get("nodes", [])
-            current_label_ids = [l["id"] for l in current_labels]
-
-            if no_labels and not label:
-                removed_label_ids = current_label_ids
-            if label:
-                label_ids = client.resolve_label_names(label, resolve_team_id())
-                # Remove labels not in the new set
-                new_set = set(label_ids)
-                removed_label_ids = [lid for lid in current_label_ids if lid not in new_set]
+        if label:
+            label_ids = client.resolve_label_names(label, resolve_team_id())
+        elif no_labels:
+            label_ids = []
 
         # Resolve assignee
         assignee_id = None
@@ -3302,7 +3350,6 @@ def update(
             estimate=estimate,
             parent_id=parent_id,
             label_ids=label_ids,
-            removed_label_ids=removed_label_ids,
             assignee_id=assignee_id,
             project_id=project_id,
             milestone_id=milestone_id,
@@ -5498,7 +5545,10 @@ def attach_commit(
 @app.command()
 def comment(
     issue_id: str = typer.Argument(..., help="Issue ID (e.g., ABC-123)"),
-    body: str = typer.Argument(..., help="Comment body (markdown supported)"),
+    body: Optional[str] = typer.Argument(None, help="Comment body (markdown supported)"),
+    body_file: Optional[Path] = typer.Option(
+        None, "--body-file", help="Read comment body from a UTF-8 file instead of BODY",
+    ),
 ) -> None:
     """Post a comment on an issue.
 
@@ -5509,6 +5559,9 @@ def comment(
     command = "comment"
 
     try:
+        body = read_markdown_input(body, body_file, "BODY", "--body-file")
+        if body is None:
+            raise typer.BadParameter("Provide BODY or --body-file", param_hint="BODY")
         client = LinearClient()
         result = client.create_comment(issue_id, body)
 
@@ -5532,7 +5585,10 @@ def comment(
 @app.command("update-comment")
 def update_comment_cmd(
     comment_id: str = typer.Argument(..., help="Comment UUID to update"),
-    body: str = typer.Argument(..., help="Full replacement body (markdown supported)"),
+    body: Optional[str] = typer.Argument(None, help="Full replacement body (markdown supported)"),
+    body_file: Optional[Path] = typer.Option(
+        None, "--body-file", help="Read replacement body from a UTF-8 file instead of BODY",
+    ),
 ) -> None:
     """Replace a comment's body in place, preserving its UUID.
 
@@ -5544,6 +5600,9 @@ def update_comment_cmd(
     command = "update-comment"
 
     try:
+        body = read_markdown_input(body, body_file, "BODY", "--body-file")
+        if body is None:
+            raise typer.BadParameter("Provide BODY or --body-file", param_hint="BODY")
         client = LinearClient()
         result = client.update_comment(comment_id, body)
 
