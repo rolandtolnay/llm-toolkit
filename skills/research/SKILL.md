@@ -102,7 +102,7 @@ Analyze the question and generate 2-4 specific sub-questions. For each, assign a
 - **Short-form video**: `social shortform` only when trends/viral consumer sentiment is clearly relevant.
 
 **Evidence rules** (apply to every subagent):
-- Use 2+ independent sources per sub-question; verify claims about official features, prices, or laws against the canonical source.
+- Match rigor to stakes. For each sub-question, weigh what it costs if the answer is wrong or incomplete and how cheaply the decision it feeds can be reversed later. A claim behind a cheap-to-reverse decision is answered from one credible source; a load-bearing claim behind a costly or hard-to-reverse one gets independent corroboration and, for official features, prices, or laws, the canonical source. Put that judgment in the brief instead of a uniform source count.
 - Trust hierarchy: **primary sources** (official docs, source code, author's post) > **secondary** (well-known blogs, curated lists) > **tertiary** (Perplexity synthesis, random forum posts).
 - Every run includes at least one broad discovery pass so unknown-unknowns can surface, and what it surfaces is accounted for: in a comparison or recommendation, a candidate the pass turned up but didn't evaluate is named with the reason it was set aside. A cap on candidates bounds how many are evaluated in depth, not which ones may be considered.
 
@@ -154,6 +154,7 @@ TARGET PATH: <absolute path, e.g. /Users/you/Documents/Research/<run-id>/0N-<ang
 
 SOURCE STRATEGY: [which commands + built-in tools fit THIS sub-question, and why]
 
+STAKES: [what being wrong costs here and how reversible the downstream decision is; this sets the depth]
 DONE WHEN: [the concrete comparison or decision this evidence must support]
 BOUNDS: [scope and exclusions the user actually stated; what uncertainty to report rather than chase]
 
