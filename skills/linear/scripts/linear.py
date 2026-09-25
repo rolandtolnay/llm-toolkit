@@ -4038,6 +4038,7 @@ def get(
             # Include full comment content
             result["comments"] = [
                 {
+                    "id": c.get("id"),
                     "author": c.get("user", {}).get("name"),
                     "date": c.get("createdAt"),
                     "body": c.get("body"),

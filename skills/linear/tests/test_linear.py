@@ -493,6 +493,27 @@ def test_update_comment_replaces_body_in_place(monkeypatch):
     assert len(calls) == 1  # No lookup, deletion, or replacement comment creation.
 
 
+def test_get_comments_exposes_uuid_for_update_and_delete(monkeypatch):
+    module = load_linear_module()
+    monkeypatch.setenv("LINEAR_API_KEY", "test")
+    comment = {
+        "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "body": "Handoff",
+        "createdAt": "2026-09-25T10:05:01.364Z",
+        "user": {"name": "Roland"},
+    }
+    issue = {
+        **parent_issue(),
+        "comments": {"pageInfo": {"hasNextPage": False}, "nodes": [comment]},
+    }
+    monkeypatch.setattr(module.LinearClient, "_request", lambda self, query, variables=None: {"issue": issue})
+
+    result = CliRunner().invoke(module.app, ["get", "ABC-123", "--comments"])
+
+    assert result.exit_code == 0, result.stdout
+    assert json.loads(result.stdout)["result"]["comments"][0]["id"] == comment["id"]
+
+
 @pytest.mark.parametrize("response", [
     {"data": {"commentUpdate": {"success": False}}},
     {"errors": [{"message": "You do not have permission to edit this comment"}]},
