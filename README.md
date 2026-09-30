@@ -471,7 +471,8 @@ The CLI can also read supported agent `env.json` locations or process environmen
   - This one is written specifically for `dashboard-web`, its `AGENTS.md`, local server, auth state, and fixtures. It needs adaptation before it can serve as generic browser QA.
 - [`audit-prompt`](skills/audit-prompt/SKILL.md): Audits changed prompt-bearing Markdown and YAML for token waste, positioning, specificity, and structural problems.
 - [`/verify`](commands/verify.md): Reconstructs intent, analyzes correctness and blast radius, runs tests, then resolves findings interactively before declaring issues.
-- [`/ripple-check`](commands/ripple-check.md): Looks for other code locations where a lesson from the latest fix genuinely transfers; "checked, does not apply" is an acceptable result.
+- [`ripple-check`](skills/ripple-check/SKILL.md): Looks for other code locations where a lesson from the latest fix genuinely transfers; "checked, does not apply" is an acceptable result. Explicit-only.
+- [`boy-scout`](skills/boy-scout/SKILL.md): Re-reads the flow the session just built or fixed for cheap fixes, missed edge cases, and behavior that would surprise a user or developer. It reports numbered findings with evidence and regression risk, then waits for you to pick; "nothing worth changing" is an acceptable result. Explicit-only.
 
 ### Land the work
 
@@ -497,10 +498,10 @@ The CLI can also read supported agent `env.json` locations or process environmen
 
 ## Complete skill index
 
-The repository currently has 22 top-level skills. Use this collapsed list when you know the name and want the source file.
+The repository currently has 24 top-level skills. Use this collapsed list when you know the name and want the source file.
 
 <details>
-<summary><strong>Show all 22 skills</strong></summary>
+<summary><strong>Show all 24 skills</strong></summary>
 
 ### Create and maintain agent resources
 
@@ -526,6 +527,8 @@ The repository currently has 22 top-level skills. Use this collapsed list when y
 - [`write-loop`](skills/write-loop/SKILL.md): Writes short, gradeable `/goal` prompts.
 - [`create-pr`](skills/create-pr/SKILL.md): Opens a PR with grounded motivation and verification notes.
 - [`triage-pr-comments`](skills/triage-pr-comments/SKILL.md): Separates valid review work from deferrals and false positives.
+- [`boy-scout`](skills/boy-scout/SKILL.md): Finds cheap, worthwhile fixes in the flow just built before the work concludes. Explicit-only.
+- [`ripple-check`](skills/ripple-check/SKILL.md): Carries a lesson from the latest fix to other code that shares its assumption. Explicit-only.
 - [`pr-qa-browser`](skills/pr-qa-browser/SKILL.md): Runs dashboard-web-specific browser QA.
 
 ### Integrations and deployment
@@ -546,7 +549,7 @@ The repository currently has 22 top-level skills. Use this collapsed list when y
 
 ## Commands
 
-The repository contains 22 Claude-style command prompts. Another host may install them as prompt templates or agent-specific commands.
+The repository contains 21 Claude-style command prompts. Another host may install them as prompt templates or agent-specific commands.
 
 ### Build, review, and ship
 
@@ -561,12 +564,6 @@ Runs the full Linear-ticket workflow: orient, diagnose, choose a design, impleme
 ```
 
 Provides an interactive second opinion on completed work.
-
-```text
-/ripple-check
-```
-
-Searches for other locations where the latest fix's underlying lesson applies.
 
 ```text
 /tidy-commits
@@ -674,8 +671,8 @@ These are strategy lenses, not market evidence. Check pricing, demand, competito
 ## Guides and repository layout
 
 ```text
-skills/           21 primary skills, with bundled references, scripts, assets, and agent metadata
-commands/         22 Claude-style command prompts, including 12 decision frameworks
+skills/           24 primary skills, with bundled references, scripts, assets, and agent metadata
+commands/         21 Claude-style command prompts, including 12 decision frameworks
 agents/           the research-subagent definition used by research workflows
 hobby-bundle/     goal-driven web-project example and optional web skills
 business-bundle/  curated offer and business-strategy skills
