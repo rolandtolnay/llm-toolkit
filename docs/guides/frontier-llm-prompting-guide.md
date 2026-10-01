@@ -4,8 +4,10 @@ A lean, model-agnostic synthesis of the prompting guidance for the current front
 
 Model-specific behavioral tendencies, the patches for them, and API details live in the source guides — consult them when accuracy for a specific model matters:
 
-- [GPT Prompting Guide](gpt-prompting-guide.md)
+- [GPT-6 Prompting Guide](gpt-6-prompting-guide.md)
+- [GPT-5.6 Prompting Guide](gpt-5.6-prompting-guide.md)
 - [Claude Fable 5 Prompting Guide](fable-5-prompting-guide.md)
+- [Claude Opus 5.5 Prompting Guide](opus-5.5-prompting-guide.md)
 
 ## What changed in this generation
 
@@ -154,6 +156,8 @@ from the user.
 
 **Make citation behavior part of the prompt** for grounded answers: define what needs support, what counts as enough evidence, and what to do when evidence is missing. Absence of evidence shouldn't automatically become a factual "no."
 
+**Name the sources a loosely specified task depends on.** Frontier models tend to start working quickly, and the information a task needs often sits somewhere the request doesn't mention: a policy in an old thread, a rule on another spreadsheet tab, a note on a record. One sentence telling the model to look through the relevant sources before acting, including ones the task does not point to, measurably improves completion on such tasks at the cost of a few extra tool calls.
+
 **For creative drafting** (slides, launch copy, summaries, talk tracks), distinguish source-backed facts from creative wording:
 
 ```text
@@ -200,7 +204,7 @@ Work through an existing prompt or skill with these checks. Change one group at 
 1. **Step-by-step process scripts** ("first do A, then B, then C…") → replace with the outcome, success criteria, and constraints. Keep ordering only where sequence is a genuine requirement.
 2. **Absolutes on judgment calls** (`ALWAYS search before answering`, `NEVER proceed without asking`) → replace with decision rules stating when the action is warranted. Keep absolutes only for true invariants.
 3. **Repeated instructions** — the same rule stated in multiple places or paraphrased for emphasis → state once, in the section where it belongs.
-4. **Enumerated behavior lists** ("don't do X, don't do Y, don't do Z, …" for variants of one failure mode) → replace with one instruction stating the principle.
+4. **Enumerated behavior lists** ("don't do X, don't do Y, don't do Z, …" for variants of one failure mode) → replace with one instruction stating the principle. This applies to judgment and behavior. For style defaults with no objective definition, such as "avoid a generic AI look" in frontend work or stock phrasing in prose, a general instruction mostly swaps one default for another; naming the specific patterns to avoid works better there.
 5. **Broad brevity commands** ("be concise", "keep it short") → replace with what a short answer must preserve and what to lead with.
 6. **Adjective-only tone guidance** ("be friendly and professional") → replace with concrete writing choices.
 7. **Compensatory hand-holding** — worked examples, reformulations, and warnings added because an older model kept failing → delete, re-test, and re-add only what a measured gap justifies.

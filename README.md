@@ -684,8 +684,10 @@ site/             a small GitHub Pages/Jekyll reference site
 ### Prompting and agent design
 
 - [Frontier LLM Prompting Guide](docs/guides/frontier-llm-prompting-guide.md): outcome-first prompting, approval boundaries, stop rules, grounding, validation, and legacy-prompt audit criteria.
-- [GPT Prompting Guide](docs/guides/gpt-prompting-guide.md): consolidated GPT-5.5/5.6 prompting guidelines for grounding custom skills and instructions.
+- [GPT-6 Prompting Guide](docs/guides/gpt-6-prompting-guide.md): GPT-6 Astra behavior and prompting patterns for grounding custom skills and instructions.
+- [GPT-5.6 Prompting Guide](docs/guides/gpt-5.6-prompting-guide.md): consolidated GPT-5.5/5.6 prompting guidelines.
 - [Fable 5 Prompting Guide](docs/guides/fable-5-prompting-guide.md)
+- [Opus 5.5 Prompting Guide](docs/guides/opus-5.5-prompting-guide.md)
 - [Prompt Quality Guide](docs/guides/prompt-quality-guide.md)
 - [Skill Prompting Principles](docs/guides/skill-prompting-principles.md)
 - [Subagent Prompting Guide](docs/guides/subagent-prompting-guide.md)
