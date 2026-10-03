@@ -537,6 +537,8 @@ The repository currently has 24 top-level skills. Use this collapsed list when y
 - [`slack`](skills/slack/SKILL.md): Reads and writes Slack through a user token; sends and schedules confirm first, while edit/delete/react/status paths are immediate.
 - [`firebase-hosting-basics`](skills/firebase-hosting-basics/SKILL.md): Guides Firebase Hosting Classic configuration, emulation, previews, and deployment for static sites, SPAs, and simple microservices.
   - It does not cover Firebase App Hosting, SSR, or ISR. It requires Node/npm, `firebase.json`, Firebase authentication and project access, and `npx firebase-tools@latest`. A live deploy changes an external service.
+- [`firebase-admin`](skills/firebase-admin/SKILL.md): Inspects and repairs Firestore data, Auth users, and Storage objects through a JSON CLI that reuses the existing Firebase CLI login, plus an escape hatch for Admin SDK JavaScript.
+  - Requires Node 22+ and a one-time `npm ci && npm run build` in the skill directory. Writes run with the selected identity's real IAM permissions and bypass security rules; there is no sandbox, dry run, or rollback.
 
 ### Creative workflows
 

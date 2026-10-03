@@ -1,0 +1,34 @@
+{
+  "name": "firebase-admin-agent-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "firebase-admin-agent": "bin/firebase-admin-agent.mjs"
+  },
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "test:emulators": "npm run build && firebase emulators:exec --project demo-agent-cli --config tests/firebase.json --only firestore,auth,storage 'node --test tests/emulator.integration.mjs'",
+    "format": "prettier --write src tests"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "8.1.0",
+    "firebase-admin": "14.5.0",
+    "firebase-tools": "15.32.1",
+    "google-auth-library": "11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.15",
+    "prettier": "^3.9.9",
+    "typescript": "5.9.3"
+  },
+  "prettier": {
+    "printWidth": 110,
+    "singleQuote": true
+  }
+}
