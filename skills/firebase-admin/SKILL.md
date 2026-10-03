@@ -18,7 +18,7 @@ node "$CLI" context
 node "$CLI" --help    # every command and its allowed flags
 ```
 
-Examples below use `node "$CLI"`. Each command prints one JSON envelope on stdout: `{success, command, result}` or `{success:false, command, error:{code, message, suggestions?}}` with exit status 1. Diagnostics, including script `console.log`, go to stderr. Large inputs go in files: `--file input.json` instead of `--data '...'`.
+Examples below use `node "$CLI"`. Each command prints one JSON envelope on stdout: `{success, command, result}` or `{success:false, command, error:{code, message, suggestions?}}` with exit status 1. Branch on `code`; the message includes the service's own explanation, such as the link that creates a missing index, with tokens masked. Diagnostics, including script `console.log`, go to stderr. Large inputs go in files: `--file input.json` instead of `--data '...'`.
 
 ## Targeting
 

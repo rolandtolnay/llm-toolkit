@@ -345,7 +345,7 @@ test('login without a refresh token fails without consulting ADC or a different 
   assert.equal(f.requests.length, 0);
 });
 
-test('permission denial is distinct from an empty lookup and never substitutes credentials or leaks raw provider bodies', async (t) => {
+test('permission denial is distinct from an empty lookup and never substitutes credentials', async (t) => {
   const f = await fixture(t, (r, res) => {
     if (isRefresh(r)) return refreshResponse(r, res);
     authPath(r);
@@ -353,7 +353,7 @@ test('permission denial is distinct from an empty lookup and never substitutes c
       error: {
         code: 403,
         message: 'INSUFFICIENT_PERMISSION',
-        details: [{ diagnostic: `${secrets.access} ${secrets.password}` }],
+        details: [{ diagnostic: 'detail fields are not forwarded' }],
       },
     });
   });
@@ -365,17 +365,51 @@ test('permission denial is distinct from an empty lookup and never substitutes c
   assert.equal(f.requests.filter((r) => !isRefresh(r)).length, 1);
 });
 
-test('unexpected Auth provider errors remain structured and do not expose raw response bodies', async (t) => {
+test('provider error messages are forwarded with credential-shaped strings masked', async (t) => {
   const f = await fixture(t, (r, res) => {
     if (isRefresh(r)) return refreshResponse(r, res);
-    authPath(r);
-    json(res, 500, {
-      error: { code: 500, message: `${secrets.access} ${secrets.refresh} ${secrets.password}` },
-    });
+    json(res, 500, [
+      {
+        error: {
+          code: 500,
+          status: 'INTERNAL',
+          message: 'BACKEND_DOWN ya29.planted-access-token 1//planted-refresh-token Bearer planted.bearer',
+        },
+      },
+    ]);
   });
-  const error = failure(await f.run(['auth', 'get', '--uid', 'test-user']), 'auth get', 'PROVIDER_ERROR');
-  assert.ok(error.suggestions.length > 0);
-  assert.equal(f.requests.filter((r) => !isRefresh(r)).length, 1);
+  const error = failure(
+    await f.run(['firestore', 'get', '--path', 'probes/one']),
+    'firestore get',
+    'PROVIDER_ERROR',
+  );
+  assert.match(error.message, /BACKEND_DOWN/);
+  assert.doesNotMatch(error.message, /planted/);
+  assert.equal(error.message.match(/\[redacted-token\]/g)?.length, 3);
+});
+
+test('a query needing a composite index returns the link that creates it', async (t) => {
+  const link =
+    'https://console.firebase.google.com/v1/r/project/test-project/firestore/indexes?create_composite=ABC';
+  const f = await fixture(t, (r, res) => {
+    if (isRefresh(r)) return refreshResponse(r, res);
+    json(res, 400, [
+      {
+        error: {
+          code: 400,
+          status: 'FAILED_PRECONDITION',
+          message: `The query requires an index. You can create it here: ${link}`,
+        },
+      },
+    ]);
+  });
+  const spec = { where: [{ field: 'a', op: '>=', value: 1 }], orderBy: [{ field: 'b' }] };
+  const error = failure(
+    await f.run(['firestore', 'query', '--path', 'records', '--data', JSON.stringify(spec)]),
+    'firestore query',
+    'PRECONDITION_FAILED',
+  );
+  assert.ok(error.message.includes(link));
 });
 
 test('explicit ADC performs OAuth from the isolated fake ADC file, not the available Firebase login', async (t) => {
@@ -434,7 +468,7 @@ test('ambiguous Firestore commit response is neither replayed nor reported succe
   failure(result, 'firestore create', 'OUTCOME_UNKNOWN');
   assert.equal(f.requests.length, 1);
   assert.match(f.requests[0].url.pathname, /:commit$/);
-  assert.ok(!JSON.stringify(result.output).includes('fake-private-payload'));
+  assert.match(result.output.error.message, /fake-private-payload/, 'the service message is forwarded');
 });
 
 test('Storage sends the exact generation precondition and does not replay a rejected delete', async (t) => {

@@ -65,7 +65,7 @@ const known: Known[] = [
     matches: codes(9, 412, 'FAILED_PRECONDITION'),
     message: 'The precondition failed.',
     suggestions: [
-      'For a write, read the current resource before repairing it. For a query, this code also reports a missing composite index.',
+      'For a write, read the current resource before repairing it. For a query, the service message links to any missing composite index.',
     ],
   },
   {
@@ -93,8 +93,15 @@ const known: Known[] = [
   },
 ];
 
+// Google access tokens, refresh tokens and bearer headers. Service messages never need them.
+const tokens = /\bya29\.[\w.-]+|\b1\/\/[\w.-]+|\bBearer\s+[\w.~+/-]+=*/gi;
+/** Make text from a service or script safe to print: mask credential-shaped strings and cap the length. */
+export function redact(text: string): string {
+  const masked = text.replace(tokens, '[redacted-token]');
+  return masked.length > 1000 ? `${masked.slice(0, 1000)}… [truncated]` : masked;
+}
 export function describe(error: unknown): string {
-  return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  return redact(error instanceof Error ? `${error.name}: ${error.message}` : String(error));
 }
 
 /** Map any thrown value onto the public error contract. `sent` means a mutating request may already have reached the service. */
@@ -103,18 +110,21 @@ export function classify(error: unknown, sent: boolean): CliError {
   const cause = (error as { cause?: unknown } | null)?.cause;
   if (cause instanceof CliError) return cause;
   const code = (error as { code?: unknown } | null)?.code;
+  // The service's own message is often the diagnosis: a missing index link, a disabled API, a missing database.
+  const raw = error instanceof Error ? error.message : String(error);
+  const said = raw ? ` Service message: ${redact(raw)}` : '';
   const match = known.find((k) => k.matches(code));
-  if (match) return new CliError(match.code, match.message, match.suggestions);
+  if (match) return new CliError(match.code, match.message + said, match.suggestions);
   if (sent)
     return new CliError(
       'OUTCOME_UNKNOWN',
-      'The request was not confirmed and may have completed. No automatic replay was attempted.',
+      `The request was not confirmed and may have completed. No automatic replay was attempted.${said}`,
       ['Inspect the named resource before retrying.'],
     );
-  // SDK-side validation throws before any request and carries no code; its message names the caller's own input, never a credential.
+  // SDK-side validation throws before any request and carries no code; its message names the caller's own input.
   if (code === undefined) return new CliError('INVALID_INPUT', describe(error));
-  return new CliError('PROVIDER_ERROR', 'The service request failed.', [
-    'Check routing, connectivity, selected credentials and required Firestore indexes. Provider error bodies are suppressed to avoid exposing credentials or input data.',
+  return new CliError('PROVIDER_ERROR', `The service request failed.${said}`, [
+    'Check routing, connectivity, selected credentials and required Firestore indexes.',
   ]);
 }
 

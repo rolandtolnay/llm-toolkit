@@ -108,6 +108,8 @@ test('missing, ambiguous and malformed configuration fail rather than choosing a
     'explicit-project': { bucket: 'x', collectionSuffix: '_dev' },
   });
   failure(await f.run(['context', '--project', 'explicit-project']), 'context', 'INVALID_INPUT');
+  await f.put(join(f.root, '.firebase-admin.json'), { database: 'named-db' });
+  failure(await f.run(['context', '--project', 'explicit-project']), 'context', 'INVALID_INPUT');
   assert.equal(f.requests.length, 0);
 });
 

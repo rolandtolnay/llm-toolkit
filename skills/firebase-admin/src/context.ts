@@ -92,9 +92,19 @@ export async function resolveContext(options: Options, cwd = process.cwd()): Pro
   const project = nonempty(selected, 'Project');
   if (!/^[a-z][a-z0-9-]*$/.test(project))
     invalid('Use a literal project ID or configured alias, not a project number.');
-  const scoped = object(local[project] ?? {}, '.firebase-admin.json entry');
-  if (Object.keys(scoped).some((k) => !['database', 'bucket'].includes(k)))
-    invalid('.firebase-admin.json entries accept only database and bucket.');
+  // Validate every entry so a misshaped file fails instead of silently targeting the defaults.
+  for (const entry of Object.values(local)) {
+    if (
+      !entry ||
+      typeof entry !== 'object' ||
+      Array.isArray(entry) ||
+      Object.keys(entry).some((k) => !['database', 'bucket'].includes(k))
+    )
+      invalid(
+        '.firebase-admin.json must map project IDs to {"database"?, "bucket"?}, e.g. {"my-project":{"database":"named-db"}}.',
+      );
+  }
+  const scoped = local[project] ?? {};
   const database = nonempty(text(options, 'database') ?? scoped.database ?? '(default)', 'Database');
   const bucketValue = text(options, 'bucket') ?? scoped.bucket;
   const bucket = bucketValue === undefined ? null : nonempty(bucketValue, 'Bucket');
