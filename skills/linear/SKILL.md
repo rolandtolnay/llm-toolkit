@@ -381,6 +381,8 @@ Parse JSON response and present result:
 
    Omit `## Details` if there's nothing beyond what Problem/Solution already covers. Keep it concise — a few lines beats a wall of text.
 
+   A description states the observed problem, the agreed outcome as an invariant, and pointers to evidence. It does not prescribe mechanisms, list scenarios per role, environment, platform or call site, or enumerate what not to build; one boundary sentence is enough. Name platform or device checks only when the code branches on platform.
+
    ```bash
    uv run ~/.claude/skills/linear/scripts/linear.py create "[title]" \
      -d "[structured description]" -p [priority] -e [estimate] \
