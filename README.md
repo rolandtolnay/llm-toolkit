@@ -71,6 +71,7 @@ The prompt is intentional. Claude Code, Pi, and other agents put skills, prompts
 | Work from a Linear ticket | [`/work-ticket`](#commands) |
 | See what to work on next across Linear projects | [`roadmap-page`](#roadmap-page) |
 | Search Gmail or Slack from an agent | [`gmail`](#gmail), [`slack`](#slack), or [`linear`](#linear) |
+| Generate narration or add a voiceover to video | [`elevenlabs`](#elevenlabs) |
 
 Invocation examples below use Claude Code slash syntax. A port may expose the same resource through a different explicit command.
 
@@ -373,6 +374,12 @@ The optional [`hobby-bundle/`](hobby-bundle/) is a worked Next.js/Firebase/Verce
 
 ## Integrations
 
+### ElevenLabs
+
+[`elevenlabs`](skills/elevenlabs/SKILL.md) generates narration through the official ElevenLabs CLI and uses FFmpeg for requested video voiceovers. Scripts are prepared for Eleven v4 with spoken-form text, audio tags and IPA pronunciation hints. Personal voice/model defaults live in `~/.config/elevenlabs/defaults.json`; `uv` loads the owner-only `credentials.env` in that directory without putting the key in commands or repository files. Requires `elevenlabs` and `uv`, plus FFmpeg/ffprobe for media assembly. [Setup](skills/elevenlabs/references/setup.md) covers permissions, account checks and installation.
+
+Setup and metadata checks do not generate audio. Requested synthesis consumes allowance; community Voice Library voices require a paid plan for API use, and Free-generated output is noncommercial. The skill preserves source videos and distinguishes file validation from listening verification.
+
 ### Linear
 
 [`linear`](skills/linear/SKILL.md) creates, updates, queries, relates, comments on, and organizes Linear issues, projects, cycles, milestones, labels, documents, attachments, and custom views. Single-team workspaces can often resolve the team automatically; multi-team setups can use a flag, environment variable, or `.linear.json`.
@@ -505,10 +512,10 @@ The CLI can also read supported agent `env.json` locations or process environmen
 
 ## Complete skill index
 
-The repository currently has 24 top-level skills. Use this collapsed list when you know the name and want the source file.
+The repository currently has 27 top-level skills. Use this collapsed list when you know the name and want the source file.
 
 <details>
-<summary><strong>Show all 24 skills</strong></summary>
+<summary><strong>Show all 27 skills</strong></summary>
 
 ### Create and maintain agent resources
 
@@ -549,6 +556,7 @@ The repository currently has 24 top-level skills. Use this collapsed list when y
 
 ### Creative workflows
 
+- [`elevenlabs`](skills/elevenlabs/SKILL.md): Generates speech or adds narration to a video through the official CLI, with private local credentials and reusable voice defaults.
 - [`app-icon-studio`](skills/app-icon-studio/SKILL.md): Generates, judges, revises, and presents app icon candidates through OpenAI and Gemini APIs.
 - [`nano-banana-app-icon`](skills/nano-banana-app-icon/SKILL.md): Writes and critiques app-icon prompts for a manual Gemini workflow.
 
@@ -680,7 +688,7 @@ These are strategy lenses, not market evidence. Check pricing, demand, competito
 ## Guides and repository layout
 
 ```text
-skills/           24 primary skills, with bundled references, scripts, assets, and agent metadata
+skills/           27 primary skills, with bundled references, scripts, assets, and agent metadata
 commands/         21 Claude-style command prompts, including 12 decision frameworks
 agents/           the research-subagent definition used by research workflows
 hobby-bundle/     goal-driven web-project example and optional web skills
@@ -716,6 +724,7 @@ site/             a small GitHub Pages/Jekyll reference site
 
 - [README Guide](docs/guides/readme-guide.md)
 - [Nano Banana 2 Prompting Guide](docs/guides/nano-banana-2-prompting-guide.md)
+- [ElevenLabs Prompting Best Practices](docs/guides/eleven-labs-prompting-best-practices.md): official delivery, pronunciation and text-normalization guidance for Eleven v4 text-to-speech.
 - [The Unreasonable Effectiveness of HTML](docs/guides/the-unreasonable-effectiveness-of-html.md)
 - [Website Scrape Consolidation Principles](docs/guides/website-scrape-consolidation-principles.md)
 
