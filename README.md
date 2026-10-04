@@ -69,6 +69,7 @@ The prompt is intentional. Claude Code, Pi, and other agents put skills, prompts
 | Get a dense answer restated in plain language | [`plain`](#complete-skill-index) |
 | Verify finished code or triage review feedback | [`/verify`](#engineering-quality-and-delivery) or [`triage-pr-comments`](#engineering-quality-and-delivery) |
 | Work from a Linear ticket | [`/work-ticket`](#commands) |
+| See what to work on next across Linear projects | [`roadmap-page`](#roadmap-page) |
 | Search Gmail or Slack from an agent | [`gmail`](#gmail), [`slack`](#slack), or [`linear`](#linear) |
 
 Invocation examples below use Claude Code slash syntax. A port may expose the same resource through a different explicit command.
@@ -407,6 +408,12 @@ Optional project defaults in `.linear.json`:
 You can also set `LINEAR_TEAM` to a team key or UUID. The installing agent should adapt the secret location for non-Claude hosts while preserving the CLI's environment contract.
 
 </details>
+
+### Roadmap page
+
+[`roadmap-page`](skills/roadmap-page/SKILL.md) turns the tickets of one or more Linear projects into a self-contained HTML roadmap page: release phases, an in-progress strip, three next-up cards, areas of work, and a drawer per ticket with blockers and a copyable session prompt. The skill asks four questions (projects and focus, goal and date, owner label, session skills), then writes humanized guidance for every ticket.
+
+A dependency-free Node server shipped with the skill refreshes the page through the `linear` CLI, serves it on localhost, and offers a Self-heal button that runs headless `pi` (`openai-codex/gpt-6.1-sol`, medium effort) under a fixed contract to integrate new tickets, reconcile unexpected states, re-check changed guidance, or apply a typed instruction. Each run is backed up, validated, and revertible from the page. It adds a `just roadmap` recipe to the project. Requires `uv`, Node 22+, `just`, the `linear` skill with its API key, and `pi` on PATH for self-heal.
 
 ### Slack
 

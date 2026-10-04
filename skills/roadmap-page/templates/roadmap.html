@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Roadmap</title>
+<style>
+:root { --paper:#fafaf6; --white:#fff; --ink:#26392f; --muted:#637067; --line:#dce2d9; --green:#315640; --wash:#eef3eb; --amber:#886128; --amber-wash:#faf3e6; --blue:#2f5572; --blue-wash:#e9f0f5; --red:#8a3b32; --red-wash:#f8ebe8; --radius:16px; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:var(--paper); }
+* { box-sizing:border-box; }
+body { margin:0; font-size:15px; line-height:1.55; }
+body:has(dialog[open]) { overflow:hidden; }
+button,input,textarea { font:inherit; color:inherit; }
+button,a,input,summary,textarea { -webkit-tap-highlight-color:transparent; }
+button { cursor:pointer; border:0; background:none; }
+a { color:var(--green); text-underline-offset:4px; }
+button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible,textarea:focus-visible { outline:3px solid #8eaa7f; outline-offset:4px; }
+p,h1,h2,h3 { margin:0; }
+h1,h2,.wordmark { font-family:Georgia,"Times New Roman",serif; font-weight:400; }
+h1 { font-size:clamp(34px,4.4vw,54px); line-height:1.13; letter-spacing:-1.8px; }
+h2 { font-size:28px; line-height:1.2; letter-spacing:-.5px; }
+h3 { font-size:16px; line-height:1.4; font-weight:600; }
+small,.small { font-size:13px; }
+.muted { color:var(--muted); }
+.eyebrow { font-size:11px; font-weight:600; letter-spacing:1.4px; text-transform:uppercase; color:var(--muted); }
+.wrap { max-width:1192px; padding:0 40px; margin:auto; }
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:24px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.brand { display:flex; align-items:center; gap:16px; }
+.wordmark { font-size:27px; letter-spacing:-1px; }
+.brand span:last-child { border-left:1px solid var(--line); padding-left:16px; color:var(--muted); font-size:13px; }
+.toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.text-button { padding:8px 0; color:var(--muted); text-decoration:underline; text-underline-offset:4px; font-size:13px; }
+.outline-button { border:1px solid var(--line); padding:8px 12px; border-radius:7px; font-size:13px; background:var(--white); }
+.outline-button:hover { border-color:var(--green); }
+.outline-button .badge { display:inline-block; min-width:18px; padding:0 6px; margin-left:6px; border-radius:9px; background:var(--amber); color:#fff; font-size:11px; line-height:18px; text-align:center; }
+.solid-button { border-radius:7px; background:var(--green); color:white; padding:9px 14px; font-size:13px; }
+.solid-button[disabled],.outline-button[disabled] { opacity:.5; cursor:default; }
+.hero { display:flex; justify-content:space-between; align-items:flex-end; gap:28px; padding:44px 0 30px; }
+.hero .eyebrow { margin-bottom:12px; }
+.hero p:last-child { max-width:570px; color:var(--muted); margin-top:14px; font-size:16px; }
+.progress { flex-shrink:0; width:184px; padding-bottom:5px; }
+.progress strong { font-size:24px; font-weight:500; }
+.progress-track { height:4px; background:var(--line); margin:12px 0 7px; border-radius:4px; }
+.progress-track i { display:block; height:100%; background:var(--green); border-radius:4px; }
+.phase-nav { display:flex; border-bottom:1px solid var(--line); gap:32px; overflow-x:auto; }
+.phase-nav button { display:flex; gap:12px; align-items:center; color:var(--muted); padding:15px 0; border-bottom:2px solid transparent; margin-bottom:-1px; text-align:left; white-space:nowrap; }
+.phase-nav button[aria-pressed=true] { color:var(--ink); border-color:var(--green); }
+.phase-number { font-family:ui-monospace,monospace; font-size:12px; color:var(--muted); }
+.phase-nav small { display:block; font-size:11px; }
+section { margin-top:38px; }
+.section-head { display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:18px; }
+.section-head h2 { font-size:25px; }
+.section-head p { color:var(--muted); font-size:13px; }
+.next-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+.next-card { padding:22px 23px; background:var(--white); border:1px solid var(--line); border-radius:var(--radius); text-align:left; display:flex; flex-direction:column; align-items:flex-start; min-height:190px; }
+.next-card.primary { background:var(--green); color:#fff; border-color:var(--green); }
+.next-card.soon { border-style:dashed; }
+.next-card .eyebrow { color:inherit; opacity:.8; font-size:10px; }
+.next-card h3 { font-size:19px; font-weight:500; margin:13px 0 8px; max-width:240px; }
+.next-card p { font-size:13px; color:var(--muted); }
+.next-card.primary p { color:#e0eade; }
+.next-card .card-end { margin-top:auto; padding-top:14px; font-size:12px; display:flex; justify-content:space-between; width:100%; }
+.next-card:hover { box-shadow:0 5px 18px #26392f0a; transform:translateY(-1px); }
+.progress-strip { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
+.progress-item { text-align:left; padding:16px 18px; border:1px solid #c9d8e2; border-radius:12px; background:var(--blue-wash); display:flex; flex-direction:column; gap:6px; }
+.progress-item h3 { font-size:15px; font-weight:500; }
+.progress-item p { font-size:12px; color:var(--blue); }
+.progress-item .unblocks { color:var(--muted); font-size:12px; }
+.system-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.system-card { text-align:left; padding:18px 19px; border:1px solid var(--line); border-radius:12px; background:transparent; position:relative; }
+.system-card[aria-pressed=true] { background:var(--wash); border-color:#9bb294; }
+.system-card .number { font-size:11px; font-family:ui-monospace,monospace; color:var(--muted); }
+.system-card h3 { margin:9px 0 5px; }
+.system-card p { color:var(--muted); font-size:13px; min-height:40px; }
+.system-card .lane-count { display:block; margin-top:15px; font-size:12px; color:var(--green); }
+.system-note { display:flex; gap:14px; align-items:center; margin:15px 0 0; color:var(--muted); font-size:13px; }
+.system-note::before { content:""; width:32px; height:1px; background:var(--line); }
+.system-note button { text-decoration:underline; text-underline-offset:3px; padding:5px 0; color:var(--green); }
+.work-section { margin-top:32px; padding:24px 0 0; border-top:1px solid var(--line); }
+.work-header { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; }
+.work-header h2 { font-size:24px; }
+.work-header p { color:var(--muted); font-size:13px; margin-top:7px; }
+.filters { display:flex; flex-wrap:wrap; gap:6px; margin:20px 0 12px; }
+.filters button { padding:6px 12px; border-radius:20px; font-size:12px; color:var(--muted); border:1px solid transparent; }
+.filters button[aria-pressed=true] { border-color:var(--line); background:var(--white); color:var(--ink); }
+.task-list { border-top:1px solid var(--line); }
+.task-row { display:grid; width:100%; grid-template-columns:1fr 180px 20px; align-items:center; gap:20px; border-bottom:1px solid var(--line); padding:19px 6px; text-align:left; }
+.task-row:hover { background:var(--wash); }
+.task-row h3 { font-size:15px; font-weight:500; }
+.task-row p { font-size:13px; color:var(--muted); margin-top:3px; }
+.row-status { text-align:right; font-size:12px; color:var(--green); }
+.row-status small { display:block; font-size:11px; color:var(--muted); margin-top:4px; }
+.row-status.waiting { color:var(--muted); }
+.row-status.owner { color:var(--amber); }
+.row-status.progress { color:var(--blue); }
+.row-status.alert { color:var(--red); }
+.arrow { color:var(--muted); font-size:18px; }
+.empty { padding:28px 5px; color:var(--muted); }
+.later-intro { padding:30px; background:var(--wash); border-radius:var(--radius); }
+.later-intro h2 { margin-bottom:10px; }
+.later-intro p { max-width:680px; color:var(--muted); }
+.bottom { margin:32px 0; }
+details { border-bottom:1px solid var(--line); }
+summary { padding:18px 0; cursor:pointer; font-size:14px; font-weight:500; }
+.details-body { padding:0 0 22px; color:var(--muted); max-width:850px; font-size:14px; }
+.details-body p + p { margin-top:12px; }
+.guide-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px 36px; }
+.guide-grid h3 { color:var(--ink); margin-bottom:4px; font-size:14px; }
+footer { display:flex; justify-content:space-between; align-items:flex-start; gap:28px; padding:22px 0 32px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+footer p { max-width:620px; }
+code { font-family:ui-monospace,SFMono-Regular,monospace; font-size:.9em; }
+footer code { color:var(--ink); }
+.notice { background:var(--amber-wash); color:var(--amber); padding:10px 15px; border-radius:8px; margin:16px 0; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.notice.alert { background:var(--red-wash); color:var(--red); }
+.notice.info { background:var(--blue-wash); color:var(--blue); }
+.notice button { text-decoration:underline; text-underline-offset:3px; color:inherit; padding:0; }
+[hidden] { display:none!important; }
+dialog { border:0; color:var(--ink); background:var(--paper); padding:0; }
+dialog::backdrop { background:#1a2e2459; backdrop-filter:blur(2px); }
+#task-dialog { position:fixed; inset:0 0 0 auto; margin:0; width:min(680px,100%); max-width:100%; height:100dvh; max-height:100dvh; box-shadow:-15px 0 70px #14251b26; }
+.drawer-top { position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:space-between; padding:16px 30px; background:var(--paper); border-bottom:1px solid var(--line); }
+.drawer-top button { padding:7px 10px; border-radius:7px; font-size:13px; }
+.drawer-top button:hover { background:var(--wash); }
+.drawer-content { padding:30px 36px 40px; }
+.drawer-content h2 { font-size:32px; margin:12px 0; }
+.drawer-summary { color:var(--muted); font-size:16px; }
+.drawer-tags { display:flex; flex-wrap:wrap; gap:8px; margin:20px 0 26px; }
+.tag { font-size:12px; padding:5px 9px; border-radius:6px; background:var(--wash); color:var(--green); }
+.tag.waiting { background:#eeeee8; color:var(--muted); }
+.tag.owner { background:var(--amber-wash); color:var(--amber); }
+.tag.progress { background:var(--blue-wash); color:var(--blue); }
+.tag.alert { background:var(--red-wash); color:var(--red); }
+.drawer-section { margin-top:26px; }
+.drawer-section h3 { margin-bottom:9px; font-size:14px; }
+.drawer-section p { color:var(--muted); font-size:14px; }
+.relations { display:grid; grid-template-columns:1fr 26px 1fr; align-items:start; gap:8px; }
+.relations .arrow { text-align:center; margin-top:38px; }
+.relations .eyebrow { font-size:10px; margin-bottom:10px; }
+.relation-button { display:block; text-align:left; font-size:12px; padding:10px 12px; background:var(--white); border:1px solid var(--line); border-radius:8px; margin-bottom:6px; width:100%; }
+.relation-button small { display:block; color:var(--muted); font-size:10px; }
+.relation-button:hover { border-color:var(--green); }
+.gate-note { margin-top:16px; border-left:2px solid #c7ad7b; padding-left:14px; }
+.gate-links { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.gate-links .relation-button { width:auto; }
+.session-box { padding:18px; border-radius:12px; background:var(--wash); }
+.session-box > code { display:block; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.65; font-size:12px; margin:10px 0 14px; }
+.drawer-footer { margin-top:26px; padding-top:20px; border-top:1px solid var(--line); }
+.drawer-footer p { font-size:12px; color:var(--muted); }
+#heal-dialog { max-width:620px; width:min(620px,calc(100% - 32px)); border-radius:16px; padding:28px; }
+#heal-dialog h2 { font-size:26px; }
+#heal-dialog .intro { margin:10px 0 18px; color:var(--muted); font-size:14px; }
+.heal-option { display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-top:1px solid var(--line); cursor:pointer; }
+.heal-option input { margin-top:5px; accent-color:var(--green); }
+.heal-option b { display:block; font-weight:500; }
+.heal-option span { color:var(--muted); font-size:13px; }
+.heal-option .count { color:var(--amber); font-weight:600; }
+#heal-instruction { width:100%; min-height:84px; margin-top:8px; border:1px solid var(--line); border-radius:8px; padding:10px; background:var(--white); resize:vertical; }
+.heal-log { margin-top:18px; max-height:260px; overflow:auto; background:var(--white); border:1px solid var(--line); border-radius:8px; padding:12px 14px; font-family:ui-monospace,SFMono-Regular,monospace; font-size:12px; line-height:1.6; }
+.heal-log div { white-space:pre-wrap; overflow-wrap:anywhere; }
+.heal-log .tool { color:var(--muted); }
+.heal-log .warn { color:var(--amber); }
+.heal-log .error { color:var(--red); }
+.heal-log .text { color:var(--ink); margin-top:6px; }
+.heal-log .info { color:var(--blue); }
+.actions { display:flex; gap:12px; justify-content:flex-end; margin-top:22px; flex-wrap:wrap; }
+.spinner { display:inline-block; width:12px; height:12px; border:2px solid var(--line); border-top-color:var(--green); border-radius:50%; animation:spin .8s linear infinite; vertical-align:-2px; margin-right:6px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+@media(max-width:900px) { .wrap { padding:0 24px; } .system-grid { grid-template-columns:repeat(2,1fr); } .next-card { padding:20px; } .next-card h3 { font-size:17px; } }
+@media(max-width:600px) {
+ .wrap { padding:0 20px; } .topbar { padding:18px 0; } .hero { padding:30px 0 22px; display:block; } h1 { letter-spacing:-1px; }
+ .hero p:last-child { font-size:15px; } .progress { margin-top:22px; width:100%; display:flex; align-items:center; gap:8px; flex-wrap:wrap; } .progress strong { font-size:17px; } .progress-track { order:3; width:100%; margin:0; } .progress small { margin-left:auto; }
+ .phase-nav { gap:20px; } .phase-nav button { font-size:12px; gap:7px; } .phase-number { display:none; }
+ section { margin-top:28px; } .section-head { align-items:flex-start; } .section-head h2 { font-size:24px; } .section-head p { max-width:140px; text-align:right; font-size:11px; }
+ .next-grid { grid-template-columns:1fr; gap:10px; } .next-card { min-height:0; padding:18px 20px; } .next-card h3 { font-size:18px; max-width:none; margin:7px 0 4px; } .next-card .card-end { padding-top:10px; }
+ .system-grid { gap:10px; } .system-card { padding:15px; } .system-card h3 { font-size:14px; } .system-card p { font-size:12px; min-height:56px; }
+ .system-note { align-items:flex-start; font-size:12px; } .system-note::before { display:none; }
+ .work-header { gap:12px; } .task-row { grid-template-columns:1fr 14px; gap:8px; padding:18px 2px; } .task-row .row-status { grid-row:2; text-align:left; } .task-row .row-status small { display:inline; margin-left:8px; } .task-row .arrow { grid-column:2; grid-row:1/3; }
+ .guide-grid { grid-template-columns:1fr; } footer { display:block; } footer p + p { margin-top:12px; } .drawer-content { padding:24px; } .drawer-top { padding:12px 16px; } .drawer-content h2 { font-size:28px; } .relations { gap:4px; grid-template-columns:1fr 20px 1fr; }
+}
+@media(prefers-reduced-motion:no-preference) { button { transition:background .15s,border-color .15s,transform .15s; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+ <header class="topbar">
+  <div class="brand"><span class="wordmark" id="brand-name">roadmap</span><span id="brand-subtitle">Your roadmap</span></div>
+  <div class="toolbar">
+   <button class="outline-button" id="refresh-button" hidden>Refresh from Linear</button>
+   <button class="outline-button" id="heal-button" hidden>Self-heal<span class="badge" id="heal-badge" hidden></span></button>
+   <button class="text-button" data-guide>How to use this</button>
+  </div>
+ </header>
+ <p class="small muted" id="snapshot-badge" style="margin-top:12px">Saved Linear snapshot</p>
+ <p id="refresh-warning" class="notice" role="status" hidden></p>
+ <p id="server-hint" class="notice info" hidden></p>
+ <p id="heal-notice" class="notice" role="status" hidden></p>
+ <main>
+  <div class="hero"><div><p class="eyebrow" id="phase-eyebrow"></p><h1 id="page-title"></h1><p id="page-description"></p></div><div class="progress" aria-label="Linear phase progress"><div><strong id="progress-count"></strong> <span class="small muted">done in Linear</span></div><div class="progress-track" aria-hidden="true"><i id="progress-bar"></i></div><small class="muted" id="date-note"></small></div></div>
+  <nav class="phase-nav" aria-label="Release phase" id="phase-nav"></nav>
+  <p id="review-notice" class="notice" hidden></p>
+  <section id="progress-section" aria-labelledby="progress-title" hidden><div class="section-head"><h2 id="progress-title">In progress right now</h2><p>Started in Linear; not suggested again below</p></div><div class="progress-strip" id="progress-strip"></div></section>
+  <section id="next-section" aria-labelledby="next-title"><div class="section-head"><h2 id="next-title">A useful next move</h2><p>Suggestions, not assignments</p></div><div class="next-grid" id="next-cards"></div></section>
+  <section id="system-section" aria-labelledby="system-title"><div class="section-head"><h2 id="system-title">How it fits together</h2><p>Choose an area to see its work</p></div><div class="system-grid" id="system-cards"></div><div class="system-note" id="system-note" hidden></div></section>
+  <section id="later-section" hidden><div class="later-intro"><h2 id="later-title"></h2><p id="later-description"></p></div></section>
+  <section class="work-section" aria-labelledby="work-title"><div class="work-header"><div><h2 id="work-title" tabindex="-1"></h2><p id="work-description"></p></div><button class="text-button" id="show-all">See all work in this phase</button></div><div class="filters" role="group" aria-label="Filter work"><button data-filter="open" aria-pressed="true">Remaining</button><button data-filter="agent" aria-pressed="false">Agent can start</button><button data-filter="input" aria-pressed="false">Your input</button><button data-filter="progress" aria-pressed="false">In progress</button><button data-filter="waiting" aria-pressed="false">Waiting</button><button data-filter="done" aria-pressed="false">Closed</button><button data-filter="review" aria-pressed="false">Needs review</button></div><div class="task-list" id="task-list"></div><p class="sr-only" aria-live="polite" id="list-status"></p></section>
+  <div class="bottom">
+   <details id="guide"><summary>Working with an agent</summary><div class="details-body"><div class="guide-grid" id="guide-grid"></div><p id="guide-footer" style="margin-top:20px"></p></div></details>
+   <details id="fallbacks" hidden><summary id="fallbacks-title"></summary><div class="details-body" id="fallbacks-body"></div></details>
+   <details id="unscheduled"><summary>Outside the release phases <span class="muted small" id="unscheduled-count"></span></summary><div id="unscheduled-list"></div></details>
+   <details id="page-settings"><summary>About this snapshot</summary><div class="details-body"><p id="snapshot-note"></p><p id="about-command"></p><p>Ticket status, assignee, phase, estimate, priority and blockers come from Linear. The titles, summaries and session advice were written for this page and can be refreshed by a self-heal pass, which uses headless pi to edit this file. Self-heal results say so; they are not human reviews.</p><p id="heal-last"></p></div></details>
+  </div>
+ </main>
+ <footer><p id="footer-snapshot"></p><p id="footer-command"></p></footer>
+</div>
+<dialog id="task-dialog" aria-labelledby="task-title"><div class="drawer-top"><button id="task-back" hidden>← Back</button><span id="task-location" class="small muted"></span><button id="task-close" aria-label="Close task details">Close ×</button></div><div id="task-content" class="drawer-content"></div></dialog>
+<dialog id="heal-dialog" aria-labelledby="heal-title">
+ <h2 id="heal-title">Self-heal this page</h2>
+ <p class="intro">A headless pi run reads Linear with the deterministic CLI and edits this page under a fixed contract. A backup is taken first and the result is validated before it is kept. Reload when it finishes.</p>
+ <form id="heal-form">
+  <label class="heal-option"><input type="radio" name="template" value="integrate-new"><div><b>Integrate new tickets <span class="count" data-count="integrate-new"></span></b><span>Write plain-language guidance for tickets that are new to this page, place them in an area, and update the suggested order.</span></div></label>
+  <label class="heal-option"><input type="radio" name="template" value="reconcile-states"><div><b>Reconcile unexpected states <span class="count" data-count="reconcile-states"></span></b><span>Teach the page about states, relations or projects it does not recognise yet, and repair references that no longer resolve.</span></div></label>
+  <label class="heal-option"><input type="radio" name="template" value="recheck-guidance"><div><b>Re-check changed guidance <span class="count" data-count="recheck-guidance"></span></b><span>Tickets whose title, description, labels or blockers changed since their guidance was written. Rewrites only what no longer matches.</span></div></label>
+  <label class="heal-option"><input type="radio" name="template" value="custom"><div><b>Something specific</b><span>Describe the change you want. Same contract, same validation.</span><textarea id="heal-instruction" placeholder="For example: add a filter for tickets estimated XL or larger." hidden></textarea></div></label>
+  <div class="heal-log" id="heal-log" hidden></div>
+  <p id="heal-status" class="small muted" role="status" style="margin-top:12px"></p>
+  <div class="actions"><button type="button" class="outline-button" id="heal-revert" hidden>Revert last self-heal</button><button type="button" class="outline-button" id="heal-close">Close</button><button type="button" class="outline-button" id="heal-reload" hidden>Reload page</button><button type="submit" class="solid-button" id="heal-run">Run self-heal</button></div>
+ </form>
+</dialog>
+<div id="announcement" class="sr-only" role="status"></div>
+<script id="roadmap-config" type="application/json">{{CONFIG}}</script>
+<script id="roadmap-data" type="application/json">{{DATA}}</script>
+<script>
+(() => {
+ 'use strict';
+ const CONFIG = JSON.parse(document.getElementById('roadmap-config').textContent);
+ const DATA = JSON.parse(document.getElementById('roadmap-data').textContent);
+ const tasks = DATA.tasks;
+ const byId = Object.fromEntries(tasks.map(t => [t.id, t]));
+ const $ = id => document.getElementById(id);
+ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const phases = CONFIG.phases;
+ const focus = CONFIG.focus || phases[0].id;
+ const phaseById = Object.fromEntries(phases.map(p => [p.id, p]));
+ const lanes = CONFIG.lanes || [];
+ const workflows = Object.assign({go:'Agent implementation',scope:'Scope together',prep:'Plan together',owner:'Your action',review:'Review the ticket'}, CONFIG.workflowLabels || {});
+ const sizes = Object.assign({1:'XS',2:'S',3:'M',5:'L',8:'XL'}, CONFIG.estimateLabels || {});
+ const startable = new Set(CONFIG.startableStateTypes || ['unstarted']);
+ const CLOSED = new Set(['completed','canceled','duplicate']);
+ const KNOWN = new Set(['triage','backlog','unstarted','started','completed','canceled','duplicate']);
+
+ // Status helpers. Completion, progress and blockers come only from Linear.
+ const done = id => byId[id]?.stateType === 'completed';
+ const started = id => byId[id]?.stateType === 'started';
+ const inactive = t => t.missing || t.archived || t.stateType === 'canceled' || t.stateType === 'duplicate';
+ const closed = t => done(t.id) || inactive(t);
+ const unknownState = t => !t.missing && (t.unknownState || !KNOWN.has(t.stateType));
+ const unmet = ids => (ids || []).filter(id => !done(id));
+ const isNew = t => !t.curated && !t.referenceOnly;
+ const belongs = (t, phaseId) => !t.referenceOnly && t.phase === phaseId;
+ const inPhase = phaseId => tasks.filter(t => belongs(t, phaseId));
+ const laneTasks = lane => lane.ids.map(id => byId[id]).filter(t => t && belongs(t, focus));
+ const dependents = id => tasks.filter(other => (other.blockedBy || []).includes(id) && !other.referenceOnly && !closed(other));
+ const aiUpdated = t => !t.reviewRequired && t.aiGuidance?.sourceHash === t.sourceHash && t.reviewedHash !== t.sourceHash;
+ const byPriority = (a, b) => (a.priority || 5) - (b.priority || 5) || (a.number || 0) - (b.number || 0);
+
+ function availability(t) {
+  if (t.missing) return {label:'Not available in Linear',kind:'waiting',ready:false};
+  if (unknownState(t)) return {label:'Unrecognised state: '+t.state,kind:'alert',ready:false};
+  if (t.archived) return {label:'Archived in Linear',kind:'waiting',ready:false};
+  if (done(t.id)) return {label:'Done in Linear',kind:'',ready:false};
+  if (inactive(t)) return {label:t.state+' in Linear',kind:'waiting',ready:false};
+  if (t.stateType === 'started') return {label:t.assignee ? t.state+' · '+t.assignee : t.state+' in Linear',kind:'progress',ready:false};
+  if (t.assignee) return {label:'Assigned to '+t.assignee,kind:'waiting',ready:false};
+  if (isNew(t)) return {label:'New: needs integration',kind:'owner',ready:false};
+  if (t.reviewRequired) return {label:'Guidance needs review',kind:'owner',ready:false};
+  const open = unmet(t.blockedBy);
+  if (open.length) return open.some(started) ? {label:'Waiting on work in progress',kind:'progress',ready:false} : {label:'Waiting on other work',kind:'waiting',ready:false};
+  if (t.phase !== focus || t.referenceOnly) return {label:'Outside the current phase',kind:'waiting',ready:false};
+  if (!startable.has(t.stateType)) return {label:'Not selected to start',kind:'waiting',ready:false};
+  if (t.owner || t.workflow === 'owner') return {label:'Your move',kind:'owner',ready:true};
+  if (unmet(t.gates).length) return {label:'Local work can start',kind:'',ready:true};
+  return {label:'Can start',kind:'',ready:true};
+ }
+ // A ticket whose only unmet blockers are already in progress becomes ready when they land.
+ const readySoon = t => { const open = unmet(t.blockedBy); return open.length > 0 && open.every(started) && !t.assignee && !t.reviewRequired && !isNew(t) && t.phase === focus && !t.referenceOnly && startable.has(t.stateType); };
+
+ function row(t) {
+  const a = availability(t);
+  return `<button class="task-row" data-task="${esc(t.id)}"><span><h3>${esc(t.title)}</h3><p>${esc(t.summary)}</p></span><span class="row-status ${a.kind}">${esc(a.label)}<small>${isNew(t) ? 'New from Linear' : t.reviewRequired ? 'Review the guidance' : workflows[t.workflow] || t.workflow}${t.estimate && sizes[t.estimate] ? ' · '+sizes[t.estimate] : ''}${aiUpdated(t) ? ' · AI-updated' : ''}</small></span><span class="arrow" aria-hidden="true">↗</span></button>`;
+ }
+ function nextCard(t, label, reason, cls) {
+  if (!t) return `<div class="next-card"><span class="eyebrow">${esc(label)}</span><h3>Nothing to suggest here</h3><p>Check Linear for updates, or choose another area below.</p></div>`;
+  return `<button class="next-card ${cls || ''}" data-task="${esc(t.id)}"><span class="eyebrow">${esc(label)}</span><h3>${esc(t.title)}</h3><p>${esc(reason)}</p><span class="card-end"><span>${esc(workflows[t.workflow] || t.workflow)}${aiUpdated(t) ? ' · AI-updated' : ''}</span><span aria-hidden="true">↗</span></span></button>`;
+ }
+ function ordered(ids) {
+  const listed = (ids || []).map(id => byId[id]).filter(Boolean);
+  return [...listed, ...tasks.filter(t => !(ids || []).includes(t.id)).sort(byPriority)];
+ }
+ function paintNext() {
+  const reasons = Object.assign({agent:'Start here. It is unblocked and ready for an agent.',agentScope:'Agree a small first slice, then let the agent build.',owner:'Clear setup and access decisions before the implementation needs them.',plan:'Settle the user-facing choices now. Building still waits for its dependencies.',soon:'Becomes ready when the work in progress lands.'}, CONFIG.nextUpReasons || {});
+  const eligible = t => t && belongs(t, focus) && !closed(t) && !unknownState(t);
+  const next = CONFIG.nextUp || {};
+  const agent = ordered(next.agent).find(t => eligible(t) && !t.owner && ['go','scope'].includes(t.workflow) && availability(t).ready);
+  const owner = ordered(next.owner).find(t => eligible(t) && (t.owner || t.workflow === 'owner') && availability(t).ready);
+  const plan = ordered(next.plan).find(t => eligible(t) && t.workflow === 'prep' && !t.assignee && !t.reviewRequired && !isNew(t) && ['backlog','unstarted'].includes(t.stateType));
+  const soon = agent ? null : ordered(next.agent).find(t => eligible(t) && !t.owner && ['go','scope'].includes(t.workflow) && readySoon(t));
+  $('next-cards').innerHTML = (agent ? nextCard(agent, 'Move the build forward', agent.workflow === 'scope' ? reasons.agentScope : reasons.agent, 'primary')
+    : nextCard(soon, 'Ready after current work', reasons.soon, 'soon'))
+   + nextCard(owner, 'A useful action for you', reasons.owner, '')
+   + nextCard(plan, 'Worth planning together', reasons.plan, '');
+ }
+ function paintProgress() {
+  const running = tasks.filter(t => !t.referenceOnly && t.stateType === 'started').sort(byPriority);
+  $('progress-section').hidden = running.length === 0;
+  $('progress-strip').innerHTML = running.map(t => {
+   const unblocks = dependents(t.id).map(d => d.title);
+   return `<button class="progress-item" data-task="${esc(t.id)}"><h3>${esc(t.title)}</h3><p>${esc(t.state)}${t.assignee ? ' · '+esc(t.assignee) : ''} · ${esc(phaseById[t.phase]?.name || t.projectName)}</p>${unblocks.length ? `<span class="unblocks">Unblocks: ${esc(unblocks.join(', '))}</span>` : '<span class="unblocks">Nothing on this page waits for it.</span>'}</button>`;
+  }).join('');
+ }
+ let phase = focus, lane = lanes[0]?.id || 'all', filter = 'open', selected = null, history = [], returnFocus = null;
+ function matches(t) {
+  if (filter === 'review') return t.reviewRequired || isNew(t) || unknownState(t);
+  if (filter === 'done') return closed(t);
+  if (closed(t)) return false;
+  if (filter === 'progress') return t.stateType === 'started';
+  if (filter === 'agent') return !t.owner && t.workflow !== 'owner' && t.workflow !== 'prep' && availability(t).ready;
+  if (filter === 'input') return t.reviewRequired || isNew(t) || t.owner || ['owner','prep','scope'].includes(t.workflow);
+  if (filter === 'waiting') return unmet(t.blockedBy).length > 0 || unmet(t.gates).length > 0;
+  return true;
+ }
+ function paintPhaseNav() {
+  $('phase-nav').innerHTML = phases.map((p, i) => `<button data-phase="${esc(p.id)}" aria-pressed="${p.id === phase}"><span class="phase-number">${String(i+1).padStart(2,'0')}</span><span>${esc(p.name)}<small>${esc(p.short || (p.id === focus ? 'Focus now' : 'Later'))}</small></span></button>`).join('');
+ }
+ function paint() {
+  const p = phaseById[phase] || phases[0];
+  const phaseTasks = inPhase(phase), counted = phaseTasks.filter(t => !inactive(t)), completed = counted.filter(t => done(t.id)).length;
+  const attention = tasks.filter(t => !t.referenceOnly && !closed(t) && (t.reviewRequired || isNew(t) || unknownState(t)));
+  const newCount = attention.filter(isNew).length, unknownCount = attention.filter(unknownState).length, reviewCount = attention.length - newCount - unknownCount;
+  $('review-notice').hidden = attention.length === 0;
+  const parts = [];
+  if (newCount) parts.push(`${newCount} new ${newCount === 1 ? 'ticket needs' : 'tickets need'} integrating`);
+  if (unknownCount) parts.push(`${unknownCount} ${unknownCount === 1 ? 'ticket has' : 'tickets have'} an unrecognised state`);
+  if (reviewCount) parts.push(`${reviewCount} ${reviewCount === 1 ? 'ticket needs' : 'tickets need'} a guidance review`);
+  $('review-notice').innerHTML = `${esc(parts.join('; '))}. <button id="show-review">See them →</button>${server ? ' <button data-heal="'+(newCount ? 'integrate-new' : unknownCount ? 'reconcile-states' : 'recheck-guidance')+'">Run self-heal →</button>' : ''}`;
+  $('phase-eyebrow').textContent = phase === focus ? 'Your focus now · '+p.name : 'Later phase · '+p.name;
+  $('page-title').textContent = p.title || p.name; $('page-description').textContent = p.description || '';
+  $('progress-count').textContent = `${completed} / ${counted.length}`;
+  $('progress-bar').style.width = (counted.length ? completed/counted.length*100 : 0)+'%';
+  let dateText = 'From the last refresh';
+  if (CONFIG.targetDate && phase === focus) {
+   const target = new Date(CONFIG.targetDate+'T00:00:00'), today = new Date(); today.setHours(0,0,0,0);
+   const days = Math.round((target-today)/86400000), label = CONFIG.targetLabel || 'the target date';
+   if (Number.isFinite(days)) dateText = days > 0 ? `${days} days until ${label}` : days === 0 ? `Today is ${label}` : `${Math.abs(days)} days since ${label}`;
+  }
+  $('date-note').textContent = dateText;
+  paintPhaseNav();
+  const focusView = phase === focus;
+  $('next-section').hidden = !focusView; $('system-section').hidden = !focusView || !lanes.length; $('later-section').hidden = focusView;
+  if (focusView) { paintNext(); paintProgress(); } else { $('progress-section').hidden = true; $('later-title').textContent = p.intro || p.title || p.name; $('later-description').textContent = p.body || p.description || ''; }
+  $('system-cards').innerHTML = lanes.map((l, i) => `<button class="system-card" data-lane="${esc(l.id)}" aria-pressed="${lane === l.id}"><span class="number">${String(i+1).padStart(2,'0')}</span><h3>${esc(l.name)}</h3><p>${esc(l.summary)}</p><span class="lane-count">${laneTasks(l).filter(t => !closed(t)).length} remaining <span aria-hidden="true">→</span></span></button>`).join('');
+  const final = CONFIG.finalTicket && byId[CONFIG.finalTicket.id] ? CONFIG.finalTicket : null;
+  $('system-note').hidden = !final;
+  if (final) $('system-note').innerHTML = `<span>${esc(final.note || 'These areas meet in one outcome.')} <button data-task="${esc(final.id)}">${esc(final.label || byId[final.id].title)} →</button></span>`;
+  const activeLane = focusView ? lanes.find(l => l.id === lane) : null;
+  $('work-title').textContent = activeLane ? activeLane.name : p.name+' work';
+  $('work-description').textContent = activeLane ? activeLane.detail : focusView ? (p.allWork || 'All work in this phase, including blocked tickets.') : (p.laterNote || 'Not part of the current focus. Select this phase explicitly before starting work.');
+  $('show-all').hidden = !focusView || !activeLane;
+  const candidates = activeLane ? laneTasks(activeLane) : phaseTasks;
+  const visible = candidates.filter(matches);
+  $('task-list').innerHTML = visible.length ? visible.map(row).join('') : '<p class="empty">No tasks match this filter. Try Remaining or choose another area.</p>';
+  $('list-status').textContent = `${visible.length} tasks shown in ${$('work-title').textContent}.`;
+  document.querySelectorAll('[data-filter]').forEach(b => b.setAttribute('aria-pressed', b.dataset.filter === filter));
+  const later = inPhase('later');
+  $('unscheduled-list').innerHTML = later.length ? later.map(row).join('') : '<p class="empty">Every tracked ticket belongs to a release phase.</p>';
+  $('unscheduled-count').textContent = `· ${later.length} items`;
+ }
+ function relation(id) {
+  const t = byId[id];
+  if (!t) return `<span class="relation-button">${esc(id)}<small>Not on this page</small></span>`;
+  return `<button class="relation-button" data-task="${esc(id)}">${esc(t.title)}<small>${done(id) ? 'Done in Linear' : started(id) ? 'In progress' : phaseById[t.phase]?.name || 'Outside the release phases'} · ${esc(t.id)}</small></button>`;
+ }
+ function opener(t) {
+  const openers = CONFIG.openers || {};
+  const fill = text => text.replaceAll('{id}', t.id).replaceAll('{title}', t.title);
+  if (isNew(t)) return fill(openers.new || 'Review {id} in Linear and run the "Integrate new tickets" self-heal on this roadmap page so it gets plain-language guidance and a place in an area. Do not start implementation.');
+  if (t.reviewRequired) return fill(openers.review || 'Review {id} against its current Linear description, comments and dependencies. Update only its roadmap explanation and session suggestion on the roadmap page. Do not start implementation or change Linear.');
+  if (t.workflow === 'owner') return fill(openers.owner || 'Help me work through {id}. Read the current ticket and comments. Prepare the next concrete action for me; do not assume account, spending or production permissions.');
+  if (t.workflow === 'prep') return fill(openers.prep || 'Plan {id} with me. Read the current ticket and its decisions. Clarify the choices that need my input before writing a plan.');
+  if (t.workflow === 'scope') return fill(openers.scope || 'Scope {id} with me. Read the current ticket. Confirm a bounded first slice, check blockers, then implement within the agreed permissions.');
+  return fill(openers.go || 'Pick up {id}. Read the current ticket and comments. Check blockers and ownership first. Implement and validate the allowed scope; record anything that still needs my approval.');
+ }
+ function renderTask() {
+  const t = byId[selected], a = availability(t);
+  const down = tasks.filter(other => (other.blockedBy || []).includes(t.id));
+  const gatedDown = tasks.filter(other => (other.gates || []).includes(t.id));
+  const gates = CONFIG.gates || {};
+  const final = CONFIG.finalTicket;
+  $('task-location').textContent = (phaseById[t.phase]?.name || 'Later · Unscheduled')+' / '+t.id;
+  $('task-back').hidden = history.length === 0;
+  const notes = [];
+  if (unknownState(t)) notes.push(`<div class="gate-note"><h3>This page does not recognise the state "${esc(t.state)}"</h3><p>Linear reports state type "${esc(t.stateType)}". Run the "Reconcile unexpected states" self-heal so the page learns how to treat it.</p></div>`);
+  if (isNew(t)) notes.push(`<div class="gate-note"><h3>New to this roadmap</h3><p>Only Linear facts are shown. Run the "Integrate new tickets" self-heal to write guidance and place it in an area, or use the prompt below in a session.</p><p>Linear title: ${esc(t.linearTitle)}</p></div>`);
+  else if (t.reviewRequired) notes.push(`<div class="gate-note"><h3>Check this guidance before using it</h3><p>The ticket's title, description, labels or blockers changed since this explanation was written. Current Linear title: ${esc(t.linearTitle)}</p><p>Run the "Re-check changed guidance" self-heal, or use the manual review prompt below.</p></div>`);
+  $('task-content').innerHTML = `<p class="eyebrow">${esc(workflows[t.workflow] || t.workflow)}</p><h2 id="task-title" tabindex="-1">${esc(t.title)}</h2><p class="drawer-summary">${esc(t.summary)}</p>
+   <div class="drawer-tags"><span class="tag ${a.kind}">${esc(a.label)}</span>${t.estimate && sizes[t.estimate] ? `<span class="tag">${sizes[t.estimate]} · Linear estimate</span>` : ''}<span class="tag waiting">Linear: ${esc(t.state)}</span>${t.assignee ? `<span class="tag waiting">Assigned to ${esc(t.assignee)}</span>` : ''}${aiUpdated(t) ? '<span class="tag">AI-updated</span>' : ''}</div>
+   ${aiUpdated(t) ? `<p class="small muted">A self-heal pass updated this guidance on ${esc(new Date(t.aiGuidance.updatedAt).toLocaleDateString())}. It has not been marked as human-reviewed. Read the full ticket before starting.</p>` : ''}
+   ${notes.join('')}
+   <div class="drawer-section"><h3>What this changes</h3><p>${esc(t.detail)}</p></div>
+   <div class="drawer-section"><h3>Where you help</h3><p>${esc(t.input)}</p></div>
+   <div class="drawer-section"><h3>How it connects</h3><div class="relations"><div><p class="eyebrow">Needs first</p>${t.blockedBy?.length ? t.blockedBy.map(relation).join('') : '<p>No ticket blockers.</p>'}</div><span class="arrow" aria-hidden="true">→</span><div><p class="eyebrow">This makes possible</p>${down.length ? down.map(x => relation(x.id)).join('') : '<p>'+esc(final && final.id === t.id && final.enables ? final.enables : 'No direct ticket dependents.')+'</p>'}</div></div>
+   ${t.gates?.length ? `<div class="gate-note"><h3>${esc(gates.title || 'Also needs')}</h3><p>${esc(gates.body || 'These prerequisites are tracked separately and do not block local preparation.')}</p><div class="gate-links">${t.gates.map(relation).join('')}</div></div>` : ''}
+   ${gatedDown.length ? `<div class="gate-note"><h3>${esc(gates.enablesTitle || 'Also enables')}</h3><p>${esc(gates.enablesBody || 'These tasks can prepare before this is complete.')}</p><div class="gate-links">${gatedDown.map(x => relation(x.id)).join('')}</div></div>` : ''}</div>
+   <div class="drawer-section session-box"><h3>${isNew(t) || t.reviewRequired ? 'Ask for a guidance review' : t.workflow === 'owner' ? 'Ask an agent to help' : 'Start a session'}</h3><code id="session-prompt">${esc(opener(t))}</code><button class="solid-button" id="copy-prompt">Copy session prompt</button><p id="copy-status" class="small" role="status"></p>${t.workflow === 'prep' && !t.reviewRequired && CONFIG.prepFollowUp ? `<p style="margin-top:14px">${esc(CONFIG.prepFollowUp)}</p>` : ''}</div>
+   <div class="drawer-footer">${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener">Read the full ticket in Linear ↗</a>` : ''}<p style="margin-top:14px">Completion comes from Linear. ${server ? 'Use Refresh from Linear after a ticket changes.' : 'Run <code>'+esc(CONFIG.command || 'the roadmap command')+'</code> after a ticket changes to refresh this page.'}</p></div>`;
+ }
+ function openTask(id, source) {
+  if (!byId[id]) return;
+  if ($('task-dialog').open) { if (selected === id) return; history.push(selected); }
+  else { returnFocus = source; history = []; }
+  selected = id; renderTask();
+  if (!$('task-dialog').open) $('task-dialog').showModal();
+  $('task-dialog').scrollTop = 0; $('task-title').focus({preventScroll:true});
+ }
+ $('task-dialog').addEventListener('close', () => { const id = selected; selected = null; history = []; if (returnFocus?.isConnected) returnFocus.focus({preventScroll:true}); else document.querySelector(`[data-task="${id}"]`)?.focus({preventScroll:true}); });
+ $('task-close').addEventListener('click', () => $('task-dialog').close());
+ const taskDialog = $('task-dialog');
+ let startedOnBackdrop = false;
+ function isTaskBackdrop(event) {
+  const rect = taskDialog.getBoundingClientRect();
+  return event.target === taskDialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom);
+ }
+ taskDialog.addEventListener('pointerdown', event => { startedOnBackdrop = isTaskBackdrop(event); });
+ taskDialog.addEventListener('pointercancel', () => { startedOnBackdrop = false; });
+ taskDialog.addEventListener('click', event => { if (startedOnBackdrop && isTaskBackdrop(event)) taskDialog.close(); startedOnBackdrop = false; });
+ $('task-back').addEventListener('click', () => { selected = history.pop(); renderTask(); $('task-dialog').scrollTop = 0; $('task-title').focus({preventScroll:true}); });
+ document.addEventListener('click', async event => {
+  const taskButton = event.target.closest('[data-task]');
+  if (taskButton) { openTask(taskButton.dataset.task, taskButton); return; }
+  const phaseButton = event.target.closest('[data-phase]');
+  if (phaseButton) { phase = phaseButton.dataset.phase; filter = 'open'; lane = lanes[0]?.id || 'all'; paint(); return; }
+  const laneButton = event.target.closest('[data-lane]');
+  if (laneButton) { lane = laneButton.dataset.lane; filter = 'open'; paint(); $('work-title').focus({preventScroll:true}); $('work-title').scrollIntoView({block:'nearest'}); return; }
+  if (event.target.closest('#show-review')) { lane = 'all'; filter = 'review'; paint(); $('work-title').focus(); return; }
+  const healTrigger = event.target.closest('[data-heal]');
+  if (healTrigger) { openHeal(healTrigger.dataset.heal); return; }
+  const filterButton = event.target.closest('[data-filter]');
+  if (filterButton) { filter = filterButton.dataset.filter; paint(); return; }
+  if (event.target.closest('[data-guide]')) { $('guide').open = true; $('guide').scrollIntoView({block:'start'}); $('guide').querySelector('summary').focus({preventScroll:true}); }
+  if (event.target.closest('#copy-prompt')) {
+   const text = opener(byId[selected]);
+   try { await navigator.clipboard.writeText(text); $('copy-status').textContent = 'Copied. Paste it into a new agent session.'; }
+   catch {
+    const selection = window.getSelection(), range = document.createRange(); range.selectNodeContents($('session-prompt')); selection.removeAllRanges(); selection.addRange(range);
+    $('copy-status').textContent = 'Select and copy the prompt above. This browser did not allow clipboard access.';
+   }
+  }
+ });
+ $('show-all').addEventListener('click', () => { lane = 'all'; filter = 'open'; paint(); $('work-title').focus({preventScroll:true}); });
+
+ // Static chrome from config.
+ document.title = `${CONFIG.product || 'Roadmap'} · Roadmap`;
+ $('brand-name').textContent = (CONFIG.product || 'roadmap').toLowerCase();
+ $('brand-subtitle').textContent = CONFIG.title || 'Your roadmap';
+ $('guide-grid').innerHTML = (CONFIG.guide || []).map(item => `<div><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p></div>`).join('');
+ $('guide-footer').textContent = CONFIG.guideFooter || 'Session choices on this page are suggestions. Ticket estimates describe scope, not hours. Read the full ticket before starting.';
+ if (CONFIG.fallbacks) { $('fallbacks').hidden = false; $('fallbacks-title').textContent = CONFIG.fallbacks.title; $('fallbacks-body').innerHTML = (CONFIG.fallbacks.paragraphs || [CONFIG.fallbacks.body]).map(text => `<p>${esc(text)}</p>`).join(''); }
+ const checkedDate = new Date(DATA.checkedAt);
+ const checkedLabel = Number.isFinite(checkedDate.getTime()) ? checkedDate.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}) : String(DATA.checkedAt || 'unknown');
+ const failed = DATA.refresh?.ok === false;
+ const oldSnapshot = !Number.isFinite(checkedDate.getTime()) || Date.now()-checkedDate.getTime() > 86400000;
+ $('refresh-warning').hidden = !failed && !oldSnapshot;
+ $('refresh-warning').textContent = failed ? `The last refresh failed${DATA.refresh?.error ? ': '+DATA.refresh.error : ''}. Showing the last saved Linear data from ${checkedLabel}; do not assume these statuses are current.` : `This snapshot is more than a day old. Refresh before choosing work. Last successful refresh: ${checkedLabel}.`;
+ $('snapshot-badge').textContent = `Linear snapshot · ${checkedLabel}`;
+ $('snapshot-note').textContent = `Ticket phases, statuses, ownership, estimates and native dependencies were read from Linear on ${checkedLabel}.`;
+ $('about-command').innerHTML = `Open this page with <code>${esc(CONFIG.command || 'the roadmap command')}</code> from the project directory. It refreshes from Linear, serves the page locally and enables the Refresh and Self-heal buttons. Opening the file directly shows the saved snapshot only.`;
+ $('footer-snapshot').textContent = `Last successful Linear refresh: ${checkedLabel}. No background sync.`;
+ $('footer-command').innerHTML = `Open from the project: <code>${esc(CONFIG.command || 'the roadmap command')}</code>`;
+ const last = DATA.heal?.lastRun;
+ $('heal-last').textContent = last ? `Last self-heal: "${last.template}" ${last.status} on ${new Date(last.finishedAt || last.startedAt).toLocaleString()} (${last.model}, ${last.thinking} effort).${last.summary ? ' '+last.summary.slice(0, 400) : ''}` : 'No self-heal pass has run on this page yet.';
+
+ // Server mode: refresh and self-heal are only possible when served by roadmap.mjs.
+ let server = false, status = null, eventSource = null;
+ const healDialog = $('heal-dialog');
+ function setBadges() {
+  if (!status) return;
+  const total = Object.values(status.pending || {}).reduce((a, b) => a + b, 0);
+  $('heal-badge').hidden = !total; $('heal-badge').textContent = total;
+  document.querySelectorAll('[data-count]').forEach(el => { const n = status.pending?.[el.dataset.count] || 0; el.textContent = n ? `· ${n} waiting` : ''; });
+  $('heal-revert').hidden = !status.heal?.hasBackup;
+ }
+ async function loadStatus() {
+  try {
+   const response = await fetch('/api/status', {cache:'no-store'});
+   if (!response.ok) throw new Error();
+   status = await response.json(); server = true;
+  } catch { server = false; status = null; }
+  $('refresh-button').hidden = !server; $('heal-button').hidden = !server;
+  $('server-hint').hidden = server || location.protocol !== 'file:';
+  $('server-hint').innerHTML = `Opened as a file: refresh and self-heal are unavailable. Start it with <code>${esc(CONFIG.command || 'the roadmap command')}</code> to enable them.`;
+  if (server) {
+   setBadges();
+   if (status.heal?.running) { openHeal(status.heal.current?.template, true); }
+   else if (status.heal?.lastRun && status.heal.lastRun.finishedAt && Date.now() - new Date(status.heal.lastRun.finishedAt).getTime() < 120000) showHealNotice(status.heal.lastRun);
+  }
+  paint();
+ }
+ function showHealNotice(run) {
+  $('heal-notice').hidden = false;
+  $('heal-notice').className = 'notice ' + (run.status === 'failed' ? 'alert' : 'info');
+  $('heal-notice').innerHTML = run.status === 'failed' ? `The last self-heal failed: ${esc(run.error || '')} <button data-heal="${esc(run.template)}">Open self-heal →</button>` : `Self-heal "${esc(run.template)}" ${esc(run.status)}. ${run.outsideChanges?.length ? 'It also changed other files; review them with git. ' : ''}<button id="dismiss-heal-notice">Dismiss</button>`;
+ }
+ document.addEventListener('click', event => { if (event.target.closest('#dismiss-heal-notice')) $('heal-notice').hidden = true; });
+ $('refresh-button').addEventListener('click', async () => {
+  const button = $('refresh-button'); button.disabled = true; button.innerHTML = '<span class="spinner"></span>Refreshing…';
+  try {
+   const response = await fetch('/api/refresh', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+   const result = await response.json();
+   if (!response.ok) throw new Error(result.error || 'Refresh failed.');
+   location.reload();
+  } catch (error) { button.disabled = false; button.textContent = 'Refresh from Linear'; $('heal-notice').hidden = false; $('heal-notice').className = 'notice alert'; $('heal-notice').textContent = String(error.message || error); }
+ });
+ $('heal-button').addEventListener('click', () => openHeal());
+ $('heal-close').addEventListener('click', () => healDialog.close());
+ $('heal-reload').addEventListener('click', () => location.reload());
+ healDialog.addEventListener('close', () => { if (eventSource) { eventSource.close(); eventSource = null; } });
+ document.querySelectorAll('input[name="template"]').forEach(input => input.addEventListener('change', () => { $('heal-instruction').hidden = input.value !== 'custom'; }));
+ function openHeal(template, running) {
+  if (!server) return;
+  const pending = status?.pending || {};
+  const preferred = template || Object.keys(pending).find(key => pending[key]) || 'custom';
+  const input = document.querySelector(`input[name="template"][value="${preferred}"]`) || document.querySelector('input[name="template"]');
+  input.checked = true; $('heal-instruction').hidden = input.value !== 'custom';
+  $('heal-log').hidden = true; $('heal-log').innerHTML = ''; $('heal-reload').hidden = true; $('heal-status').textContent = '';
+  $('heal-run').disabled = false; $('heal-run').textContent = 'Run self-heal';
+  if (!healDialog.open) healDialog.showModal();
+  if (running) watchHeal();
+ }
+ function appendLog(event) {
+  const log = $('heal-log'); log.hidden = false;
+  const line = document.createElement('div'); line.className = event.kind; line.textContent = event.kind === 'tool' ? '› '+event.text : event.text;
+  log.appendChild(line); log.scrollTop = log.scrollHeight;
+ }
+ function watchHeal() {
+  $('heal-run').disabled = true; $('heal-run').innerHTML = '<span class="spinner"></span>Running…';
+  $('heal-status').textContent = 'pi is working. You can close this dialog; the run continues on the server.';
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource('/api/heal/events');
+  eventSource.onmessage = message => {
+   const event = JSON.parse(message.data);
+   if (event.kind === 'done') {
+    eventSource.close(); eventSource = null;
+    const result = event.result || {};
+    $('heal-run').disabled = false; $('heal-run').textContent = 'Run again';
+    $('heal-status').textContent = result.status === 'failed' ? 'The run failed. The page was not changed.' : result.status === 'unchanged' ? 'pi finished without changing the page.' : 'The page was updated and validated. Reload to see the new version.';
+    $('heal-reload').hidden = result.status !== 'updated';
+    $('heal-revert').hidden = result.status !== 'updated';
+    return;
+   }
+   appendLog(event);
+  };
+  eventSource.onerror = () => { $('heal-status').textContent = 'Lost the connection to the server. Reload to check the result.'; };
+ }
+ $('heal-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const template = new FormData($('heal-form')).get('template');
+  const instruction = $('heal-instruction').value;
+  $('heal-log').innerHTML = ''; $('heal-reload').hidden = true;
+  const response = await fetch('/api/heal', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({template, instruction})});
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) { $('heal-status').textContent = result.error || 'Could not start the self-heal.'; return; }
+  watchHeal();
+ });
+ $('heal-revert').addEventListener('click', async () => {
+  if (!confirm('Restore the page from the backup taken before the last self-heal?')) return;
+  const response = await fetch('/api/heal/revert', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) { $('heal-status').textContent = result.error || 'Could not revert.'; return; }
+  location.reload();
+ });
+ paint();
+ loadStatus();
+})();
+</script>
+</body>
+</html>
