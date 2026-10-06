@@ -13,17 +13,17 @@ Requirements in the consumer project: a `.linear.json` with `teamId`, a `LINEAR_
 
 ## Creating a page
 
-Ask these four things in one round, recommending answers from what you can see in Linear (`uv run ~/.agents/skills/linear/scripts/linear.py projects`, `states`, `labels`):
+Ask these three things in one round, recommending answers from what you can see in Linear (`uv run ~/.agents/skills/linear/scripts/linear.py projects`, `states`, `labels`):
 
 1. Which Linear projects to include, and which one is the current focus. Each project becomes a phase; order them by delivery.
 2. The goal the focus phase works towards, with an optional target date and a short label for the countdown.
 3. Which label marks work the person must do themselves (often "Owner Action"), or none.
-4. Which session-starter skills the project has for planning and scoping (for example `/prep`, `/scope`), so session prompts point at them. None is fine; the defaults are plain prompts.
 
 Then build the page without further questions:
 
 - Read every ticket in the chosen projects (`list --project NAME`, then `get ID -V -c` for each) and the team's workflow states. Note which state types the team starts work from; if work starts from Backlog, set `startableStateTypes` to include it.
-- Write the config: phases, four to five lanes that group the focus phase by area of the system (lanes are groupings, not blockers), `nextUp` orderings that reflect dependency order and risk, openers, a short guide, and a `finalTicket` if the phase converges on one ticket such as a final acceptance check. Add a `roadmap` recipe to the project's justfile (create the justfile if there is none) that runs `node ~/.agents/skills/roadmap-page/scripts/roadmap.mjs <page> {{args}}` with `*args` pass-through, and set `command` to `just roadmap`. Use a different entry point only when the person asks for one.
+- Give every ticket a `workflow` by the session workflow rules in the contract: `/scope` for bounded work the agent can decide on its own, `/prep` for anything substantial or anything the person will want to steer, and `owner` only for work with no code output, such as provider setup or business decisions. Lean to `prep` when unsure.
+- Write the config: phases, four to five lanes that group the focus phase by area of the system (lanes are groupings, not blockers), `nextUp` orderings that reflect dependency order and risk, a short guide that explains the three kinds of session, and a `finalTicket` if the phase converges on one ticket such as a final acceptance check. Add a `roadmap` recipe to the project's justfile (create the justfile if there is none) that runs `node ~/.agents/skills/roadmap-page/scripts/roadmap.mjs <page> {{args}}` with `*args` pass-through, and set `command` to `just roadmap`. Use a different entry point only when the person asks for one. The default openers spell skills the Claude Code way (`/scope {id}`); when you are running in pi, set `openers.scope` and `openers.prep` to `/skill:scope {id}` and `/skill:prep {id}`.
 - Write the data block from the Linear reads using the task shape in the contract, with `curated: true` and `reviewedHash: sourceHash` for every ticket you write guidance for. The `sourceHash` is computed by the server; leave it null and run a refresh immediately after writing so the server fills in facts and hashes, then confirm no ticket shows "New: needs integration" or "Guidance needs review".
 - Humanize the reader-facing text (`title`, `summary`, `detail`, `input`, lane and phase copy, guide). In Pi, use the `humanize_text` tool; in Claude Code, load the `humanizer` skill; otherwise rewrite for a human reader yourself: short sentences, ordinary words, no marketing language, and keep every requirement, number and permission boundary from the ticket. Keep `linearTitle` untouched.
 - Show the proposed lanes and next-up order to the person once, as a compact list, and apply their corrections before finishing.

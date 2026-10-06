@@ -243,7 +243,7 @@ dialog::backdrop { background:#1a2e2459; backdrop-filter:blur(2px); }
  const focus = CONFIG.focus || phases[0].id;
  const phaseById = Object.fromEntries(phases.map(p => [p.id, p]));
  const lanes = CONFIG.lanes || [];
- const workflows = Object.assign({go:'Agent implementation',scope:'Scope together',prep:'Plan together',owner:'Your action',review:'Review the ticket'}, CONFIG.workflowLabels || {});
+ const workflows = Object.assign({scope:'Scope and build',prep:'Plan together',owner:'Your action',review:'Review the ticket'}, CONFIG.workflowLabels || {});
  const sizes = Object.assign({1:'XS',2:'S',3:'M',5:'L',8:'XL'}, CONFIG.estimateLabels || {});
  const startable = new Set(CONFIG.startableStateTypes || ['unstarted']);
  const CLOSED = new Set(['completed','canceled','duplicate']);
@@ -298,14 +298,14 @@ dialog::backdrop { background:#1a2e2459; backdrop-filter:blur(2px); }
   return [...listed, ...tasks.filter(t => !(ids || []).includes(t.id)).sort(byPriority)];
  }
  function paintNext() {
-  const reasons = Object.assign({agent:'Start here. It is unblocked and ready for an agent.',agentScope:'Agree a small first slice, then let the agent build.',owner:'Clear setup and access decisions before the implementation needs them.',plan:'Settle the user-facing choices now. Building still waits for its dependencies.',soon:'Becomes ready when the work in progress lands.'}, CONFIG.nextUpReasons || {});
+  const reasons = Object.assign({agent:'Bounded work an agent can frame and build in one session.',owner:'Clear setup and access decisions before the implementation needs them.',plan:'Settle the choices that shape it, then build from the plan.',soon:'Becomes ready when the work in progress lands.'}, CONFIG.nextUpReasons || {});
   const eligible = t => t && belongs(t, focus) && !closed(t) && !unknownState(t);
   const next = CONFIG.nextUp || {};
-  const agent = ordered(next.agent).find(t => eligible(t) && !t.owner && ['go','scope'].includes(t.workflow) && availability(t).ready);
+  const agent = ordered(next.agent).find(t => eligible(t) && !t.owner && t.workflow === 'scope' && availability(t).ready);
   const owner = ordered(next.owner).find(t => eligible(t) && (t.owner || t.workflow === 'owner') && availability(t).ready);
   const plan = ordered(next.plan).find(t => eligible(t) && t.workflow === 'prep' && !t.assignee && !t.reviewRequired && !isNew(t) && ['backlog','unstarted'].includes(t.stateType));
-  const soon = agent ? null : ordered(next.agent).find(t => eligible(t) && !t.owner && ['go','scope'].includes(t.workflow) && readySoon(t));
-  $('next-cards').innerHTML = (agent ? nextCard(agent, 'Move the build forward', agent.workflow === 'scope' ? reasons.agentScope : reasons.agent, 'primary')
+  const soon = agent ? null : ordered(next.agent).find(t => eligible(t) && !t.owner && t.workflow === 'scope' && readySoon(t));
+  $('next-cards').innerHTML = (agent ? nextCard(agent, 'Move the build forward', reasons.agent, 'primary')
     : nextCard(soon, 'Ready after current work', reasons.soon, 'soon'))
    + nextCard(owner, 'A useful action for you', reasons.owner, '')
    + nextCard(plan, 'Worth planning together', reasons.plan, '');
@@ -324,8 +324,8 @@ dialog::backdrop { background:#1a2e2459; backdrop-filter:blur(2px); }
   if (filter === 'done') return closed(t);
   if (closed(t)) return false;
   if (filter === 'progress') return t.stateType === 'started';
-  if (filter === 'agent') return !t.owner && t.workflow !== 'owner' && t.workflow !== 'prep' && availability(t).ready;
-  if (filter === 'input') return t.reviewRequired || isNew(t) || t.owner || ['owner','prep','scope'].includes(t.workflow);
+  if (filter === 'agent') return !t.owner && t.workflow === 'scope' && availability(t).ready;
+  if (filter === 'input') return t.reviewRequired || isNew(t) || t.owner || ['owner','prep'].includes(t.workflow);
   if (filter === 'waiting') return unmet(t.blockedBy).length > 0 || unmet(t.gates).length > 0;
   return true;
  }
@@ -385,10 +385,9 @@ dialog::backdrop { background:#1a2e2459; backdrop-filter:blur(2px); }
   const fill = text => text.replaceAll('{id}', t.id).replaceAll('{title}', t.title);
   if (isNew(t)) return fill(openers.new || 'Review {id} in Linear and run the "Integrate new tickets" self-heal on this roadmap page so it gets plain-language guidance and a place in an area. Do not start implementation.');
   if (t.reviewRequired) return fill(openers.review || 'Review {id} against its current Linear description, comments and dependencies. Update only its roadmap explanation and session suggestion on the roadmap page. Do not start implementation or change Linear.');
-  if (t.workflow === 'owner') return fill(openers.owner || 'Help me work through {id}. Read the current ticket and comments. Prepare the next concrete action for me; do not assume account, spending or production permissions.');
-  if (t.workflow === 'prep') return fill(openers.prep || 'Plan {id} with me. Read the current ticket and its decisions. Clarify the choices that need my input before writing a plan.');
-  if (t.workflow === 'scope') return fill(openers.scope || 'Scope {id} with me. Read the current ticket. Confirm a bounded first slice, check blockers, then implement within the agreed permissions.');
-  return fill(openers.go || 'Pick up {id}. Read the current ticket and comments. Check blockers and ownership first. Implement and validate the allowed scope; record anything that still needs my approval.');
+  if (t.workflow === 'owner') return fill(openers.owner || 'Help me work through {id}. Read the ticket and its comments, then walk me through it one step at a time: explain each step or decision plainly with its implications and trade-offs, ask for my call where one is needed, and verify each step worked before moving to the next. Do not assume account, spending or production permissions.');
+  if (t.workflow === 'scope') return fill(openers.scope || '/scope {id}');
+  return fill(openers.prep || '/prep {id}');
  }
  function renderTask() {
   const t = byId[selected], a = availability(t);
@@ -411,7 +410,7 @@ dialog::backdrop { background:#1a2e2459; backdrop-filter:blur(2px); }
    <div class="drawer-section"><h3>How it connects</h3><div class="relations"><div><p class="eyebrow">Needs first</p>${t.blockedBy?.length ? t.blockedBy.map(relation).join('') : '<p>No ticket blockers.</p>'}</div><span class="arrow" aria-hidden="true">→</span><div><p class="eyebrow">This makes possible</p>${down.length ? down.map(x => relation(x.id)).join('') : '<p>'+esc(final && final.id === t.id && final.enables ? final.enables : 'No direct ticket dependents.')+'</p>'}</div></div>
    ${t.gates?.length ? `<div class="gate-note"><h3>${esc(gates.title || 'Also needs')}</h3><p>${esc(gates.body || 'These prerequisites are tracked separately and do not block local preparation.')}</p><div class="gate-links">${t.gates.map(relation).join('')}</div></div>` : ''}
    ${gatedDown.length ? `<div class="gate-note"><h3>${esc(gates.enablesTitle || 'Also enables')}</h3><p>${esc(gates.enablesBody || 'These tasks can prepare before this is complete.')}</p><div class="gate-links">${gatedDown.map(x => relation(x.id)).join('')}</div></div>` : ''}</div>
-   <div class="drawer-section session-box"><h3>${isNew(t) || t.reviewRequired ? 'Ask for a guidance review' : t.workflow === 'owner' ? 'Ask an agent to help' : 'Start a session'}</h3><code id="session-prompt">${esc(opener(t))}</code><button class="solid-button" id="copy-prompt">Copy session prompt</button><p id="copy-status" class="small" role="status"></p>${t.workflow === 'prep' && !t.reviewRequired && CONFIG.prepFollowUp ? `<p style="margin-top:14px">${esc(CONFIG.prepFollowUp)}</p>` : ''}</div>
+   <div class="drawer-section session-box"><h3>${isNew(t) || t.reviewRequired ? 'Ask for a guidance review' : t.workflow === 'owner' ? 'Ask an agent to help' : 'Start a session'}</h3><code id="session-prompt">${esc(opener(t))}</code><button class="solid-button" id="copy-prompt">Copy session prompt</button><p id="copy-status" class="small" role="status"></p>${t.workflow === 'prep' && !t.reviewRequired ? `<p style="margin-top:14px">${esc(CONFIG.prepFollowUp || 'Then build it in a fresh session with /cook-prd and the PRD path that /prep returns.')}</p>` : ''}</div>
    <div class="drawer-footer">${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener">Read the full ticket in Linear ↗</a>` : ''}<p style="margin-top:14px">Completion comes from Linear. ${server ? 'Use Refresh from Linear after a ticket changes.' : 'Run <code>'+esc(CONFIG.command || 'the roadmap command')+'</code> after a ticket changes to refresh this page.'}</p></div>`;
  }
  function openTask(id, source) {
