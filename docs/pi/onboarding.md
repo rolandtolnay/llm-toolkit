@@ -43,7 +43,7 @@ Two options:
 ```bash
 # Option A: API key (works with any provider)
 export OPENAI_API_KEY=sk-...
-pi --provider openai --model gpt-5.5
+pi --provider openai --model gpt-6.1-sol
 
 # Option B: Subscription login
 pi
@@ -54,10 +54,10 @@ pi
 
 ```bash
 # Direct model specification
-pi --model openai/gpt-5.5
+pi --model openai/gpt-6.1-sol
 
 # With thinking level
-pi --model openai/gpt-5.5:high
+pi --model openai/gpt-6.1-sol:high
 
 # Switch mid-session
 /model                    # Opens selector
@@ -182,7 +182,7 @@ pi --no-context-files    # or -nc
 ```json
 {
   "defaultProvider": "openai",
-  "defaultModel": "gpt-5.5",
+  "defaultModel": "gpt-6.1-sol",
   "defaultThinkingLevel": "high",
   "theme": "dark",
   "compaction": {
@@ -196,7 +196,7 @@ pi --no-context-files    # or -nc
     "baseDelayMs": 2000
   },
   "enableSkillCommands": true,
-  "enabledModels": ["gpt-5.5", "gpt-5.5-mini", "claude-*"]
+  "enabledModels": ["gpt-6.1-sol", "claude-*"]
 }
 ```
 
@@ -206,7 +206,7 @@ The `enabledModels` array controls what Ctrl+P cycles through. Supports glob pat
 
 ```json
 {
-  "enabledModels": ["gpt-5.5*", "claude-sonnet*", "gemini-3*"]
+  "enabledModels": ["gpt-6.1-sol*", "claude-sonnet*", "gemini-3*"]
 }
 ```
 
@@ -724,7 +724,7 @@ This is separate from the Plannotator extension (§8) — it's a lightweight pro
 Rapidly switch between models mid-conversation. Context carries over between models.
 
 ```json
-{ "enabledModels": ["gpt-5.5", "claude-sonnet*", "gemini-3-flash"] }
+{ "enabledModels": ["gpt-6.1-sol", "claude-sonnet*", "gemini-3-flash"] }
 ```
 
 Use `Shift+Tab` to cycle thinking levels without switching models. Power users run local models (Qwen3.6 35B) for cheap tasks and switch to GPT 5.5 / Claude for complex work.

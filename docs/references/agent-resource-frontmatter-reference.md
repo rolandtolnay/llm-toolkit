@@ -64,7 +64,7 @@ Why it fails: `codebase: bottom line` is parsed as nested mapping syntax, and `[
 | Concern | pi | Claude Code |
 |---------|----|-----|
 | Tools | lowercase: `read, write, edit, bash, grep, find, ls` | Capitalized: `Read, Write, Edit, Bash, Grep, Glob` |
-| Model tier | `model: openai-codex/gpt-5.5` + `thinking: high\|xhigh` | `model: opus\|sonnet\|haiku` (optionally `effort: high\|xhigh\|max`) |
+| Model tier | `model: openai/gpt-6.1-sol` + `thinking: high\|xhigh` | `model: opus\|sonnet\|haiku` (optionally `effort: high\|xhigh\|max`) |
 | Preloaded skills | `skills: a, b, c` (inline, comma-separated) | `skills:` YAML block list |
 | System prompt | `systemPromptMode: replace` | (no equivalent — body always replaces) |
 | Context inheritance | `inheritProjectContext`, `inheritSkills`, `defaultContext: fresh\|fork` | (no equivalent) |
@@ -103,7 +103,7 @@ Both runtimes inject the **full skill body** (frontmatter stripped) into the sub
 ```yaml
 # .agents/agents/ms-next-code-quality.md (pi)
 tools: read, write, edit, bash, grep, find, ls
-model: openai-codex/gpt-5.5
+model: openai/gpt-6.1-sol
 thinking: high
 systemPromptMode: replace
 inheritProjectContext: true
@@ -128,7 +128,7 @@ Reference pair using injected rubric: `~/.pi/agent/agents/nuclear-reviewer.md` (
 ## Checklist for a new dual-runtime subagent
 
 1. Write the body once. Decide which skills it preloads.
-2. Write the pi file: lowercase tools, `openai-codex/gpt-5.5` + `thinking`, pi context fields, **inline** `skills`.
+2. Write the pi file: lowercase tools, `openai/gpt-6.1-sol` + `thinking`, pi context fields, **inline** `skills`.
 3. Write the Claude file (a real copy, not a symlink): Capitalized tools, `opus`/`sonnet`/`haiku`, **YAML-block** `skills`.
 4. Symlink any new skills into `.claude/skills/` (and `~/.claude/skills/` for user-scoped).
 5. Verify the bodies are identical and every referenced skill resolves in both runtimes.

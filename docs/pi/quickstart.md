@@ -1,6 +1,6 @@
 # Pi Quickstart (from Claude Code)
 
-Step-by-step migration to Pi with GPT 5.5. Follow in order — each step builds on the previous.
+Step-by-step migration to Pi with GPT-6.1 Sol. Follow in order — each step builds on the previous.
 
 ---
 
@@ -32,7 +32,7 @@ Create `~/.pi/agent/settings.json`:
 ```json
 {
   "defaultProvider": "openai",
-  "defaultModel": "gpt-5.5",
+  "defaultModel": "gpt-6.1-sol",
   "defaultThinkingLevel": "high",
   "theme": "dark",
   "compaction": {
@@ -46,7 +46,7 @@ Create `~/.pi/agent/settings.json`:
     "baseDelayMs": 2000
   },
   "enableSkillCommands": true,
-  "enabledModels": ["gpt-5.5", "gpt-5.5-mini", "claude-sonnet*", "gemini-3*"]
+  "enabledModels": ["gpt-6.1-sol", "claude-sonnet*", "gemini-3*"]
 }
 ```
 

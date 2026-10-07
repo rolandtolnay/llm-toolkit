@@ -25,7 +25,7 @@ import { Script } from 'node:vm'
 const execFileAsync = promisify(execFile)
 const here = dirname(fileURLToPath(import.meta.url))
 
-export const MODEL = 'openai-codex/gpt-6.1-sol'
+export const MODEL = 'openai/gpt-6.1-sol'
 export const THINKING = 'medium'
 export const HEAL_TEMPLATES = ['integrate-new', 'reconcile-states', 'recheck-guidance', 'custom']
 export const KNOWN_STATE_TYPES = new Set(['triage', 'backlog', 'unstarted', 'started', 'completed', 'canceled', 'duplicate'])

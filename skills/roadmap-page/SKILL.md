@@ -7,7 +7,7 @@ description: Create or update a self-contained HTML roadmap page from a set of t
 
 The output is one HTML file in the consumer project, usually `etc/roadmap/<name>.html`, built from `~/.agents/skills/roadmap-page/templates/roadmap.html`. The page shows a release-phase plan: an "In progress right now" strip, three next-up cards (an agent task, an owner task, something to plan together), areas of work with recommended order, a filterable list, and a drawer per ticket with blockers, dependents and a copyable session prompt. Linear facts (status, assignee, blockers, estimates) are authoritative; the page adds humanized titles and short guidance for a person choosing their next session.
 
-The shared server `~/.agents/skills/roadmap-page/scripts/roadmap.mjs` refreshes the page from Linear through the toolkit's `linear.py`, serves it on localhost, and runs self-heal passes with `pi -p` on `openai-codex/gpt-6.1-sol` at medium effort. The page's data model and status rules are in `~/.agents/skills/roadmap-page/references/page-contract.md`; read it before writing the config or data blocks.
+The shared server `~/.agents/skills/roadmap-page/scripts/roadmap.mjs` refreshes the page from Linear through the toolkit's `linear.py`, serves it on localhost, and runs self-heal passes with `pi -p` on `openai/gpt-6.1-sol` at medium effort. The page's data model and status rules are in `~/.agents/skills/roadmap-page/references/page-contract.md`; read it before writing the config or data blocks.
 
 Requirements in the consumer project: a `.linear.json` with `teamId`, a `LINEAR_API_KEY` reachable through the project env files or the shell, `uv`, Node 22+, and `pi` on PATH for self-heal.
 
