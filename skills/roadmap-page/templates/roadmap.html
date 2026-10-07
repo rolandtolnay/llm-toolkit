@@ -86,7 +86,7 @@ small,.small { font-size:var(--t-caption); }
 .hero { display:grid; grid-template-columns:minmax(0,1fr) 264px; align-items:end; gap:40px; padding:56px 0 40px; }
 .hero .label { margin-bottom:16px; }
 .hero h1 + p { max-width:60ch; color:var(--muted); margin-top:20px; font-size:var(--t-lead); line-height:1.6; }
-.progress { background:var(--surface); border-radius:var(--radius); box-shadow:var(--float); padding:20px 22px; }
+.progress-panel { background:var(--surface); border-radius:var(--radius); box-shadow:var(--float); padding:20px 22px; }
 .progress-count { font-size:var(--t-small); color:var(--muted); }
 .progress-count strong { font-size:28px; font-weight:500; color:var(--ink); letter-spacing:-.02em; font-variant-numeric:tabular-nums; margin-right:4px; }
 .progress-track { height:6px; background:var(--wash); margin:12px 0 16px; border-radius:6px; overflow:hidden; }
@@ -246,14 +246,14 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
 @media(max-width:900px) {
  .wrap { padding:0 24px; }
  .hero { grid-template-columns:1fr; gap:28px; padding:44px 0 32px; }
- .progress { max-width:420px; }
+ .progress-panel { max-width:420px; }
 }
 @media(max-width:600px) {
  :root { --t-section:26px; --t-card:22px; }
  .wrap { padding:0 16px; } .topbar { padding:16px 0; gap:10px; } .wordmark { font-size:26px; }
  .toolbar { width:100%; } .snapshot { width:100%; margin:0; }
  .hero { padding:32px 0 24px; } .hero h1 + p { font-size:var(--t-body); }
- .progress { max-width:none; }
+ .progress-panel { max-width:none; }
  .phase-nav { gap:24px; } .phase-nav button { font-size:15px; } .phase-number { display:none; }
  section, .work-section { margin-top:40px; } .work-section { padding-top:32px; }
  .section-head { display:block; } .section-head p { margin-top:6px; }
@@ -289,7 +289,7 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
  <p id="server-hint" class="notice info" hidden></p>
  <p id="heal-notice" class="notice" role="status" hidden></p>
  <main>
-  <div class="hero"><div><p class="label" id="phase-eyebrow"></p><h1 id="page-title"></h1><p id="page-description"></p></div><div class="progress" aria-label="Linear phase progress"><p class="progress-count"><strong id="progress-count"></strong> done in Linear</p><div class="progress-track" aria-hidden="true"><i id="progress-bar"></i></div><p class="date-note" id="date-note"></p></div></div>
+  <div class="hero"><div><p class="label" id="phase-eyebrow"></p><h1 id="page-title"></h1><p id="page-description"></p></div><div class="progress-panel" aria-label="Linear phase progress"><p class="progress-count"><strong id="progress-count"></strong> done in Linear</p><div class="progress-track" aria-hidden="true"><i id="progress-bar"></i></div><p class="date-note" id="date-note"></p></div></div>
   <nav class="phase-nav" aria-label="Release phase" id="phase-nav"></nav>
   <p id="review-notice" class="notice" hidden></p>
   <section id="progress-section" aria-labelledby="progress-title" hidden><div class="section-head"><h2 id="progress-title">In progress right now</h2><p>Started in Linear; not suggested again below</p></div><div class="progress-strip" id="progress-strip"></div></section>
