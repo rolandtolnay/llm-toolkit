@@ -1,6 +1,6 @@
 # Roadmap page contract
 
-A roadmap page is one self-contained HTML file. It renders two embedded JSON blocks with a fixed script and needs no build, server or network to display. The server script `roadmap.mjs` refreshes the data block from Linear and runs self-heal passes; the page shows its Refresh and Self-heal buttons only when served by that script.
+A roadmap page is one self-contained HTML file. It renders two embedded JSON blocks with a fixed script and needs no build, server or network to display; its web fonts load from Google Fonts when online and fall back to system faces offline. The server script `roadmap.mjs` refreshes the data block from Linear and runs self-heal passes; the page shows its Refresh and Self-heal buttons only when served by that script.
 
 ```html
 <script id="roadmap-config" type="application/json">{ ...curated content... }</script>
@@ -23,7 +23,7 @@ Written when the page is created and edited by self-heal passes. Nothing here is
 | `phases[]` | Ordered release phases. Each has `id`, `name`, `short` (nav caption), `title` and `description` (hero), `projects` (Linear project names that belong to it), and for later phases `intro` and `body` (the explanation shown instead of next-up cards). Optional `allWork` and `laterNote` replace the default work-list descriptions. |
 | `lanes[]` | Areas of the focus phase. Each has `id`, `name`, `summary`, `detail`, `ids` (identifiers in recommended order). Lanes group work; they are not blockers. |
 | `nextUp` | `{agent:[], owner:[], plan:[]}` identifier lists that order the three next-up cards before priority ordering takes over. |
-| `nextUpReasons` | Optional overrides for the card captions: `agent`, `owner`, `plan`, `soon`. |
+| `nextUpReasons` | Optional overrides for the caption a next-up card shows when its ticket has no `summary`: `agent`, `owner`, `plan`, `soon`. |
 | `finalTicket` | Optional `{id, label, note, enables}` for the ticket the phase converges on. |
 | `ownerLabel` | Linear label that marks work the person must do themselves. The server sets `owner` on tasks from it. |
 | `excludeLabelPrefixes` | Tickets with a label starting with one of these prefixes are not tracked (planning or meta tickets). |
