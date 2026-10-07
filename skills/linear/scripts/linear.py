@@ -17,6 +17,7 @@ Usage:
 Commands:
     create          Create a new issue
     update          Update an existing issue
+    delete          Move an issue to trash (recoverable for 30 days)
     done            Mark an issue as completed
     state           Change an issue's state
     break           Break down an issue into sub-issues
@@ -909,6 +910,14 @@ mutation IssueCreate($input: IssueCreateInput!) {
         name
       }
     }
+  }
+}
+"""
+
+MUTATION_DELETE_ISSUE = """
+mutation IssueDelete($id: String!) {
+  issueDelete(id: $id, permanentlyDelete: false) {
+    success
   }
 }
 """
@@ -2570,6 +2579,20 @@ class LinearClient:
 
         return result.get("issue", {})
 
+    def delete_issue(self, issue_id: str) -> dict[str, Any]:
+        """Move an issue to trash, returning its identity from before deletion."""
+        issue = self.get_issue(issue_id)
+        data = self._request(MUTATION_DELETE_ISSUE, {"id": issue["id"]})
+        result = data.get("issueDelete") or {}
+
+        if result.get("success") is not True:
+            raise LinearError(
+                code=ErrorCode.API_ERROR,
+                message="Failed to delete issue",
+            )
+
+        return issue
+
     def find_state_by_name(self, team_id: str, state_name: str) -> dict[str, Any]:
         """Find a workflow state by name within a team."""
         states = self.get_workflow_states(team_id)
@@ -3532,6 +3555,41 @@ def update(
         response = format_success(
             command=command,
             result=result_data,
+        )
+        typer.echo(output_json(response))
+
+    except LinearError as e:
+        error_response = format_error(command, e)
+        typer.echo(output_json(error_response))
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def delete(
+    issue_id: str = typer.Argument(..., help="Issue identifier (e.g., ABC-123) or UUID"),
+) -> None:
+    """Move an issue to trash, recoverable in Linear for 30 days.
+
+    Executes immediately without a confirmation prompt. Does not permanently delete.
+
+    Examples:
+        linear.py delete ABC-123
+    """
+    command = "delete"
+
+    try:
+        client = LinearClient()
+        issue = client.delete_issue(issue_id)
+
+        response = format_success(
+            command=command,
+            result={
+                "id": issue["id"],
+                "identifier": issue.get("identifier"),
+                "title": issue.get("title"),
+                "url": issue.get("url"),
+                "deleted": True,
+            },
         )
         typer.echo(output_json(response))
 

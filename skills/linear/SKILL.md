@@ -1,7 +1,7 @@
 ---
 name: linear
 description: >
-  Create, update, and comment on Linear tickets. Use when creating issues,
+  Create, update, delete, and comment on Linear tickets. Use when creating or deleting issues,
   adding or editing comments, changing status, assigning work, or referencing issue IDs
   like ABC-123. Examples: "create a ticket", "add a comment", "mark done",
   "my issues".
@@ -16,9 +16,9 @@ Conversational interface to Linear for fast issue management. Primary use case: 
 </objective>
 
 <cli_reference>
-**CLI script:** `~/.claude/skills/linear/scripts/linear.py`
+**CLI script:** `~/.agents/skills/linear/scripts/linear.py`
 
-Run with: `uv run ~/.claude/skills/linear/scripts/linear.py <command> [options]`
+Run with: `uv run ~/.agents/skills/linear/scripts/linear.py <command> [options]`
 
 **Verbose flag (`-V`):** Available on `get` and `list` subcommands. **Always use concise (no `-V`) unless the user explicitly needs data only verbose provides.** Verbose adds URL, internal UUIDs, relations, commit SHAs, and linked documents — data that inflates context without helping most operations.
 
@@ -36,6 +36,7 @@ Use `-V` only when the user:
 |---------|-------|---------|
 | `create` | `create "<title>" [-d desc / --description-file path] [-p priority] [-e estimate] [--parent ID] [--project name] [--no-project] [--label name] [--assignee <email-or-@me>] [--cycle <number-or-"active">] [--team <key-or-uuid>]` | Create issue |
 | `update` | `update <ID> [-t title] [-d desc / --description-file path] [-p priority] [-e estimate] [--parent ID] [--label name] [--no-labels] [--assignee <email-or-@me>] [--no-assignee] [--project name] [--no-project] [--cycle <number-or-"active">] [--no-cycle] [--team <key-or-uuid>]` | Update fields |
+| `delete` | `delete <ID>` | Move one issue to trash by identifier or UUID (recoverable for 30 days) |
 | `done` | `done <ID>` | Mark completed |
 | `state` | `state <ID> "<name>"` | Change state |
 | `break` | `break <ID> --issues '[{...}]' [--project name] [--no-project] [--label name] [--no-labels]` | Create sub-issues |
@@ -153,6 +154,7 @@ When `.linear.json` is present but the team is overridden to a *different* team 
 
 | Pattern | Intent | Action |
 |---------|--------|--------|
+| `delete <ID>`, `"delete ticket <ID>"`, `"delete issue <ID>"` | Delete issue | Execute `delete <ID>` only when explicitly requested |
 | `done <ID>` | Mark complete | Execute `done` directly |
 | `state <ID> "<name>"` | Change state | Execute `state` directly |
 | `get <ID>` | Fetch details | Execute `get` (returns comment count) |
@@ -203,6 +205,8 @@ When `.linear.json` is present but the team is overridden to a *different* team 
 
 Issue ID pattern: 2-4 uppercase letters followed by hyphen and numbers (e.g., `ABC-123`, `PROJ-42`).
 
+**Issue deletion:** Only delete an explicitly requested ticket; never infer deletion from cancellation, completion, or duplicate status. `delete` is non-interactive and moves the issue to Linear's trash, recoverable from the team's **Recently deleted issues** for 30 days before permanent removal. It does not offer immediate permanent deletion. It needs no project config or team selection. Do not retry an uncertain deletion automatically; check Linear first.
+
 **Comment vs document vs attach vs attach-commit decision:**
 
 | Command | Use for | Key signal |
@@ -247,12 +251,12 @@ The CLI's `--assignee` accepts only an exact email or the `@me` sentinel. Fuzzy 
 </step>
 
 <step name="direct_commands">
-**For direct commands (done, state, get, states, projects, create-project, delete-project, update-project, milestones, create-milestone, delete-milestone, cycles, cycle, create-cycle, update-cycle, labels, create-label, delete-label, update-label, views, create-view, update-view, view-issues, delete-view, update, comment, update-comment, delete-comment, attach-commit, members):**
+**For direct commands (delete, done, state, get, states, projects, create-project, delete-project, update-project, milestones, create-milestone, delete-milestone, cycles, cycle, create-cycle, update-cycle, labels, create-label, delete-label, update-label, views, create-view, update-view, view-issues, delete-view, update, comment, update-comment, delete-comment, attach-commit, members):**
 
 Execute CLI and format output.
 
 ```bash
-uv run ~/.claude/skills/linear/scripts/linear.py [command] [args]
+uv run ~/.agents/skills/linear/scripts/linear.py [command] [args]
 ```
 
 **Long Markdown:** Use `create`/`update --description-file path` or `comment`/`update-comment --body-file path` instead of shell interpolation. Files are UTF-8 and sent unchanged; file and inline inputs are mutually exclusive. An empty description file clears the description on `update`.
@@ -263,6 +267,7 @@ uv run ~/.claude/skills/linear/scripts/linear.py [command] [args]
 
 Parse JSON response and present result:
 - Success: Show identifier, title, new state, and URL
+- For `delete`: Show identifier and title, and report moved to trash (recoverable for 30 days), not a workflow-state change.
 - For `projects`/`labels`: List grouped by team
 - Error: Show error message and suggestions
 </step>
@@ -384,7 +389,7 @@ Parse JSON response and present result:
    A description states the observed problem, the agreed outcome as an invariant, and pointers to evidence. It does not prescribe mechanisms, list scenarios per role, environment, platform or call site, or enumerate what not to build; one boundary sentence is enough. Name platform or device checks only when the code branches on platform.
 
    ```bash
-   uv run ~/.claude/skills/linear/scripts/linear.py create "[title]" \
+   uv run ~/.agents/skills/linear/scripts/linear.py create "[title]" \
      -d "[structured description]" -p [priority] -e [estimate] \
      [--parent ID] [--project "Name"] [--label "name"] [--no-project] \
      [--cycle <number-or-"active">]
@@ -409,7 +414,7 @@ User provides the sub-issues in conversation. Do NOT propose or generate sub-iss
 2. **Build JSON and execute:**
 
    ```bash
-   uv run ~/.claude/skills/linear/scripts/linear.py break [ID] \
+   uv run ~/.agents/skills/linear/scripts/linear.py break [ID] \
      --issues '[{"title":"...","estimate":3},{"title":"...","estimate":2}]'
    ```
 

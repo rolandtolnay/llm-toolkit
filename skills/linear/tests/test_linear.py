@@ -448,6 +448,97 @@ def test_break_derives_team_from_parent_without_config(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# CLI: delete resolves the target and only reports confirmed, recoverable deletion
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("target", ["ABC-123", "a1b2c3d4-e5f6-7890-abcd-ef1234567890"])
+def test_delete_moves_resolved_issue_to_trash(monkeypatch, tmp_path, target):
+    module = load_linear_module()
+    monkeypatch.setenv("LINEAR_API_KEY", "test")
+    monkeypatch.delenv("LINEAR_TEAM", raising=False)
+    monkeypatch.chdir(tmp_path)
+    issue = {**parent_issue(), "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"}
+    calls = []
+
+    def fake_post(self, url, *, headers, json):
+        calls.append(json)
+        if len(calls) == 1:
+            assert "issue(id: $id)" in json["query"]
+            assert json["variables"] == {"id": target}
+            return module.httpx.Response(200, json={"data": {"issue": issue}})
+        assert len(calls) == 2
+        assert "issueDelete(id: $id, permanentlyDelete: false)" in json["query"]
+        assert json["variables"] == {"id": issue["id"]}
+        return module.httpx.Response(200, json={"data": {"issueDelete": {"success": True}}})
+
+    monkeypatch.setattr(module.httpx.Client, "post", fake_post)
+
+    result = CliRunner().invoke(module.app, ["delete", target])
+
+    assert result.exit_code == 0, result.stdout
+    data = json.loads(result.stdout)
+    assert data["success"] is True
+    assert data["command"] == "delete"
+    assert data["result"] == {
+        "id": issue["id"], "identifier": "ABC-123", "title": "Parent title",
+        "url": issue["url"], "deleted": True,
+    }
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("response", [
+    {"data": {"issueDelete": {"success": False}}},
+    {"data": {"issueDelete": None}},
+    {"data": {}},
+    {"errors": [{"message": "You do not have permission to delete this issue"}]},
+])
+def test_delete_unconfirmed_mutation_fails_without_retry(monkeypatch, response):
+    module = load_linear_module()
+    monkeypatch.setenv("LINEAR_API_KEY", "test")
+    calls = []
+
+    def fake_post(self, url, *, headers, json):
+        calls.append(json)
+        if len(calls) == 1:
+            return module.httpx.Response(200, json={"data": {"issue": parent_issue()}})
+        return module.httpx.Response(200, json=response)
+
+    monkeypatch.setattr(module.httpx.Client, "post", fake_post)
+
+    result = CliRunner().invoke(module.app, ["delete", "ABC-123"])
+
+    assert result.exit_code == 1, result.stdout
+    data = json.loads(result.stdout)
+    assert data["success"] is False
+    assert data["command"] == "delete"
+    assert data["error"]["code"] == "API_ERROR"
+    assert "result" not in data
+    assert len(calls) == 2
+
+
+def test_delete_missing_issue_never_mutates(monkeypatch):
+    module = load_linear_module()
+    monkeypatch.setenv("LINEAR_API_KEY", "test")
+    calls = []
+
+    def fake_post(self, url, *, headers, json):
+        calls.append(json)
+        assert "issue(id: $id)" in json["query"]
+        return module.httpx.Response(200, json={"data": {"issue": None}})
+
+    monkeypatch.setattr(module.httpx.Client, "post", fake_post)
+
+    result = CliRunner().invoke(module.app, ["delete", "ABC-404"])
+
+    assert result.exit_code == 1, result.stdout
+    data = json.loads(result.stdout)
+    assert data["success"] is False
+    assert data["error"]["code"] == "ISSUE_NOT_FOUND"
+    assert len(calls) == 1
+
+
+# ---------------------------------------------------------------------------
 # CLI: update-comment edits in place and surfaces API failures
 # ---------------------------------------------------------------------------
 
