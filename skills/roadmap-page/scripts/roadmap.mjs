@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 // Linear roadmap server: refreshes a roadmap page from Linear through the
 // toolkit's linear.py CLI, serves it on localhost, and runs self-heal passes
-// with headless pi. Node 22+, no dependencies.
+// with headless Claude Code. Node 22+, no dependencies.
+//
+// The page commits its curated config and guidance; the Linear snapshot lives in
+// a sidecar script next to it, named by the page's roadmap-snapshot tag, which
+// projects keep out of version control.
 //
 //   node roadmap.mjs <page.html>                 refresh, serve, open browser
 //   node roadmap.mjs <page.html> --no-open       refresh and serve only
@@ -25,15 +29,20 @@ import { Script } from 'node:vm'
 const execFileAsync = promisify(execFile)
 const here = dirname(fileURLToPath(import.meta.url))
 
-export const MODEL = 'openai/gpt-6.1-sol'
-export const THINKING = 'medium'
+export const MODEL = 'opus'
+export const EFFORT = 'medium'
 export const HEAL_TEMPLATES = ['integrate-new', 'reconcile-states', 'recheck-guidance', 'custom']
 export const KNOWN_STATE_TYPES = new Set(['triage', 'backlog', 'unstarted', 'started', 'completed', 'canceled', 'duplicate'])
 export const CLOSED_STATE_TYPES = new Set(['completed', 'canceled', 'duplicate'])
 const LIMITS = Object.freeze({ healTimeout: 15 * 60_000, cliTimeout: 60_000, concurrency: 4, eventLog: 400, backups: 5 })
 
-const dataPattern = /(<script id="roadmap-data" type="application\/json">)([\s\S]*?)(<\/script>)/
+const guidancePattern = /(<script id="roadmap-guidance" type="application\/json">)([\s\S]*?)(<\/script>)/
 const configPattern = /(<script id="roadmap-config" type="application\/json">)([\s\S]*?)(<\/script>)/
+const snapshotTagPattern = /<script id="roadmap-snapshot" src="([^"]+)"><\/script>/
+const snapshotFilePattern = /^[\s\S]*?window\.ROADMAP_SNAPSHOT = ([\s\S]*);\s*$/
+
+// Per-ticket fields written for the reader. They live in the page; everything else on a task is a Linear fact or derived.
+export const GUIDANCE_FIELDS = ['title', 'summary', 'detail', 'input', 'workflow', 'gates', 'curated', 'reviewedHash', 'aiGuidance']
 
 export class RoadmapError extends Error {}
 
@@ -47,10 +56,60 @@ export function readBlock(html, pattern, label) {
   catch { throw new RoadmapError(`The ${label} block is not valid JSON.`) }
 }
 
-export function readSnapshot(html) {
-  const snapshot = readBlock(html, dataPattern, 'roadmap-data')
-  if (!Array.isArray(snapshot.tasks)) throw new RoadmapError('The roadmap-data block has no tasks array.')
+export function readGuidance(html) {
+  const guidance = readBlock(html, guidancePattern, 'roadmap-guidance')
+  if (!Array.isArray(guidance.tasks)) throw new RoadmapError('The roadmap-guidance block has no tasks array.')
+  return guidance
+}
+
+export function snapshotPathFor(page, html) {
+  const src = html.match(snapshotTagPattern)?.[1]
+  if (!src) throw new RoadmapError('The page has no roadmap-snapshot script tag.')
+  if (src.startsWith('/') || src.split('/').includes('..') || /^[a-z]+:/i.test(src)) throw new RoadmapError('The roadmap-snapshot src must be a path below the page directory.')
+  return join(dirname(page), src)
+}
+
+export function parseSnapshotFile(text) {
+  const match = text.match(snapshotFilePattern)
+  let snapshot
+  try { snapshot = JSON.parse(match?.[1]) } catch {}
+  if (!Array.isArray(snapshot?.tasks)) throw new RoadmapError('The snapshot file is not a roadmap snapshot. Delete it and refresh.')
   return snapshot
+}
+
+export function encodeSnapshotFile(snapshot) {
+  return `// Linear snapshot for a roadmap page, written by roadmap.mjs on refresh. Local only: do not edit or commit.\nwindow.ROADMAP_SNAPSHOT = ${encodeJson(snapshot)};\n`
+}
+
+// A fresh checkout has no snapshot yet; the first refresh writes it.
+export async function readSnapshotFile(path) {
+  try { return parseSnapshotFile(await readFile(path, 'utf8')) }
+  catch (error) { if (error.code === 'ENOENT') return { tasks: [] }; throw error }
+}
+
+// Overlay the page's guidance on the Linear snapshot, the same way the page script does.
+export function combine(snapshot, guidance) {
+  const notes = new Map(guidance.tasks.map(entry => [entry.id, entry]))
+  const tasks = snapshot.tasks.map(task => ({ ...task, ...notes.get(task.id) }))
+  const seen = new Set(tasks.map(task => task.id))
+  for (const entry of guidance.tasks) if (!seen.has(entry.id)) tasks.push({ ...entry })
+  for (const task of tasks) task.reviewRequired = Boolean(task.missing) || (task.sourceHash !== task.reviewedHash && task.sourceHash !== task.aiGuidance?.sourceHash)
+  return { ...snapshot, tasks }
+}
+
+// What the snapshot file stores: facts for every task, plus placeholder guidance only for tickets the page has none for.
+export function factsOnly(snapshot, guidance) {
+  const guided = new Set(guidance.tasks.map(entry => entry.id))
+  const strip = task => Object.fromEntries(Object.entries(task).filter(([key]) => key !== 'reviewRequired' && !(guided.has(task.id) && GUIDANCE_FIELDS.includes(key))))
+  return { ...snapshot, tasks: snapshot.tasks.map(strip) }
+}
+
+export async function loadPage(page) {
+  const html = await readFile(page, 'utf8')
+  const config = readConfig(html), guidance = readGuidance(html)
+  const snapshotPath = snapshotPathFor(page, html)
+  const stored = await readSnapshotFile(snapshotPath)
+  return { html, config, guidance, snapshotPath, stored, snapshot: combine(stored, guidance) }
 }
 
 export function readConfig(html) {
@@ -67,15 +126,11 @@ export function encodeJson(value) {
   return JSON.stringify(value, null, 1).replaceAll('<', '\\u003c').replaceAll('\u2028', '\\u2028').replaceAll('\u2029', '\\u2029')
 }
 
-export function replaceSnapshot(html, snapshot) {
-  if (!dataPattern.test(html)) throw new RoadmapError('The page has no roadmap-data block.')
-  return html.replace(dataPattern, (_, start, _old, end) => start + encodeJson(snapshot) + end)
-}
-
 // Syntax-check every inline classic script so a broken self-heal is caught before reload.
 export function validatePage(html) {
-  readSnapshot(html)
+  readGuidance(html)
   readConfig(html)
+  if (!snapshotTagPattern.test(html)) throw new RoadmapError('The page has no roadmap-snapshot script tag.')
   const scripts = [...html.matchAll(/<script(?![^>]*\btype=)[^>]*>([\s\S]*?)<\/script>/g)]
   if (!scripts.length) throw new RoadmapError('The page has no inline script.')
   for (const [, source] of scripts) {
@@ -194,7 +249,7 @@ export async function fetchFacts(linear, config, previous, log = () => {}) {
     } while (after)
     log(`Listed ${project}: ${[...listed.values()].filter(i => i.projectName === project).length} tickets.`)
   }
-  const wanted = new Set([...listed.keys(), ...previous.tasks.map(task => task.id)])
+  const wanted = new Set([...listed.keys(), ...previous.tasks.filter(task => task.curated).map(task => task.id)])
   const issues = new Map()
   const requested = new Set(wanted)
   const queue = [...wanted]
@@ -238,7 +293,8 @@ export function mergeSnapshot(previous, config, facts, now = new Date().toISOStr
   const oldTasks = new Map(previous.tasks.map(task => [task.id, task]))
   const phaseOf = projectName => config.phases.find(phase => phase.projects.includes(projectName))?.id || 'later'
   const excluded = labels => (config.excludeLabelPrefixes || []).some(prefix => labels.some(label => label.startsWith(prefix)))
-  const roots = new Set(previous.tasks.filter(task => !task.referenceOnly).map(task => task.id))
+  // Curated tickets stay tracked after they leave the projects; anything else is tracked only while Linear lists it.
+  const roots = new Set(previous.tasks.filter(task => task.curated && !task.referenceOnly).map(task => task.id))
   for (const [id, issue] of issues) {
     if (!issue) continue
     const labels = (issue.labels || []).map(label => label.name)
@@ -256,7 +312,7 @@ export function mergeSnapshot(previous, config, facts, now = new Date().toISOStr
         url: old?.url || null, phase: 'later', projectName: old?.projectName || 'Unavailable',
         state: 'Unavailable', stateType: 'unavailable', missing: true, assignee: null,
         blockedBy: old?.blockedBy || [], gates: old?.gates || [], workflow: old?.workflow || 'review',
-        curated: old?.curated ?? false, reviewRequired: true, referenceOnly: !roots.has(id),
+        curated: old?.curated ?? false, referenceOnly: !roots.has(id),
       })
     } else {
       const labels = (issue.labels || []).map(label => label.name)
@@ -278,46 +334,43 @@ export function mergeSnapshot(previous, config, facts, now = new Date().toISOStr
         truncated: issue.truncated || [], missing: false, referenceOnly: !roots.has(id),
         blockedBy, gates: old?.gates || [], sourceHash, reviewedHash,
         curated: old?.curated ?? false,
-        reviewRequired: sourceHash !== reviewedHash && sourceHash !== old?.aiGuidance?.sourceHash,
       })
     }
     const task = tasks.get(id)
     for (const dependency of [...task.blockedBy, ...task.gates]) add(dependency)
   }
   for (const id of roots) add(id)
-  return {
+  return combine({
     ...previous, checkedAt: now, trackingSince: previous.trackingSince || now, stateTypes,
     refresh: { ok: true, attemptedAt: now }, tasks: [...tasks.values()],
-  }
+  }, { tasks: [] })
 }
 
 // ---------------------------------------------------------------------------
 // File writes
 
-async function atomicWrite(path, html) {
+async function atomicWrite(path, text) {
   const temporary = `${path}.${randomUUID()}.tmp`
   try {
-    await writeFile(temporary, html, { flag: 'wx' })
+    await writeFile(temporary, text, { flag: 'wx' })
     await rename(temporary, path)
   } finally {
     await unlink(temporary).catch(() => {})
   }
 }
 
+// A refresh writes only the snapshot file; the page itself changes only through self-heal or by hand.
 export async function refreshFile(path, loadFacts, now = new Date().toISOString()) {
-  const currentHtml = await readFile(path, 'utf8')
-  const previous = readSnapshot(currentHtml)
-  const config = readConfig(currentHtml)
+  const { config, guidance, snapshotPath, stored, snapshot: previous } = await loadPage(path)
   let next, error
   try {
     next = mergeSnapshot(previous, config, await loadFacts(config, previous), now)
   } catch (cause) {
     error = cause
-    next = { ...previous, refresh: { ok: false, attemptedAt: now, error: errorMessage(cause) } }
+    next = { ...stored, refresh: { ok: false, attemptedAt: now, error: errorMessage(cause) } }
   }
-  if (await readFile(path, 'utf8') !== currentHtml) throw new RoadmapError('The page changed during refresh. Run the refresh again.')
-  await atomicWrite(path, replaceSnapshot(currentHtml, next))
-  return { snapshot: next, error }
+  await atomicWrite(snapshotPath, encodeSnapshotFile(factsOnly(next, guidance)))
+  return { snapshot: combine(next, guidance), error }
 }
 
 export function errorMessage(error) {
@@ -341,7 +394,7 @@ export function findings(snapshot, config) {
   const danglingConfig = [...laneIds, ...Object.values(config.nextUp || {}).flat(), config.finalTicket?.id].filter(id => id && !snapshot.tasks.some(task => task.id === id))
   const review = snapshot.tasks.filter(task => open(task) && task.curated && task.reviewRequired)
   const inProgress = snapshot.tasks.filter(task => open(task) && task.stateType === 'started')
-  const brief = task => ({ id: task.id, linearTitle: task.linearTitle, state: task.state, stateType: task.stateType, phase: task.phase, project: task.projectName, assignee: task.assignee, blockedBy: task.blockedBy, labels: task.labels })
+  const brief = task => ({ id: task.id, linearTitle: task.linearTitle, state: task.state, stateType: task.stateType, phase: task.phase, project: task.projectName, assignee: task.assignee, blockedBy: task.blockedBy, labels: task.labels, sourceHash: task.sourceHash })
   return {
     'integrate-new': { uncurated: uncurated.map(brief), unplaced: unplaced.map(brief), inProgress: inProgress.map(brief) },
     'reconcile-states': { unknownStates: unknownStates.map(brief), missing: missing.map(brief), truncated: truncated.map(task => ({ id: task.id, truncated: task.truncated })), emptyProjects, danglingConfig, stateTypes: snapshot.stateTypes || {} },
@@ -360,9 +413,9 @@ export function pendingCounts(snapshot, config) {
 }
 
 // ---------------------------------------------------------------------------
-// Self-heal with headless pi
+// Self-heal with headless Claude Code
 
-export async function buildHealPrompt({ template, instruction = '', page, root, cli, snapshot, config }) {
+export async function buildHealPrompt({ template, instruction = '', page, root, cli, snapshot, snapshotPath, config }) {
   if (!HEAL_TEMPLATES.includes(template)) throw new RoadmapError(`Unknown self-heal template: ${template}.`)
   if (template === 'custom' && !instruction.trim()) throw new RoadmapError('A custom self-heal needs an instruction.')
   const read = name => readFile(join(here, 'heal-prompts', name), 'utf8')
@@ -370,7 +423,8 @@ export async function buildHealPrompt({ template, instruction = '', page, root, 
   const body = await read(`${template}.md`)
   const values = {
     page, pageRelative: relative(root, page), root, linearCli: `uv run ${cli}`,
-    contract: join(here, '../references/page-contract.md'),
+    snapshotRelative: snapshotPath ? relative(root, snapshotPath) : '',
+    contract: await readFile(join(here, '../references/page-contract.md'), 'utf8'),
     findings: JSON.stringify(findings(snapshot, config)[template], null, 1),
     instruction: instruction.trim(), product: config.product || basename(root), model: MODEL,
   }
@@ -378,43 +432,54 @@ export async function buildHealPrompt({ template, instruction = '', page, root, 
   return { system: fill(contract), prompt: fill(body) }
 }
 
-function summarizeTool(event) {
-  const args = event.args || {}
-  if (event.toolName === 'bash') return `bash: ${String(args.command || '').slice(0, 160)}`
-  if (args.path) return `${event.toolName}: ${args.path}`
-  return event.toolName
+function summarizeTool(part) {
+  const input = part.input || {}
+  if (part.name === 'Bash') return `bash: ${String(input.command || '').slice(0, 160)}`
+  const target = input.file_path || input.path || input.pattern
+  return target ? `${part.name.toLowerCase()}: ${target}` : part.name
 }
 
-export function parsePiEvent(line) {
+// One stream-json line from `claude -p` can carry several events (text and tool calls in one message).
+export function parseClaudeEvents(line) {
   let event
-  try { event = JSON.parse(line) } catch { return null }
-  if (event.type === 'tool_execution_start') return { kind: 'tool', text: summarizeTool(event) }
-  if (event.type === 'tool_execution_end' && event.isError) return { kind: 'warn', text: `${event.toolName} failed` }
-  if (event.type === 'message_end' && event.message?.role === 'assistant') {
-    if (event.message.stopReason === 'error') return { kind: 'error', text: String(event.message.errorMessage || 'provider error').slice(0, 300) }
-    const text = (event.message.content || []).filter(part => part.type === 'text').map(part => part.text).join('').trim()
-    if (text) return { kind: 'text', text: text.slice(0, 4000) }
+  try { event = JSON.parse(line) } catch { return [] }
+  if (event.type === 'assistant') {
+    return (event.message?.content || []).flatMap(part => {
+      if (part.type === 'tool_use') return [{ kind: 'tool', text: summarizeTool(part) }]
+      if (part.type === 'text' && part.text?.trim()) return [{ kind: 'text', text: part.text.trim().slice(0, 4000) }]
+      return []
+    })
   }
-  if (event.type === 'agent_end') return { kind: 'end', text: 'pi finished' }
-  return null
+  if (event.type === 'user') {
+    return (event.message?.content || []).filter(part => part?.type === 'tool_result' && part.is_error).map(part => ({ kind: 'warn', text: `Tool call failed: ${String(typeof part.content === 'string' ? part.content : '').slice(0, 200)}` }))
+  }
+  if (event.type === 'result') {
+    if (event.is_error || event.subtype !== 'success') return [{ kind: 'error', text: String(event.result || event.subtype || 'Claude reported an error').slice(0, 300) }]
+    return [{ kind: 'end', text: 'Claude finished', result: String(event.result || '').slice(0, 4000) }]
+  }
+  return []
 }
 
-export function runPi({ system, prompt, cwd, env, onEvent, spawnPi = spawn, timeoutMs = LIMITS.healTimeout }) {
+// Headless Claude Code in safe mode: no CLAUDE.md, skills, plugins, hooks or MCP servers. File edits and Bash are
+// pre-approved; anything that would prompt is denied.
+export function runClaude({ system, prompt, cwd, env, onEvent, spawnAgent = spawn, timeoutMs = LIMITS.healTimeout }) {
   return new Promise((resolvePromise, reject) => {
-    const args = ['-p', '--mode', 'json', '--model', MODEL, '--thinking', THINKING,
-      '--no-session', '--no-extensions', '--no-skills', '--no-context-files', '--no-prompt-templates', '--no-themes',
-      '--tools', 'read,edit,write,bash', '--append-system-prompt', system, prompt]
-    const child = spawnPi('pi', args, { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const args = ['-p', '--output-format', 'stream-json', '--verbose', '--model', MODEL, '--effort', EFFORT,
+      '--safe-mode', '--no-session-persistence', '--tools', 'Read,Edit,Write,Bash,Grep,Glob',
+      '--permission-mode', 'acceptEdits', '--allowedTools', 'Bash', '--permission-prompts', 'none',
+      '--append-system-prompt', system, prompt]
+    const child = spawnAgent('claude', args, { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
     let buffer = '', stderrTail = '', finalText = '', failure = null, settled = false
     const kill = () => { try { process.kill(-child.pid, 'SIGKILL') } catch { try { child.kill('SIGKILL') } catch {} } }
-    const timer = setTimeout(() => { failure = 'timeout'; onEvent({ kind: 'error', text: 'Time limit reached; pi was stopped.' }); kill() }, timeoutMs)
+    const timer = setTimeout(() => { failure = 'timeout'; onEvent({ kind: 'error', text: 'Time limit reached; Claude was stopped.' }); kill() }, timeoutMs)
     const handle = line => {
       if (!line.trim()) return
-      const event = parsePiEvent(line)
-      if (!event) return
-      if (event.kind === 'text') finalText = event.text
-      if (event.kind === 'error') failure = failure || 'provider-error'
-      onEvent(event)
+      for (const event of parseClaudeEvents(line)) {
+        if (event.kind === 'text') finalText = event.text
+        if (event.kind === 'end' && event.result) finalText = event.result
+        if (event.kind === 'error') failure = failure || event.text
+        onEvent(event)
+      }
     }
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', chunk => {
@@ -423,15 +488,14 @@ export function runPi({ system, prompt, cwd, env, onEvent, spawnPi = spawn, time
       while ((newline = buffer.indexOf('\n')) >= 0) { handle(buffer.slice(0, newline)); buffer = buffer.slice(newline + 1) }
     })
     child.stderr.on('data', chunk => { stderrTail = (stderrTail + chunk.toString('utf8')).slice(-4000) })
-    child.on('error', error => { clearTimeout(timer); if (!settled) { settled = true; reject(new RoadmapError(`pi could not start: ${error.message}`)) } })
+    child.on('error', error => { clearTimeout(timer); if (!settled) { settled = true; reject(new RoadmapError(`Claude Code could not start: ${error.message}. Is claude on PATH?`)) } })
     child.on('close', code => {
       clearTimeout(timer); handle(buffer)
       if (settled) return
       settled = true
-      if (/non-interactive shell and project is not trusted/.test(stderrTail)) return reject(new RoadmapError('safe-pi needs a one-time trust approval: run `pi --safe-pi-trust` in the project directory, then retry.'))
-      if (failure === 'timeout') return reject(new RoadmapError('pi reached the time limit.'))
-      if (failure) return reject(new RoadmapError(`pi reported a provider error. ${stderrTail.trim().split('\n').pop() || ''}`.trim()))
-      if (code !== 0) return reject(new RoadmapError(`pi exited with status ${code}. ${stderrTail.trim().split('\n').slice(-3).join(' ')}`.trim()))
+      if (failure === 'timeout') return reject(new RoadmapError('Claude reached the time limit.'))
+      if (failure) return reject(new RoadmapError(`Claude reported an error: ${failure}`))
+      if (code !== 0) return reject(new RoadmapError(`claude exited with status ${code}. ${stderrTail.trim().split('\n').slice(-3).join(' ')}`.trim()))
       resolvePromise(finalText)
     })
   })
@@ -483,11 +547,10 @@ export class Healer {
     await unlink(backup).catch(() => {})
     return backup
   }
-  async run({ template, instruction = '', spawnPi, dryRun = false }) {
+  async run({ template, instruction = '', spawnAgent, dryRun = false }) {
     if (this.running) throw new RoadmapError('A self-heal is already running.')
-    const html = await readFile(this.page, 'utf8')
-    const snapshot = readSnapshot(html), config = readConfig(html)
-    const built = await buildHealPrompt({ template, instruction, page: this.page, root: this.root, cli: this.cli, snapshot, config })
+    const { html, snapshot, snapshotPath, config } = await loadPage(this.page)
+    const built = await buildHealPrompt({ template, instruction, page: this.page, root: this.root, cli: this.cli, snapshot, snapshotPath, config })
     if (dryRun) return built
     this.running = true
     this.events = []
@@ -497,9 +560,9 @@ export class Healer {
     try {
       const before = await gitStatus(this.root)
       const backup = await this.backup()
-      this.emit({ kind: 'info', text: `Backup saved. Running pi (${MODEL}, ${THINKING} effort) on template "${template}".` })
-      const env = { ...process.env, LINEAR_API_KEY: this.apiKey, PI_TELEMETRY: '0' }
-      const summary = await runPi({ ...built, cwd: this.root, env, spawnPi, onEvent: event => this.emit(event) })
+      this.emit({ kind: 'info', text: `Backup saved. Running Claude Code (${MODEL}, ${EFFORT} effort) on template "${template}".` })
+      const env = { ...process.env, LINEAR_API_KEY: this.apiKey }
+      const summary = await runClaude({ ...built, cwd: this.root, env, spawnAgent, onEvent: event => this.emit(event) })
       result.summary = summary
       const after = await readFile(this.page, 'utf8')
       const changed = after !== html
@@ -516,8 +579,8 @@ export class Healer {
       }
       result.ok = true
       result.status = changed ? 'updated' : 'unchanged'
-      this.emit({ kind: 'info', text: changed ? 'The page was updated and passed validation.' : 'pi finished without changing the page.' })
-      if (result.outsideChanges.length) this.emit({ kind: 'warn', text: `pi also touched files outside the page: ${result.outsideChanges.join(', ')}. Review them with git.` })
+      this.emit({ kind: 'info', text: changed ? 'The page was updated and passed validation.' : 'Claude finished without changing the page.' })
+      if (result.outsideChanges.length) this.emit({ kind: 'warn', text: `Claude also touched files outside the page: ${result.outsideChanges.join(', ')}. Review them with git.` })
       result.backup = backup
     } catch (error) {
       result.status = 'failed'
@@ -534,10 +597,9 @@ export class Healer {
     return result
   }
   async recordRun(result) {
-    const html = await readFile(this.page, 'utf8')
-    const snapshot = readSnapshot(html)
-    snapshot.heal = { lastRun: { template: result.template, startedAt: result.startedAt, finishedAt: result.finishedAt, status: result.status, summary: (result.summary || result.error || '').slice(0, 2000), model: MODEL, thinking: THINKING } }
-    await atomicWrite(this.page, replaceSnapshot(html, snapshot))
+    const { snapshotPath, stored } = await loadPage(this.page)
+    stored.heal = { lastRun: { template: result.template, startedAt: result.startedAt, finishedAt: result.finishedAt, status: result.status, summary: (result.summary || result.error || '').slice(0, 2000), model: MODEL, effort: EFFORT } }
+    await atomicWrite(snapshotPath, encodeSnapshotFile(stored))
   }
 }
 
@@ -581,11 +643,19 @@ export function createRoadmapServer({ page, refresh, healer, pageCommand }) {
         response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
         return response.end(html)
       }
+      if (request.method === 'GET' && url.pathname !== '/' && !url.pathname.startsWith('/api/')) {
+        const { snapshotPath } = await loadPage(page)
+        if (resolve(dirname(page), '.' + decodeURIComponent(url.pathname)) === snapshotPath) {
+          const text = await readFile(snapshotPath, 'utf8').catch(() => null)
+          if (text === null) return sendJson(response, 404, { error: 'No snapshot yet.' })
+          response.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' })
+          return response.end(text)
+        }
+      }
       if (request.method === 'GET' && url.pathname === '/api/status') {
-        const html = await readFile(page, 'utf8')
-        const snapshot = readSnapshot(html), config = readConfig(html)
+        const { snapshot, config } = await loadPage(page)
         return sendJson(response, 200, {
-          server: true, page: relative(healer.root, page), root: healer.root, command: pageCommand, model: MODEL, thinking: THINKING,
+          server: true, page: relative(healer.root, page), root: healer.root, command: pageCommand, model: MODEL, effort: EFFORT,
           refreshing, lastRefresh, heal: { running: healer.running, current: healer.current, lastRun: healer.lastRun, events: healer.events.slice(-50), hasBackup: Boolean(await healer.latestBackup()) },
           pending: pendingCounts(snapshot, config), templates: HEAL_TEMPLATES,
         })
@@ -664,8 +734,7 @@ async function main(argv) {
   const healer = new Healer({ page, root, cli, apiKey })
 
   if (argv.includes('--check')) {
-    const html = await readFile(page, 'utf8')
-    const snapshot = readSnapshot(html), config = readConfig(html)
+    const { snapshot, config } = await loadPage(page)
     const next = mergeSnapshot(snapshot, config, await fetchFacts(linear, config, snapshot, log))
     const counts = pendingCounts(next, config)
     console.log(`Check passed: ${next.tasks.filter(task => !task.referenceOnly).length} roadmap tickets merged. Pending self-heal work: ${JSON.stringify(counts)}. Nothing was written.`)

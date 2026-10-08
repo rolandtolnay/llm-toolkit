@@ -1,11 +1,14 @@
 # Roadmap page contract
 
-A roadmap page is one self-contained HTML file. It renders two embedded JSON blocks with a fixed script and needs no build, server or network to display; its web fonts load from Google Fonts when online and fall back to system faces offline. The server script `roadmap.mjs` refreshes the data block from Linear and runs self-heal passes; the page shows its Refresh and Self-heal buttons only when served by that script.
+A roadmap page is one HTML file plus a Linear snapshot beside it. The page holds everything a person wrote for it in two embedded JSON blocks and is committed; the snapshot holds only what anyone can fetch again from Linear, so the project ignores it in git. A fixed script renders them with no build, server or network; its web fonts load from Google Fonts when online and fall back to system faces offline. The server script `roadmap.mjs` refreshes the snapshot from Linear and runs self-heal passes; the page shows its Refresh and Self-heal buttons only when served by that script.
 
 ```html
-<script id="roadmap-config" type="application/json">{ ...curated content... }</script>
-<script id="roadmap-data"   type="application/json">{ ...Linear snapshot... }</script>
+<script id="roadmap-config"   type="application/json">{ ...curated content... }</script>
+<script id="roadmap-guidance" type="application/json">{ "tasks": [ ...per-ticket guidance... ] }</script>
+<script id="roadmap-snapshot" src="<page>.snapshot.js"></script>
 ```
+
+The `src` names the snapshot file relative to the page, usually `<page name>.snapshot.js`, and the project's `.gitignore` lists it. It is a script (`window.ROADMAP_SNAPSHOT = {...};`) rather than JSON so the page still loads it when opened as a plain file. Without it, as in a fresh checkout, the page renders its config, shows no tickets and asks for a refresh.
 
 Ticket identifiers are Linear identifiers such as `ORF-19`, everywhere.
 
@@ -29,15 +32,21 @@ Written when the page is created and edited by self-heal passes. Nothing here is
 | `excludeLabelPrefixes` | Tickets with a label starting with one of these prefixes are not tracked (planning or meta tickets). |
 | `startableStateTypes` | State types the page treats as "selected to start". Default `["unstarted"]` (Todo). Add `"backlog"` for teams that start work straight from Backlog. |
 | `workflowLabels`, `estimateLabels` | Optional display overrides. |
-| `openers` | Session prompt overrides per workflow (`scope`, `prep`, `owner`) and for guidance reviews (`review`, `new`). `{id}` and `{title}` are replaced. The defaults follow the session workflows below; override them to spell skill commands for the person's harness. |
-| `prepFollowUp` | Optional override for the sentence shown after a prep opener, which by default points at `/cook-prd`. |
+| `openers` | Session prompt overrides per workflow (`scope`, `prep`, `owner`) and for guidance reviews (`review`, `new`). `{id}` and `{title}` are replaced. The defaults follow the session workflows below. |
+| `prepFollowUp` | Optional override for the sentence shown after a prep opener, which by default points at `{skill:cook-prd}`. |
 | `gates` | Optional titles and bodies for the gate sections: `title`, `body`, `enablesTitle`, `enablesBody`. |
 | `guide[]`, `guideFooter` | The "Working with an agent" section: `{title, body}` items and a closing note. |
 | `fallbacks` | Optional `{title, paragraphs[]}` for a "if the schedule gets tight" section. |
 
-## roadmap-data: Linear snapshot
+Skill commands in `openers`, `prepFollowUp` and `guide` are written as `{skill:name}`. The page spells them for the agent harness picked in its header and remembered per browser: `/name` for Claude Code, `/skill:name` for Pi, `$name` for Codex.
 
-Written by the server. Fields marked **fact** come from Linear and must not be edited by hand or by a self-heal; the next refresh overwrites them anyway. Fields marked *curated* survive refreshes.
+## roadmap-guidance: per-ticket guidance
+
+Written when the page is created and edited by self-heal passes; a refresh never changes it. `tasks[]` holds one entry per curated ticket with its `id` and the *curated* fields in the table below. The page and the server overlay each entry on the snapshot task with the same `id`. A curated ticket stays tracked after it leaves the configured projects until its entry is removed.
+
+## Snapshot file: Linear facts
+
+Written by the server on every refresh and never edited by hand or by a self-heal. Fields marked **fact** and *derived* live here; fields marked *curated* live in `roadmap-guidance`, and the snapshot carries placeholder values for them only on tickets that have no guidance entry yet.
 
 Top level: `checkedAt` (fact), `trackingSince`, `stateTypes` (fact: state name to type map), `refresh` (`{ok, attemptedAt, error?}`), `heal.lastRun` (written after each self-heal), `tasks[]`.
 
@@ -60,15 +69,15 @@ Each task:
 | `gates[]` | curated | Identifiers of prerequisites that are not native blockers (service approvals, access). Local work may start before gates clear. |
 | `curated` | curated | False until guidance was written for the ticket. The page shows "New: needs integration" while false. |
 | `reviewedHash` | curated | The `sourceHash` the guidance was last checked against. |
-| `reviewRequired` | derived | `sourceHash` differs from both `reviewedHash` and `aiGuidance.sourceHash`. |
+| `reviewRequired` | derived | Computed when guidance and snapshot are combined, not stored: the ticket is missing, or `sourceHash` differs from both `reviewedHash` and `aiGuidance.sourceHash`. |
 | `aiGuidance` | curated | Optional `{sourceHash, updatedAt, model}` when a self-heal wrote the guidance; the page labels it "AI-updated". |
 
 ## Session workflows
 
 Each ticket gets one `workflow`, which picks the session prompt in its drawer. Classify by how the person will start the work:
 
-- `scope`: bounded code work where the agent can make the remaining decisions itself, because the risk is low or few decisions are left. Opens with `/scope {id}`: the skill confirms a short frame, then builds in the same session.
-- `prep`: every other code change, and the default for anything substantial: a feature, work across several areas, a new provider or data migration, or work whose product, UX or architecture choices the person will want to steer. Also the choice when the ticket is too thin to judge. Opens with `/prep {id}`: an interview that produces a PRD, which `/cook-prd <prd path>` then builds in a fresh session.
+- `scope`: bounded code work where the agent can make the remaining decisions itself, because the risk is low or few decisions are left. Opens with `{skill:scope} {id}`: the skill confirms a short frame, then builds in the same session.
+- `prep`: every other code change, and the default for anything substantial: a feature, work across several areas, a new provider or data migration, or work whose product, UX or architecture choices the person will want to steer. Also the choice when the ticket is too thin to judge. Opens with `{skill:prep} {id}`: an interview that produces a PRD, which `{skill:cook-prd} <prd path>` then builds in a fresh session.
 - `owner`: no code output. The person does the work in a conversation with the agent: setting up third-party providers, accounts and credentials, or making business and policy decisions. Opens with a walk-through prompt that takes one step or decision at a time and verifies each step before the next. Tickets carrying `ownerLabel` are always owner work.
 
 When unsure between `scope` and `prep`, choose `prep`. The estimate is a hint, not the rule: a small ticket that settles a product rule (who gets access, what a user sees) is `prep`, and a large ticket whose behaviour is fully specified can be `scope`. Session prompts are the skill command and the ticket identifier only; the skills read the ticket themselves.
@@ -89,4 +98,4 @@ Next-up cards pick the first eligible ticket from `nextUp.agent` (workflow scope
 
 ## Self-heal passes
 
-The server launches `pi -p` (model `openai/gpt-6.1-sol`, medium effort, tools read/edit/write/bash, no project extensions or context files) in the project root with `heal-prompts/contract.md` appended to the system prompt and one of the templates as the prompt. Templates: `integrate-new`, `reconcile-states`, `recheck-guidance`, `custom`. Before the run the page is backed up to `~/.cache/roadmap-page/<hash>/`; after it the file must still contain both JSON blocks, a parseable script, a body and the task list, or it is restored. Files changed outside the page are reported, not reverted. The page's "Revert last self-heal" button restores the latest backup.
+The server launches `claude -p` (model `opus`, medium effort, `--safe-mode` so no CLAUDE.md, skills, plugins, hooks or MCP servers; tools Read, Edit, Write, Bash, Grep and Glob, with edits and Bash pre-approved and anything else denied) in the project root with `heal-prompts/contract.md` and this contract appended to the system prompt and one of the templates as the prompt. Templates: `integrate-new`, `reconcile-states`, `recheck-guidance`, `custom`. Self-heal edits only the page, never the snapshot file. Before the run the page is backed up to `~/.cache/roadmap-page/<hash>/`; after it the file must still contain both JSON blocks, the snapshot tag, a parseable script, a body and the task list, or it is restored. Files changed outside the page are reported, not reverted. The page's "Revert last self-heal" button restores the latest backup.

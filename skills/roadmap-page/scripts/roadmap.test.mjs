@@ -6,8 +6,8 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import {
-  readSnapshot, readConfig, replaceSnapshot, validatePage, mergeSnapshot, fingerprint, findings, pendingCounts,
-  resolveApiKey, makeCli, fetchFacts, parsePiEvent, runPi, buildHealPrompt, Healer, RoadmapError,
+  readGuidance, readConfig, encodeSnapshotFile, parseSnapshotFile, readSnapshotFile, refreshFile, loadPage, validatePage, mergeSnapshot, fingerprint, findings, pendingCounts,
+  resolveApiKey, makeCli, fetchFacts, parseClaudeEvents, runClaude, buildHealPrompt, Healer, RoadmapError,
 } from './roadmap.mjs'
 
 const template = await readFile(new URL('../templates/roadmap.html', import.meta.url), 'utf8')
@@ -16,7 +16,7 @@ const config = {
   phases: [{ id: 'now', name: 'Now', projects: ['Alpha'] }, { id: 'next', name: 'Next', projects: ['Beta'] }],
   lanes: [{ id: 'a', name: 'A', summary: '', detail: '', ids: ['DM-1'] }], nextUp: { agent: ['DM-1'], owner: [], plan: [] },
 }
-const page = (snapshot = { tasks: [] }) => template.replace('{{CONFIG}}', JSON.stringify(config)).replace('{{DATA}}', JSON.stringify(snapshot))
+const page = (guidance = { tasks: [] }) => template.replace('{{CONFIG}}', JSON.stringify(config)).replace('{{GUIDANCE}}', JSON.stringify(guidance)).replace('{{SNAPSHOT}}', 'r.snapshot.js')
 
 function issue(id, overrides = {}) {
   return {
@@ -34,21 +34,48 @@ function facts(issues, listed = issues.map(i => i.identifier)) {
 
 test('template renders both blocks and validates', () => {
   const html = page()
-  assert.deepEqual(readSnapshot(html).tasks, [])
+  assert.deepEqual(readGuidance(html).tasks, [])
   assert.equal(readConfig(html).focus, 'now')
   validatePage(html)
 })
 
-test('replaceSnapshot keeps script-breaking titles as data', () => {
-  const html = replaceSnapshot(page(), { tasks: [{ id: 'DM-1', title: '</script><b>' }] })
-  assert.ok(!html.includes('</script><b>'))
-  assert.equal(readSnapshot(html).tasks[0].title, '</script><b>')
-  validatePage(html)
+test('the snapshot file keeps script-breaking titles as data', () => {
+  const text = encodeSnapshotFile({ tasks: [{ id: 'DM-1', title: '</script><b>\u2028' }] })
+  assert.ok(!text.includes('</script>'))
+  assert.equal(parseSnapshotFile(text).tasks[0].title, '</script><b>\u2028')
+  assert.throws(() => parseSnapshotFile('window.OTHER = {};'), RoadmapError)
 })
 
 test('validatePage rejects a broken script or missing block', () => {
   assert.throws(() => validatePage(page().replace("'use strict';", "'use strict'; const = ;")), /syntax error/)
-  assert.throws(() => validatePage(page().replace('id="roadmap-data"', 'id="x"')), /roadmap-data/)
+  assert.throws(() => validatePage(page().replace('id="roadmap-guidance"', 'id="x"')), /roadmap-guidance/)
+  assert.throws(() => validatePage(page().replace('id="roadmap-snapshot"', 'id="x"')), /roadmap-snapshot/)
+})
+
+test('refresh writes only the snapshot file, and page guidance decides curation and tracking', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'roadmap-split-'))
+  const pagePath = join(root, 'r.html')
+  const first = mergeSnapshot({ tasks: [] }, config, facts([issue('DM-1'), issue('DM-2')]))
+  const hash = first.tasks.find(t => t.id === 'DM-1').sourceHash
+  const html = page({ tasks: [{ id: 'DM-1', title: 'Nice name', summary: 'S', detail: 'D', input: 'I', workflow: 'scope', gates: [], curated: true, reviewedHash: hash }] })
+  await writeFile(pagePath, html)
+  assert.deepEqual((await loadPage(pagePath)).snapshot.tasks.map(t => t.id), ['DM-1'])
+
+  await refreshFile(pagePath, async () => facts([issue('DM-1'), issue('DM-2')]))
+  assert.equal(await readFile(pagePath, 'utf8'), html)
+  const stored = await readSnapshotFile(join(root, 'r.snapshot.js'))
+  const storedById = Object.fromEntries(stored.tasks.map(t => [t.id, t]))
+  assert.equal(storedById['DM-1'].title, undefined)
+  assert.equal(storedById['DM-1'].reviewRequired, undefined)
+  assert.equal(storedById['DM-2'].curated, false)
+  const loaded = Object.fromEntries((await loadPage(pagePath)).snapshot.tasks.map(t => [t.id, t]))
+  assert.equal(loaded['DM-1'].title, 'Nice name')
+  assert.equal(loaded['DM-1'].reviewRequired, false)
+  assert.equal(loaded['DM-2'].reviewRequired, true)
+
+  // Unlisted tickets stay only while the page has guidance for them.
+  const { snapshot } = await refreshFile(pagePath, async () => facts([issue('DM-1'), issue('DM-2')], []))
+  assert.deepEqual(snapshot.tasks.map(t => t.id), ['DM-1'])
 })
 
 test('merge creates uncurated tasks, derives phase, owner and blockers, and pulls reference blockers', () => {
@@ -152,12 +179,19 @@ test('makeCli surfaces CLI error envelopes and fetchFacts follows blockers acros
   await assert.rejects(failing(['states']), /MISSING_API_KEY/)
 })
 
-test('parsePiEvent summarises tools, text and errors', () => {
-  assert.deepEqual(parsePiEvent(JSON.stringify({ type: 'tool_execution_start', toolName: 'bash', args: { command: 'uv run linear.py get X' } })), { kind: 'tool', text: 'bash: uv run linear.py get X' })
-  assert.deepEqual(parsePiEvent(JSON.stringify({ type: 'tool_execution_start', toolName: 'edit', args: { path: 'etc/r.html' } })), { kind: 'tool', text: 'edit: etc/r.html' })
-  assert.deepEqual(parsePiEvent(JSON.stringify({ type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'Done.' }] } })), { kind: 'text', text: 'Done.' })
-  assert.equal(parsePiEvent(JSON.stringify({ type: 'message_end', message: { role: 'assistant', stopReason: 'error', errorMessage: 'quota' } })).kind, 'error')
-  assert.equal(parsePiEvent('not json'), null)
+const assistant = (...content) => ({ type: 'assistant', message: { content } })
+const done = text => ({ type: 'result', subtype: 'success', is_error: false, result: text })
+
+test('parseClaudeEvents summarises tools, text, failed tools and the result', () => {
+  assert.deepEqual(parseClaudeEvents(JSON.stringify(assistant(
+    { type: 'text', text: 'Reading.' },
+    { type: 'tool_use', name: 'Bash', input: { command: 'uv run linear.py get X' } },
+    { type: 'tool_use', name: 'Edit', input: { file_path: 'etc/r.html' } },
+  ))), [{ kind: 'text', text: 'Reading.' }, { kind: 'tool', text: 'bash: uv run linear.py get X' }, { kind: 'tool', text: 'edit: etc/r.html' }])
+  assert.equal(parseClaudeEvents(JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', is_error: true, content: 'denied' }] } }))[0].kind, 'warn')
+  assert.deepEqual(parseClaudeEvents(JSON.stringify(done('All good'))), [{ kind: 'end', text: 'Claude finished', result: 'All good' }])
+  assert.equal(parseClaudeEvents(JSON.stringify({ type: 'result', subtype: 'error_max_turns', is_error: true }))[0].kind, 'error')
+  assert.deepEqual(parseClaudeEvents('not json'), [])
 })
 
 function fakeSpawn({ lines = [], stderr = '', code = 0 }) {
@@ -176,17 +210,17 @@ function fakeSpawn({ lines = [], stderr = '', code = 0 }) {
   }
 }
 
-test('runPi resolves the final assistant text and maps trust failures', async () => {
+test('runClaude resolves the final result text and reports errors and exit codes', async () => {
   const events = []
-  const text = await runPi({ system: 's', prompt: 'p', cwd: '/', env: {}, onEvent: e => events.push(e), spawnPi: fakeSpawn({ lines: [
-    { type: 'tool_execution_start', toolName: 'read', args: { path: 'x' } },
-    { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'All good' }] } },
-    { type: 'agent_end' },
+  const text = await runClaude({ system: 's', prompt: 'p', cwd: '/', env: {}, onEvent: e => events.push(e), spawnAgent: fakeSpawn({ lines: [
+    assistant({ type: 'tool_use', name: 'Read', input: { file_path: 'x' } }),
+    assistant({ type: 'text', text: 'Interim' }),
+    done('All good'),
   ] }) })
   assert.equal(text, 'All good')
   assert.deepEqual(events.map(e => e.kind), ['tool', 'text', 'end'])
-  await assert.rejects(runPi({ system: 's', prompt: 'p', cwd: '/', env: {}, onEvent: () => {}, spawnPi: fakeSpawn({ stderr: 'safe-pi: non-interactive shell and project is not trusted; aborting', code: 1 }) }), /safe-pi-trust/)
-  await assert.rejects(runPi({ system: 's', prompt: 'p', cwd: '/', env: {}, onEvent: () => {}, spawnPi: fakeSpawn({ code: 3 }) }), /status 3/)
+  await assert.rejects(runClaude({ system: 's', prompt: 'p', cwd: '/', env: {}, onEvent: () => {}, spawnAgent: fakeSpawn({ lines: [{ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'quota' }], code: 1 }) }), /quota/)
+  await assert.rejects(runClaude({ system: 's', prompt: 'p', cwd: '/', env: {}, onEvent: () => {}, spawnAgent: fakeSpawn({ code: 3 }) }), /status 3/)
 })
 
 test('buildHealPrompt fills findings and rejects empty custom instructions', async () => {
@@ -202,20 +236,19 @@ test('buildHealPrompt fills findings and rejects empty custom instructions', asy
 test('Healer restores the page when the edited result fails validation and records the run', async () => {
   const root = await mkdtemp(join(tmpdir(), 'roadmap-heal-'))
   const pagePath = join(root, 'r.html')
-  const snapshot = mergeSnapshot({ tasks: [] }, config, facts([issue('DM-1')]))
-  await writeFile(pagePath, page(snapshot))
+  await writeFile(pagePath, page())
   const healer = new Healer({ page: pagePath, root, cli: 'c', apiKey: 'k' })
   const breakPage = () => {
-    const spawn = fakeSpawn({ lines: [{ type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'broke it' }] } }] })
+    const spawn = fakeSpawn({ lines: [done('broke it')] })
     return (...args) => { writeFile(pagePath, '<html>oops</html>'); return spawn(...args) }
   }
-  const result = await healer.run({ template: 'integrate-new', spawnPi: breakPage() })
+  const result = await healer.run({ template: 'integrate-new', spawnAgent: breakPage() })
   assert.equal(result.status, 'failed')
   assert.match(result.error, /restored/)
   const restored = await readFile(pagePath, 'utf8')
   validatePage(restored)
-  assert.equal(readSnapshot(restored).heal.lastRun.status, 'failed')
-  const ok = await healer.run({ template: 'integrate-new', spawnPi: fakeSpawn({ lines: [{ type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'No change needed' }] } }] }) })
+  assert.equal((await readSnapshotFile(join(root, 'r.snapshot.js'))).heal.lastRun.status, 'failed')
+  const ok = await healer.run({ template: 'integrate-new', spawnAgent: fakeSpawn({ lines: [done('No change needed')] }) })
   assert.equal(ok.status, 'unchanged')
   assert.equal(ok.summary, 'No change needed')
   assert.ok(await healer.latestBackup())
