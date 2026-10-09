@@ -66,15 +66,31 @@ small,.small { font-size:var(--t-caption); }
 .brand { display:flex; align-items:center; gap:16px; }
 .wordmark { font-size:30px; line-height:1; letter-spacing:-.03em; }
 .brand span:last-child { border-left:1px solid var(--line); padding-left:16px; color:var(--muted); font-size:var(--t-small); }
-.toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.theme-switch, .harness-switch { display:inline-flex; gap:2px; padding:3px; border-radius:999px; background:var(--wash); }
-.harness-switch { margin-left:8px; }
-.theme-switch button { display:grid; place-items:center; width:32px; height:28px; border-radius:999px; color:var(--muted); }
-.harness-switch button { height:28px; padding:0 10px; border-radius:999px; color:var(--muted); font-size:var(--t-caption); font-weight:500; }
+/* Toolbar: sync status, the one page action, then quiet icon buttons for help and preferences. */
+.toolbar { display:flex; gap:8px; align-items:center; }
+.toolbar svg { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.toolbar .outline-button { display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 16px 0 14px; white-space:nowrap; }
+.toolbar .outline-button .badge { margin:0 -6px 0 0; }
+.toolbar-divider { width:1px; height:20px; background:var(--line); margin:0 4px; }
+.sync { display:inline-flex; align-items:center; gap:8px; min-width:0; margin-right:8px; color:var(--muted); font-size:var(--t-caption); font-variant-numeric:tabular-nums; }
+.sync-dot { width:7px; height:7px; flex:none; border-radius:50%; background:var(--green); box-shadow:0 0 0 3px var(--green-soft); }
+.sync.stale .sync-dot { background:var(--amber); box-shadow:0 0 0 3px var(--amber-wash); }
+.sync > span:not(.sync-dot) { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.icon-button { display:grid; place-items:center; flex:none; width:36px; height:36px; border-radius:999px; color:var(--muted); }
+.icon-button:hover, .icon-button[aria-expanded=true] { background:var(--wash); color:var(--ink); }
+.icon-button svg { width:18px; height:18px; }
+.sync .icon-button { width:30px; height:30px; margin-left:-2px; }
+.sync .icon-button svg { width:16px; height:16px; }
+#refresh-button[aria-busy=true] svg { animation:spin .8s linear infinite; }
+.prefs { position:relative; }
+.prefs-panel { position:absolute; z-index:20; top:calc(100% + 8px); right:0; display:grid; gap:8px; width:max-content; min-width:248px; padding:14px; border-radius:var(--radius-s); background:var(--surface); box-shadow:var(--float-lg),inset 0 0 0 1px var(--line); }
+.prefs-panel p { color:var(--muted); font-size:var(--t-caption); font-weight:500; }
+.prefs-panel p + div + p { margin-top:6px; }
+.theme-switch, .harness-switch { display:flex; gap:2px; padding:3px; border-radius:999px; background:var(--wash); }
+.theme-switch button, .harness-switch button { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; height:30px; padding:0 12px; border-radius:999px; color:var(--muted); font-size:var(--t-caption); font-weight:500; white-space:nowrap; }
 .theme-switch button:hover, .harness-switch button:hover { color:var(--ink); }
 .theme-switch button[aria-pressed=true], .harness-switch button[aria-pressed=true] { background:var(--raised); color:var(--ink); box-shadow:var(--float-sm); }
-.theme-switch svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
-.snapshot { color:var(--muted); font-size:var(--t-caption); margin-right:8px; }
+.theme-switch svg { width:14px; height:14px; }
 .text-button { padding:8px 4px; color:var(--muted); text-decoration:underline; text-underline-offset:4px; font-size:var(--t-small); }
 .text-button:hover { color:var(--ink); }
 .outline-button { padding:8px 16px; border-radius:999px; font-size:var(--t-small); font-weight:500; background:var(--surface); box-shadow:var(--float-sm); }
@@ -253,7 +269,9 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
 @media(max-width:600px) {
  :root { --t-section:26px; --t-card:22px; }
  .wrap { padding:0 16px; } .topbar { padding:16px 0; gap:10px; } .wordmark { font-size:26px; }
- .toolbar { width:100%; } .snapshot { width:100%; margin:0; }
+ /* One toolbar row under the brand: the sync time drops its verb and self-heal keeps only its icon and badge. */
+ .toolbar { width:100%; } .sync { flex:1; margin-right:0; } .sync-word, .toolbar-divider { display:none; }
+ .toolbar .outline-button { padding:0 10px; } .heal-label { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
  .hero { padding:32px 0 24px; } .hero h1 + p { font-size:var(--t-body); }
  .progress-panel { max-width:none; }
  .phase-nav { gap:24px; } .phase-nav button { font-size:15px; } .phase-number { display:none; }
@@ -276,19 +294,29 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
  <header class="topbar">
   <div class="brand"><span class="wordmark" id="brand-name">roadmap</span><span id="brand-subtitle">Your roadmap</span></div>
   <div class="toolbar">
-   <span class="snapshot" id="snapshot-badge">Saved Linear snapshot</span>
-   <button class="outline-button" id="refresh-button" hidden>Refresh from Linear</button>
-   <button class="outline-button" id="heal-button" hidden>Self-heal<span class="badge" id="heal-badge" hidden></span></button>
-   <button class="text-button" data-guide>How to use this</button>
-   <div class="harness-switch" role="group" aria-label="Write session prompts for" title="Write session prompts for this agent">
-    <button data-harness-choice="claude" aria-pressed="true">Claude Code</button>
-    <button data-harness-choice="pi" aria-pressed="false">Pi</button>
-    <button data-harness-choice="codex" aria-pressed="false">Codex</button>
+   <div class="sync" id="sync">
+    <span class="sync-dot" aria-hidden="true"></span><span id="snapshot-badge">Saved Linear snapshot</span>
+    <button class="icon-button" id="refresh-button" aria-label="Refresh from Linear" title="Refresh from Linear" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9"/><path d="M14.4 3v3.4H11"/></svg></button>
    </div>
-   <div class="theme-switch" role="group" aria-label="Color theme">
-    <button data-theme-choice="system" aria-pressed="true" aria-label="System theme" title="System"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="10" rx="2"/><path d="M7 16.5h6M10 13.5v3"/></svg></button>
-    <button data-theme-choice="light" aria-pressed="false" aria-label="Light theme" title="Light"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.2"/><path d="M10 2.5v1.8M10 15.7v1.8M2.5 10h1.8M15.7 10h1.8M4.7 4.7l1.3 1.3M14 14l1.3 1.3M4.7 15.3 6 14M14 6l1.3-1.3"/></svg></button>
-    <button data-theme-choice="dark" aria-pressed="false" aria-label="Dark theme" title="Dark"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 12.2A6.8 6.8 0 0 1 7.8 3.5a6.8 6.8 0 1 0 8.7 8.7Z"/></svg></button>
+   <button class="outline-button" id="heal-button" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 3.5 9.9 7.1l3.6 1.4-3.6 1.4-1.4 3.6-1.4-3.6-3.6-1.4 3.6-1.4Z"/><path d="M14.5 12.5v4M12.5 14.5h4"/></svg><span class="heal-label">Self-heal</span><span class="badge" id="heal-badge" hidden></span></button>
+   <span class="toolbar-divider" aria-hidden="true"></span>
+   <button class="icon-button" data-guide aria-label="How to use this" title="How to use this"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M7.9 7.9a2.1 2.1 0 1 1 2.9 1.9c-.5.2-.8.7-.8 1.2v.4"/><path d="M10 13.9v.1"/></svg></button>
+   <div class="prefs">
+    <button class="icon-button" id="prefs-button" aria-expanded="false" aria-controls="prefs-panel" aria-label="Preferences" title="Preferences"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 6.5h7M15.5 6.5h1M3.5 13.5h1M9.5 13.5h7"/><circle cx="13" cy="6.5" r="2"/><circle cx="7" cy="13.5" r="2"/></svg></button>
+    <div class="prefs-panel" id="prefs-panel" hidden>
+     <p id="harness-label">Write session prompts for</p>
+     <div class="harness-switch" role="group" aria-labelledby="harness-label">
+      <button data-harness-choice="claude" aria-pressed="true">Claude Code</button>
+      <button data-harness-choice="pi" aria-pressed="false">Pi</button>
+      <button data-harness-choice="codex" aria-pressed="false">Codex</button>
+     </div>
+     <p id="theme-label">Theme</p>
+     <div class="theme-switch" role="group" aria-labelledby="theme-label">
+      <button data-theme-choice="system" aria-pressed="true"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="10" rx="2"/><path d="M7 16.5h6M10 13.5v3"/></svg>System</button>
+      <button data-theme-choice="light" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.2"/><path d="M10 2.5v1.8M10 15.7v1.8M2.5 10h1.8M15.7 10h1.8M4.7 4.7l1.3 1.3M14 14l1.3 1.3M4.7 15.3 6 14M14 6l1.3-1.3"/></svg>Light</button>
+      <button data-theme-choice="dark" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 12.2A6.8 6.8 0 0 1 7.8 3.5a6.8 6.8 0 1 0 8.7 8.7Z"/></svg>Dark</button>
+     </div>
+    </div>
    </div>
   </div>
  </header>
@@ -581,6 +609,12 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
  document.querySelectorAll('[data-theme-choice]').forEach(b => b.addEventListener('click', () => setTheme(b.dataset.themeChoice)));
  setTheme(document.documentElement.dataset.theme || 'system');
 
+ // Preferences menu: closes on a click outside it or on Escape.
+ function setPrefs(open) { $('prefs-panel').hidden = !open; $('prefs-button').setAttribute('aria-expanded', open); }
+ $('prefs-button').addEventListener('click', () => setPrefs($('prefs-panel').hidden));
+ document.addEventListener('pointerdown', event => { if (!event.target.closest('.prefs')) setPrefs(false); });
+ document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('prefs-panel').hidden) { setPrefs(false); $('prefs-button').focus(); } });
+
  // Static chrome from config.
  document.title = `${CONFIG.product || 'Roadmap'} · Roadmap`;
  $('brand-name').textContent = (CONFIG.product || 'roadmap').toLowerCase();
@@ -603,7 +637,10 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
  const oldSnapshot = !Number.isFinite(checkedDate.getTime()) || Date.now()-checkedDate.getTime() > 86400000;
  $('refresh-warning').hidden = !failed && !oldSnapshot;
  $('refresh-warning').textContent = noSnapshot ? `No Linear data on this machine yet${failed && DATA.refresh?.error ? ' (the last refresh failed: '+DATA.refresh.error+')' : ''}. Run ${CONFIG.command || 'the roadmap command'} from the project to load ticket status.` : failed ? `The last refresh failed${DATA.refresh?.error ? ': '+DATA.refresh.error : ''}. Showing the last saved Linear data from ${checkedLabel}; do not assume these statuses are current.` : `This snapshot is more than a day old. Refresh before choosing work. Last successful refresh: ${checkedLabel}.`;
- $('snapshot-badge').textContent = noSnapshot ? 'No Linear data yet' : `Linear data from ${checkedLabel}`;
+ const syncedLabel = Number.isFinite(checkedDate.getTime()) ? checkedDate.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : checkedLabel;
+ $('snapshot-badge').innerHTML = noSnapshot ? 'No Linear data yet' : `<span class="sync-word">Synced </span>${esc(syncedLabel)}`;
+ $('sync').title = noSnapshot ? '' : `Linear data from ${checkedLabel}`;
+ $('sync').classList.toggle('stale', failed || oldSnapshot);
  $('snapshot-note').textContent = `Ticket phases, statuses, ownership, estimates and native dependencies were read from Linear on ${checkedLabel}.`;
  $('about-command').innerHTML = `Open this page with <code>${esc(CONFIG.command || 'the roadmap command')}</code> from the project directory. It refreshes from Linear, serves the page locally and enables the Refresh and Self-heal buttons. Opening the file directly shows the saved snapshot only.`;
  $('footer-snapshot').textContent = `Last successful Linear refresh: ${checkedLabel}. No background sync.`;
@@ -644,13 +681,14 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
  }
  document.addEventListener('click', event => { if (event.target.closest('#dismiss-heal-notice')) $('heal-notice').hidden = true; });
  $('refresh-button').addEventListener('click', async () => {
-  const button = $('refresh-button'); button.disabled = true; button.innerHTML = '<span class="spinner"></span>Refreshing…';
+  const button = $('refresh-button'), label = $('snapshot-badge').innerHTML;
+  button.disabled = true; button.setAttribute('aria-busy', 'true'); $('snapshot-badge').textContent = 'Refreshing from Linear…';
   try {
    const response = await fetch('/api/refresh', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
    const result = await response.json();
    if (!response.ok) throw new Error(result.error || 'Refresh failed.');
    location.reload();
-  } catch (error) { button.disabled = false; button.textContent = 'Refresh from Linear'; $('heal-notice').hidden = false; $('heal-notice').className = 'notice alert'; $('heal-notice').textContent = String(error.message || error); }
+  } catch (error) { button.disabled = false; button.removeAttribute('aria-busy'); $('snapshot-badge').innerHTML = label; $('heal-notice').hidden = false; $('heal-notice').className = 'notice alert'; $('heal-notice').textContent = String(error.message || error); }
  });
  $('heal-button').addEventListener('click', () => openHeal());
  $('heal-close').addEventListener('click', () => healDialog.close());
