@@ -170,6 +170,7 @@ button.next-card:hover { box-shadow:var(--float-lg); transform:translateY(-2px);
 .task-row { display:grid; width:100%; grid-template-columns:1fr 200px 20px; align-items:center; gap:24px; border-bottom:1px solid var(--line); padding:20px 12px; text-align:left; }
 .task-row:hover { background:var(--wash); }
 .task-row h3 { font-size:17px; font-weight:500; }
+.task-id { margin-right:10px; font-size:var(--t-small); font-weight:400; color:var(--muted); font-variant-numeric:tabular-nums; }
 .task-row p { font-size:15px; color:var(--muted); margin-top:4px; max-width:78ch; }
 .row-status { text-align:right; font-size:var(--t-small); font-weight:500; color:var(--green); }
 .row-status .status::before { content:""; display:inline-block; width:7px; height:7px; border-radius:50%; background:currentColor; margin-right:8px; vertical-align:2px; }
@@ -423,7 +424,7 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
 
  function row(t) {
   const a = availability(t);
-  return `<button class="task-row" data-task="${esc(t.id)}"><span><h3>${esc(t.title)}</h3><p>${esc(t.summary)}</p></span><span class="row-status ${a.kind}"><span class="status">${esc(a.label)}</span><small>${isNew(t) ? 'New from Linear' : t.reviewRequired ? 'Review the guidance' : workflows[t.workflow] || t.workflow}${t.estimate && sizes[t.estimate] ? ' · '+sizes[t.estimate] : ''}${aiUpdated(t) ? ' · AI-updated' : ''}</small></span><span class="arrow" aria-hidden="true">↗</span></button>`;
+  return `<button class="task-row" data-task="${esc(t.id)}"><span><h3><span class="task-id">${esc(t.id)}</span>${esc(t.title)}</h3><p>${esc(t.summary)}</p></span><span class="row-status ${a.kind}"><span class="status">${esc(a.label)}</span><small>${isNew(t) ? 'New from Linear' : t.reviewRequired ? 'Review the guidance' : workflows[t.workflow] || t.workflow}${t.estimate && sizes[t.estimate] ? ' · '+sizes[t.estimate] : ''}${aiUpdated(t) ? ' · AI-updated' : ''}</small></span><span class="arrow" aria-hidden="true">↗</span></button>`;
  }
  // The card shows the ticket's own summary; the reason only fills cards without one.
  function nextCard(t, label, reason, cls) {
@@ -452,14 +453,14 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
   $('progress-section').hidden = running.length === 0;
   $('progress-strip').innerHTML = running.map(t => {
    const unblocks = dependents(t.id).map(d => d.title);
-   return `<button class="progress-item" data-task="${esc(t.id)}"><h3>${esc(t.title)}</h3><p>${esc(t.state)}${t.assignee ? ' · '+esc(t.assignee) : ''} · ${esc(phaseById[t.phase]?.name || t.projectName)}</p>${unblocks.length ? `<span class="unblocks">Unblocks: ${esc(unblocks.join(', '))}</span>` : '<span class="unblocks">Nothing on this page waits for it.</span>'}</button>`;
+   return `<button class="progress-item" data-task="${esc(t.id)}"><h3><span class="task-id">${esc(t.id)}</span>${esc(t.title)}</h3><p>${esc(t.state)}${t.assignee ? ' · '+esc(t.assignee) : ''} · ${esc(phaseById[t.phase]?.name || t.projectName)}</p>${unblocks.length ? `<span class="unblocks">Unblocks: ${esc(unblocks.join(', '))}</span>` : '<span class="unblocks">Nothing on this page waits for it.</span>'}</button>`;
   }).join('');
  }
  let phase = focus, lane = lanes[0]?.id || 'all', filter = 'open', selected = null, history = [], returnFocus = null;
  function matches(t, f = filter) {
-  if (f === 'review') return t.reviewRequired || isNew(t) || unknownState(t);
   if (f === 'done') return closed(t);
   if (closed(t)) return false;
+  if (f === 'review') return t.reviewRequired || isNew(t) || unknownState(t);
   if (f === 'progress') return t.stateType === 'started';
   if (f === 'agent') return !t.owner && t.workflow === 'scope' && availability(t).ready;
   if (f === 'input') return t.reviewRequired || isNew(t) || t.owner || ['owner','prep'].includes(t.workflow);
