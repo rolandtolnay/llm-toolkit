@@ -470,6 +470,22 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
  function paintPhaseNav() {
   $('phase-nav').innerHTML = phases.map((p, i) => `<button data-phase="${esc(p.id)}" aria-pressed="${p.id === phase}"><span class="phase-number">${String(i+1).padStart(2,'0')}</span><span>${esc(p.name)}<small>${esc(p.short || (p.id === focus ? 'Focus now' : 'Later'))}</small></span></button>`).join('');
  }
+ // Counts down to the phase's earliest open Linear milestone with a target date; the config target date is only a fallback.
+ function dateNote(p) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const daysUntil = iso => Math.round((new Date(iso+'T00:00:00')-today)/86400000);
+  const span = n => `${n} ${n === 1 ? 'day' : 'days'}`;
+  const next = (DATA.milestones || []).filter(m => p.projects.includes(m.project) && m.targetDate && m.status !== 'done').sort((a, b) => a.targetDate.localeCompare(b.targetDate))[0];
+  if (next) {
+   const days = daysUntil(next.targetDate), name = `${esc(next.name)} · ${esc(next.project)}`;
+   return days > 0 ? `<strong>${span(days)}</strong> until ${name}` : days === 0 ? `<strong>Due today</strong> ${name}` : `<strong>${span(-days)} overdue</strong> ${name}`;
+  }
+  if (CONFIG.targetDate && p.id === focus) {
+   const days = daysUntil(CONFIG.targetDate), label = esc(CONFIG.targetLabel || 'the target date');
+   if (Number.isFinite(days)) return days > 0 ? `<strong>${span(days)}</strong> until ${label}` : days === 0 ? `<strong>Today</strong> is ${label}` : `<strong>${span(-days)}</strong> since ${label}`;
+  }
+  return 'From the last refresh';
+ }
  function paint() {
   const p = phaseById[phase] || phases[0];
   const phaseTasks = inPhase(phase), counted = phaseTasks.filter(t => !inactive(t)), completed = counted.filter(t => done(t.id)).length;
@@ -485,14 +501,7 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
   $('page-title').textContent = p.title || p.name; $('page-description').textContent = p.description || '';
   $('progress-count').textContent = `${completed} of ${counted.length}`;
   $('progress-bar').style.width = (counted.length ? completed/counted.length*100 : 0)+'%';
-  let dateText = 'From the last refresh';
-  if (CONFIG.targetDate && phase === focus) {
-   const target = new Date(CONFIG.targetDate+'T00:00:00'), today = new Date(); today.setHours(0,0,0,0);
-   const days = Math.round((target-today)/86400000), label = esc(CONFIG.targetLabel || 'the target date');
-   const span = n => `<strong>${n} ${n === 1 ? 'day' : 'days'}</strong>`;
-   if (Number.isFinite(days)) dateText = days > 0 ? `${span(days)} until ${label}` : days === 0 ? `<strong>Today</strong> is ${label}` : `${span(-days)} since ${label}`;
-  }
-  $('date-note').innerHTML = dateText;
+  $('date-note').innerHTML = dateNote(p);
   paintPhaseNav();
   const focusView = phase === focus;
   $('next-section').hidden = !focusView; $('system-section').hidden = !focusView || !lanes.length; $('later-section').hidden = focusView;

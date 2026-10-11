@@ -22,7 +22,7 @@ Written when the page is created and edited by self-heal passes. Nothing here is
 | `title` | Subtitle next to the wordmark, usually "Your roadmap". |
 | `command` | How to open the page from the project, shown in the footer and hints. |
 | `focus` | The `id` of the phase shown first. Defaults to the first phase. |
-| `targetDate`, `targetLabel` | Optional ISO date and a short label ("the wedding") for the countdown. |
+| `targetDate`, `targetLabel` | Optional ISO date and a short label ("the wedding") for the focus phase's countdown, used only when none of its projects has an open milestone with a target date. |
 | `phases[]` | Ordered release phases. Each has `id`, `name`, `short` (nav caption), `title` and `description` (hero), `projects` (Linear project names that belong to it), and for later phases `intro` and `body` (the explanation shown instead of next-up cards). Optional `allWork` and `laterNote` replace the default work-list descriptions. |
 | `lanes[]` | Areas of the focus phase. Each has `id`, `name`, `summary`, `detail`, `ids` (identifiers in recommended order). Lanes group work; they are not blockers. |
 | `nextUp` | `{agent:[], owner:[], plan:[]}` identifier lists that order the three next-up cards before priority ordering takes over. |
@@ -48,7 +48,7 @@ Written when the page is created and edited by self-heal passes; a refresh never
 
 Written by the server on every refresh and never edited by hand or by a self-heal. Fields marked **fact** and *derived* live here; fields marked *curated* live in `roadmap-guidance`, and the snapshot carries placeholder values for them only on tickets that have no guidance entry yet.
 
-Top level: `checkedAt` (fact), `trackingSince`, `stateTypes` (fact: state name to type map), `refresh` (`{ok, attemptedAt, error?}`), `heal.lastRun` (written after each self-heal), `tasks[]`.
+Top level: `checkedAt` (fact), `trackingSince`, `stateTypes` (fact: state name to type map), `milestones[]` (fact: `{project, name, targetDate, status}` for every milestone of the configured projects, `status` as Linear computes it), `refresh` (`{ok, attemptedAt, error?}`), `heal.lastRun` (written after each self-heal), `tasks[]`.
 
 Each task:
 
@@ -93,6 +93,8 @@ Order matters; the first matching rule wins.
 5. Unmet blockers: waiting. Outside the focus phase or reference-only: outside the current phase.
 6. State type not in `startableStateTypes`: "Not selected to start" (Backlog work is visible but not suggested).
 7. Owner work: "Your move". Unmet gates: "Local work can start". Otherwise: "Can start".
+
+The hero counts down to the earliest milestone of the viewed phase's projects that has a target date and is not `done`, showing it as overdue once the date passes. Milestones without a date are skipped, and with none left the focus phase falls back to `targetDate`.
 
 Next-up cards pick the first eligible ticket from `nextUp.agent` (workflow scope), `nextUp.owner`, `nextUp.plan` (workflow prep), falling back to Linear priority.
 

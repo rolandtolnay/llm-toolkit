@@ -152,7 +152,7 @@ test('resolveApiKey follows the project env precedence', async () => {
   assert.equal(await resolveApiKey(root, {}, () => {}), 'agents')
 })
 
-test('makeCli surfaces CLI error envelopes and fetchFacts follows blockers across pages', async () => {
+test('makeCli surfaces CLI error envelopes and fetchFacts follows blockers across pages and reads milestones', async () => {
   const calls = []
   const responses = {
     'states': { teams: [{ states: [{ name: 'Todo', type: 'unstarted' }] }] },
@@ -162,6 +162,8 @@ test('makeCli surfaces CLI error envelopes and fetchFacts follows blockers acros
     'get DM-1': issue('DM-1', { relations: [{ type: 'blocked-by', issue: 'DM-9' }] }),
     'get DM-2': issue('DM-2'),
     'get DM-9': null,
+    'milestones Alpha': { project: 'Alpha', milestones: [{ id: 'm1', name: 'Beta ready', status: 'next', targetDate: '2026-10-14', description: 'x' }, { id: 'm2', name: 'Published', status: 'unstarted' }] },
+    'milestones Beta': { project: 'Beta', milestones: [] },
   }
   const run = async (_uv, args) => {
     // args = ['run', cli, command, ...options]
@@ -175,6 +177,11 @@ test('makeCli surfaces CLI error envelopes and fetchFacts follows blockers acros
   assert.deepEqual([...result.listed.keys()], ['DM-1', 'DM-2'])
   assert.equal(result.issues.get('DM-9'), null)
   assert.ok(calls.includes('get DM-9'))
+  assert.deepEqual(result.milestones, [
+    { project: 'Alpha', name: 'Beta ready', targetDate: '2026-10-14', status: 'next' },
+    { project: 'Alpha', name: 'Published', targetDate: null, status: 'unstarted' },
+  ])
+  assert.deepEqual(mergeSnapshot({ tasks: [] }, config, result).milestones, result.milestones)
   const failing = makeCli({ cli: 'linear.py', cwd: '/', apiKey: 'k', run: async () => ({ stdout: JSON.stringify({ success: false, error: { code: 'MISSING_API_KEY', message: 'nope' } }) }) })
   await assert.rejects(failing(['states']), /MISSING_API_KEY/)
 })

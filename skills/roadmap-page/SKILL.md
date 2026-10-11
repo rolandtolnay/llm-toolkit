@@ -16,7 +16,7 @@ Requirements in the consumer project: a `.linear.json` with `teamId`, a `LINEAR_
 Ask these three things in one round, recommending answers from what you can see in Linear (`uv run ~/.agents/skills/linear/scripts/linear.py projects`, `states`, `labels`):
 
 1. Which Linear projects to include, and which one is the current focus. Each project becomes a phase; order them by delivery.
-2. The goal the focus phase works towards, with an optional target date and a short label for the countdown.
+2. The goal the focus phase works towards. The countdown follows the projects' dated Linear milestones; ask for a fallback target date and label only when the focus projects have none.
 3. Which label marks work the person must do themselves (often "Owner Action"), or none.
 
 Then build the page without further questions:

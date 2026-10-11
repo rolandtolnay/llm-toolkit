@@ -249,6 +249,11 @@ export async function fetchFacts(linear, config, previous, log = () => {}) {
     } while (after)
     log(`Listed ${project}: ${[...listed.values()].filter(i => i.projectName === project).length} tickets.`)
   }
+  const milestones = []
+  for (const project of projects) {
+    const result = await linear(['milestones', project])
+    for (const milestone of result.milestones || []) milestones.push({ project, name: milestone.name, targetDate: milestone.targetDate || null, status: milestone.status || null })
+  }
   const wanted = new Set([...listed.keys(), ...previous.tasks.filter(task => task.curated).map(task => task.id)])
   const issues = new Map()
   const requested = new Set(wanted)
@@ -268,7 +273,7 @@ export async function fetchFacts(linear, config, previous, log = () => {}) {
     }
     log(`Fetched ${issues.size} of ${requested.size} tickets.`)
   }
-  return { stateTypes, listed, issues }
+  return { stateTypes, listed, issues, milestones }
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +294,7 @@ export function fingerprint(issue, blockedBy, ownerLabel) {
 }
 
 export function mergeSnapshot(previous, config, facts, now = new Date().toISOString()) {
-  const { stateTypes, listed, issues } = facts
+  const { stateTypes, listed, issues, milestones = [] } = facts
   const oldTasks = new Map(previous.tasks.map(task => [task.id, task]))
   const phaseOf = projectName => config.phases.find(phase => phase.projects.includes(projectName))?.id || 'later'
   const excluded = labels => (config.excludeLabelPrefixes || []).some(prefix => labels.some(label => label.startsWith(prefix)))
@@ -341,7 +346,7 @@ export function mergeSnapshot(previous, config, facts, now = new Date().toISOStr
   }
   for (const id of roots) add(id)
   return combine({
-    ...previous, checkedAt: now, trackingSince: previous.trackingSince || now, stateTypes,
+    ...previous, checkedAt: now, trackingSince: previous.trackingSince || now, stateTypes, milestones,
     refresh: { ok: true, attemptedAt: now }, tasks: [...tasks.values()],
   }, { tasks: [] })
 }
