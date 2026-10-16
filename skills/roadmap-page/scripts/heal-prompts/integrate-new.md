@@ -14,4 +14,4 @@ For each uncurated ticket, read it with the Linear CLI (`get <ID> -V -c`) and th
 
 Then update `roadmap-config`: add each focus-phase ticket to the lane that fits its area (create a lane only when no existing lane fits and at least two tickets would share it, keeping four to five lanes in total), and insert it into the `nextUp` ordering lists where it belongs relative to its neighbours. Tickets in later phases need no lane.
 
-Success means every ticket in `uncurated` and `unplaced` is curated and placed, no Linear fact changed, and the two JSON blocks still parse. If a ticket's description is too thin to write honest guidance, write a cautious summary that says what is known, set `workflow` to `prep` so the interview fills the gaps, and name it in your final message.
+Success means every ticket in `uncurated` and `unplaced` is curated and placed with a session prompt that fits it, no Linear fact changed, and the two JSON blocks still parse. If a ticket's description is too thin to write honest guidance, write a cautious summary that says what is known, set `workflow` to `prep` so the interview fills the gaps, and name it in your final message.

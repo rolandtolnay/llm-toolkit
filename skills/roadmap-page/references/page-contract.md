@@ -38,7 +38,7 @@ Written when the page is created and edited by self-heal passes. Nothing here is
 | `guide[]`, `guideFooter` | The "Working with an agent" section: `{title, body}` items and a closing note. |
 | `fallbacks` | Optional `{title, paragraphs[]}` for a "if the schedule gets tight" section. |
 
-Skill commands in `openers`, `prepFollowUp` and `guide` are written as `{skill:name}`. The page spells them for the agent harness picked in its header and remembered per browser: `/name` for Claude Code, `/skill:name` for Pi, `$name` for Codex.
+Skill commands in `openers`, `prepFollowUp` and `guide` are written as `{skill:name}`. The page spells them for the agent harness picked in its header or in a drawer's session box, one choice remembered per browser: `/name` for Claude Code, `/skill:name` for Pi, `$name` for Codex.
 
 ## roadmap-guidance: per-ticket guidance
 
@@ -66,6 +66,7 @@ Each task:
 | `sourceHash` | fact | Hash of title, description, project, labels and blockers. Status, assignee, estimate and comments are deliberately excluded so routine changes never flag a review. |
 | `title`, `summary`, `detail`, `input` | curated | Reader-facing guidance. `title` is a humanized name; `linearTitle` stays as the source. |
 | `workflow` | curated | `scope`, `prep` or `owner`; see Session workflows. The server gives uncurated tickets the placeholder `review` until they are integrated. |
+| `opener` | curated | Optional session prompt for this ticket alone, filled like `openers`; see Session workflows. |
 | `gates[]` | curated | Identifiers of prerequisites that are not native blockers (service approvals, access). Local work may start before gates clear. |
 | `curated` | curated | False until guidance was written for the ticket. The page shows "New: needs integration" while false. |
 | `reviewedHash` | curated | The `sourceHash` the guidance was last checked against. |
@@ -81,6 +82,8 @@ Each ticket gets one `workflow`, which picks the session prompt in its drawer. C
 - `owner`: no code output. The person does the work in a conversation with the agent: setting up third-party providers, accounts and credentials, or making business and policy decisions. Opens with a walk-through prompt that takes one step or decision at a time and verifies each step before the next. Tickets carrying `ownerLabel` are always owner work.
 
 When unsure between `scope` and `prep`, choose `prep`. The estimate is a hint, not the rule: a small ticket that settles a product rule (who gets access, what a user sees) is `prep`, and a large ticket whose behaviour is fully specified can be `scope`. Session prompts are the skill command and the ticket identifier only; the skills read the ticket themselves.
+
+The drawer's prompt is the one the person copies, so it must fit the ticket. When the workflow's prompt in `openers` does not fit one ticket, for example owner work outside the skill that `openers.owner` names, set that ticket's `opener` to a prompt that does.
 
 ## Status rules the page applies
 
@@ -100,4 +103,4 @@ Next-up cards pick the first eligible ticket from `nextUp.agent` (workflow scope
 
 ## Self-heal passes
 
-The server launches `claude -p` (model `opus`, medium effort, `--safe-mode` so no CLAUDE.md, skills, plugins, hooks or MCP servers; tools Read, Edit, Write, Bash, Grep and Glob, with edits and Bash pre-approved and anything else denied) in the project root with `heal-prompts/contract.md` and this contract appended to the system prompt and one of the templates as the prompt. Templates: `integrate-new`, `reconcile-states`, `recheck-guidance`, `custom`. Self-heal edits only the page, never the snapshot file. Before the run the page is backed up to `~/.cache/roadmap-page/<hash>/`; after it the file must still contain both JSON blocks, the snapshot tag, a parseable script, a body and the task list, or it is restored. Files changed outside the page are reported, not reverted. The page's "Revert last self-heal" button restores the latest backup.
+The server launches `claude -p` (model `opus`, medium effort, `--safe-mode` so no CLAUDE.md, skills, plugins, hooks or MCP servers; tools Read, Edit, Write, Bash, Grep and Glob, with edits and Bash pre-approved and anything else denied) in the project root with `heal-prompts/contract.md` and this contract appended to the system prompt and one of the templates as the prompt. Templates: `integrate-new`, `reconcile-states`, `recheck-guidance`, `next-phase` (makes the next phase with open work the focus: new lanes, next-up order and phase copy; offered as pending once the focus phase has no open work left), `custom`. Self-heal edits only the page, never the snapshot file. Before the run the page is backed up to `~/.cache/roadmap-page/<hash>/`; after it the file must still contain both JSON blocks, the snapshot tag, a parseable script, a body and the task list, or it is restored. Files changed outside the page are reported, not reverted. The page's "Revert last self-heal" button restores the latest backup.

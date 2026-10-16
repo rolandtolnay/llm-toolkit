@@ -140,6 +140,20 @@ test('unknown states, missing tickets and excluded labels are handled', () => {
   assert.equal(pendingCounts(snapshot, config)['integrate-new'], 1)
 })
 
+test('next-phase findings name the first later phase with open work once the focus phase is done', () => {
+  const beta = { project: { id: 'p2', name: 'Beta' } }
+  const open = mergeSnapshot({ tasks: [] }, config, facts([issue('DM-1'), issue('DM-2', beta)]))
+  assert.equal(findings(open, config)['next-phase'].next, 'next')
+  assert.deepEqual(findings(open, config)['next-phase'].candidates.map(task => task.id), ['DM-2'])
+  assert.equal(pendingCounts(open, config)['next-phase'], 0)
+  const done = mergeSnapshot({ tasks: [] }, config, facts([issue('DM-1', { state: { name: 'Done', type: 'completed' } }), issue('DM-2', beta)]))
+  assert.equal(findings(done, config)['next-phase'].remaining.length, 0)
+  assert.equal(pendingCounts(done, config)['next-phase'], 1)
+  const last = mergeSnapshot({ tasks: [] }, config, facts([issue('DM-1')]))
+  assert.equal(findings(last, config)['next-phase'].next, null)
+  assert.equal(pendingCounts(last, config)['next-phase'], 0)
+})
+
 test('resolveApiKey follows the project env precedence', async () => {
   const root = await mkdtemp(join(tmpdir(), 'roadmap-env-'))
   await mkdir(join(root, '.agents'), { recursive: true })

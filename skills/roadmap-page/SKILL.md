@@ -34,7 +34,7 @@ Hand over with: the command that opens the page, the number of tickets tracked, 
 
 ## Updating an existing page
 
-Prefer the page's own loop over editing by hand: run the server and use Refresh, then the Self-heal templates (integrate new tickets, reconcile unexpected states, re-check changed guidance, or a custom instruction). Edit the file directly only when the person asks for a change in the rendering that self-heal should not be trusted with, and keep the two JSON blocks and the snapshot tag valid. Never edit the snapshot file; a refresh rewrites it.
+Prefer the page's own loop over editing by hand: run the server and use Refresh, then the Self-heal templates (integrate new tickets, reconcile unexpected states, re-check changed guidance, move to the next phase, or a custom instruction). Lanes and next-up cards exist only for the focus phase; when that phase is done, the "Move to the next phase" self-heal switches the focus and writes areas and an order for the phase that follows. Edit the file directly only when the person asks for a change in the rendering that self-heal should not be trusted with, and keep the two JSON blocks and the snapshot tag valid. Never edit the snapshot file; a refresh rewrites it.
 
 ## Boundaries
 

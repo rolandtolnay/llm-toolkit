@@ -31,7 +31,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 
 export const MODEL = 'opus'
 export const EFFORT = 'medium'
-export const HEAL_TEMPLATES = ['integrate-new', 'reconcile-states', 'recheck-guidance', 'custom']
+export const HEAL_TEMPLATES = ['integrate-new', 'reconcile-states', 'recheck-guidance', 'next-phase', 'custom']
 export const KNOWN_STATE_TYPES = new Set(['triage', 'backlog', 'unstarted', 'started', 'completed', 'canceled', 'duplicate'])
 export const CLOSED_STATE_TYPES = new Set(['completed', 'canceled', 'duplicate'])
 const LIMITS = Object.freeze({ healTimeout: 15 * 60_000, cliTimeout: 60_000, concurrency: 4, eventLog: 400, backups: 5 })
@@ -42,7 +42,7 @@ const snapshotTagPattern = /<script id="roadmap-snapshot" src="([^"]+)"><\/scrip
 const snapshotFilePattern = /^[\s\S]*?window\.ROADMAP_SNAPSHOT = ([\s\S]*);\s*$/
 
 // Per-ticket fields written for the reader. They live in the page; everything else on a task is a Linear fact or derived.
-export const GUIDANCE_FIELDS = ['title', 'summary', 'detail', 'input', 'workflow', 'gates', 'curated', 'reviewedHash', 'aiGuidance']
+export const GUIDANCE_FIELDS = ['title', 'summary', 'detail', 'input', 'workflow', 'opener', 'gates', 'curated', 'reviewedHash', 'aiGuidance']
 
 export class RoadmapError extends Error {}
 
@@ -399,11 +399,16 @@ export function findings(snapshot, config) {
   const danglingConfig = [...laneIds, ...Object.values(config.nextUp || {}).flat(), config.finalTicket?.id].filter(id => id && !snapshot.tasks.some(task => task.id === id))
   const review = snapshot.tasks.filter(task => open(task) && task.curated && task.reviewRequired)
   const inProgress = snapshot.tasks.filter(task => open(task) && task.stateType === 'started')
+  const openIn = phaseId => snapshot.tasks.filter(task => open(task) && task.phase === phaseId)
+  const phaseIds = config.phases.map(phase => phase.id)
+  const next = phaseIds.slice(phaseIds.indexOf(focus) + 1).find(phaseId => openIn(phaseId).length) || null
+  const nextProjects = new Set(config.phases.find(phase => phase.id === next)?.projects || [])
   const brief = task => ({ id: task.id, linearTitle: task.linearTitle, state: task.state, stateType: task.stateType, phase: task.phase, project: task.projectName, assignee: task.assignee, blockedBy: task.blockedBy, labels: task.labels, sourceHash: task.sourceHash })
   return {
     'integrate-new': { uncurated: uncurated.map(brief), unplaced: unplaced.map(brief), inProgress: inProgress.map(brief) },
     'reconcile-states': { unknownStates: unknownStates.map(brief), missing: missing.map(brief), truncated: truncated.map(task => ({ id: task.id, truncated: task.truncated })), emptyProjects, danglingConfig, stateTypes: snapshot.stateTypes || {} },
-    'recheck-guidance': { review: review.map(task => ({ ...brief(task), title: task.title, summary: task.summary, workflow: task.workflow })) },
+    'recheck-guidance': { review: review.map(task => ({ ...brief(task), title: task.title, summary: task.summary, workflow: task.workflow, opener: task.opener })) },
+    'next-phase': { focus, remaining: openIn(focus).map(brief), next, candidates: next ? openIn(next).map(brief) : [], milestones: (snapshot.milestones || []).filter(milestone => nextProjects.has(milestone.project)), inProgress: inProgress.map(brief) },
     custom: {},
   }
 }
@@ -414,6 +419,8 @@ export function pendingCounts(snapshot, config) {
     'integrate-new': all['integrate-new'].uncurated.length + all['integrate-new'].unplaced.length,
     'reconcile-states': all['reconcile-states'].unknownStates.length + all['reconcile-states'].missing.length + all['reconcile-states'].emptyProjects.length + all['reconcile-states'].danglingConfig.length,
     'recheck-guidance': all['recheck-guidance'].review.length,
+    // The focus phase has no open work left and a later phase does: the page is ready to move on.
+    'next-phase': all['next-phase'].next && !all['next-phase'].remaining.length ? 1 : 0,
   }
 }
 
