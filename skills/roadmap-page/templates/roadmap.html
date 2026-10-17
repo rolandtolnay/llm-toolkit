@@ -259,7 +259,8 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
 
 /* Self-heal dialog */
 #heal-dialog { max-width:620px; width:min(620px,calc(100% - 32px)); border-radius:var(--radius); padding:32px; box-shadow:var(--float-lg); }
-#heal-dialog h2 { font-size:28px; margin-bottom:20px; }
+#heal-dialog h2 { font-size:28px; }
+#heal-dialog .intro { margin:8px 0 16px; color:var(--muted); font-size:var(--t-small); }
 .heal-option { display:flex; gap:12px; align-items:flex-start; padding:14px 0; border-top:1px solid var(--line); cursor:pointer; }
 .heal-option input { margin-top:5px; accent-color:var(--green); }
 .heal-option b { display:block; font-weight:500; }
@@ -273,6 +274,22 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
 .heal-log .error { color:var(--red); }
 .heal-log .text { color:var(--ink); margin-top:6px; }
 .heal-log .info { color:var(--blue); }
+.heal-log:empty::before { content:"Starting…"; color:var(--muted); }
+/* A started run takes over the dialog: the other templates hide and the log gets a fixed height that fits the viewport. */
+#heal-dialog:not([data-mode="run"]) .heal-run-head, #heal-dialog:not([data-mode="run"]) .heal-log, #heal-dialog[data-mode="run"] .heal-choose-head, #heal-dialog[data-mode="run"] .heal-option { display:none; }
+#heal-dialog[open][data-mode="run"] { display:flex; flex-direction:column; max-height:calc(100dvh - 48px); }
+#heal-dialog[data-mode="run"] #heal-form { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+#heal-dialog[data-mode="run"] .heal-log { flex:0 1 auto; height:clamp(220px,52dvh,480px); min-height:120px; max-height:none; }
+.heal-run-top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.heal-state { display:inline-flex; align-items:center; gap:8px; font-size:var(--t-small); font-weight:600; color:var(--green); }
+.heal-state::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
+.heal-state[data-state="unchanged"] { color:var(--muted); }
+.heal-state[data-state="failed"] { color:var(--red); }
+#heal-back { padding:7px 12px; margin:-7px -12px -7px 0; border-radius:999px; font-size:var(--t-small); color:var(--muted); }
+#heal-back:hover { background:var(--wash); color:var(--ink); }
+#heal-dialog #heal-run-detail { margin-bottom:0; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+@keyframes heal-pulse { 0% { box-shadow:0 0 0 0 color-mix(in srgb,currentColor 50%,transparent); } 70%,100% { box-shadow:0 0 0 7px transparent; } }
+@media(prefers-reduced-motion:no-preference) { .heal-state[data-state="running"]::before { animation:heal-pulse 1.6s ease-out infinite; } }
 .actions { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; flex-wrap:wrap; }
 .spinner { display:inline-block; width:12px; height:12px; border:2px solid var(--line); border-top-color:var(--green); border-radius:50%; animation:spin .8s linear infinite; vertical-align:-2px; margin-right:6px; }
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -359,17 +376,25 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
  <footer><p id="footer-snapshot"></p><p id="footer-command"></p></footer>
 </div>
 <dialog id="task-dialog" aria-labelledby="task-title"><div class="drawer-top"><button id="task-back" hidden>← Back</button><span id="task-location" class="small muted"></span><button id="task-close" aria-label="Close task details">Close ×</button></div><div id="task-content" class="drawer-content"></div></dialog>
-<dialog id="heal-dialog" aria-labelledby="heal-title">
- <h2 id="heal-title">Self-heal this page</h2>
+<dialog id="heal-dialog" aria-labelledby="heal-title" data-mode="choose">
+ <div class="heal-choose-head">
+  <h2 id="heal-title">Self-heal this page</h2>
+  <p class="intro">Runs headless Claude Code on this file. Every run is backed up and can be reverted.</p>
+ </div>
+ <div class="heal-run-head">
+  <div class="heal-run-top"><p class="heal-state" id="heal-state"></p><button type="button" id="heal-back">← All options</button></div>
+  <h2 id="heal-run-title" tabindex="-1"></h2>
+  <p class="intro" id="heal-run-detail"></p>
+ </div>
  <form id="heal-form">
   <label class="heal-option"><input type="radio" name="template" value="integrate-new"><div><b>Integrate new tickets <span class="count" data-count="integrate-new"></span></b><span>Write plain-language guidance for tickets that are new to this page, place them in an area, and update the suggested order.</span></div></label>
   <label class="heal-option"><input type="radio" name="template" value="reconcile-states"><div><b>Reconcile unexpected states <span class="count" data-count="reconcile-states"></span></b><span>Teach the page about states, relations or projects it does not recognise yet, and repair references that no longer resolve.</span></div></label>
   <label class="heal-option"><input type="radio" name="template" value="recheck-guidance"><div><b>Re-check changed guidance <span class="count" data-count="recheck-guidance"></span></b><span>Tickets whose title, description, labels or blockers changed since their guidance was written. Rewrites only what no longer matches.</span></div></label>
   <label class="heal-option"><input type="radio" name="template" value="next-phase"><div><b>Move to the next phase <span class="count" data-count="next-phase" data-ready="phase complete"></span></b><span>Make the next phase the focus: group its tickets into areas, rebuild the suggested order and rewrite the phase copy. Tickets still open in the current phase stay visible under it.</span></div></label>
   <label class="heal-option"><input type="radio" name="template" value="custom"><div><b>Something specific</b><span>Describe the change you want. Same contract, same validation.</span><textarea id="heal-instruction" placeholder="For example: add a filter for tickets estimated XL or larger." hidden></textarea></div></label>
-  <div class="heal-log" id="heal-log" hidden></div>
+  <div class="heal-log" id="heal-log"></div>
   <p id="heal-status" class="small muted" role="status" style="margin-top:12px"></p>
-  <div class="actions"><button type="button" class="outline-button" id="heal-revert" hidden>Revert last self-heal</button><button type="button" class="outline-button" id="heal-close">Close</button><button type="button" class="outline-button" id="heal-reload" hidden>Reload page</button><button type="submit" class="solid-button" id="heal-run">Run self-heal</button></div>
+  <div class="actions"><button type="button" class="outline-button" id="heal-revert" hidden>Revert last self-heal</button><button type="button" class="outline-button" id="heal-close">Close</button><button type="submit" class="solid-button" id="heal-run">Run self-heal</button><button type="button" class="solid-button" id="heal-reload" hidden>Reload page</button></div>
  </form>
 </dialog>
 <div id="announcement" class="sr-only" role="status"></div>
@@ -699,7 +724,7 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
  $('heal-last').textContent = last ? `Last self-heal: "${last.template}" ${last.status} on ${new Date(last.finishedAt || last.startedAt).toLocaleString()} (${last.model}, ${last.effort} effort).${last.summary ? ' '+last.summary.slice(0, 400) : ''}` : 'No self-heal pass has run on this page yet.';
 
  // Server mode: refresh and self-heal are only possible when served by roadmap.mjs.
- let server = false, status = null, eventSource = null;
+ let server = false, status = null, eventSource = null, run = null;
  const healDialog = $('heal-dialog');
  function setBadges() {
   if (!status) return;
@@ -719,7 +744,7 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
   $('server-hint').innerHTML = `Opened as a file: refresh and self-heal are unavailable. Start it with <code>${esc(CONFIG.command || 'the roadmap command')}</code> to enable them.`;
   if (server) {
    setBadges();
-   if (status.heal?.running) { openHeal(status.heal.current?.template, true); }
+   if (status.heal?.running) { openHeal(null, status.heal.current || {}); }
    else if (status.heal?.lastRun && status.heal.lastRun.finishedAt && Date.now() - new Date(status.heal.lastRun.finishedAt).getTime() < 120000) showHealNotice(status.heal.lastRun);
   }
   paint();
@@ -743,55 +768,98 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
  $('heal-button').addEventListener('click', () => openHeal());
  $('heal-close').addEventListener('click', () => healDialog.close());
  $('heal-reload').addEventListener('click', () => location.reload());
- healDialog.addEventListener('close', () => { if (eventSource) { eventSource.close(); eventSource = null; } });
+ // The run view stays until the dialog is closed after the run ends; closing mid-run and reopening replays the server's log.
+ healDialog.addEventListener('close', () => { if (eventSource) { eventSource.close(); eventSource = null; } if (run?.done) run = null; });
  document.querySelectorAll('input[name="template"]').forEach(input => input.addEventListener('change', () => { $('heal-instruction').hidden = input.value !== 'custom'; }));
- function openHeal(template, running) {
+ const healOption = template => document.querySelector(`input[name="template"][value="${template}"]`);
+ function openHeal(template, current) {
   if (!server) return;
-  const pending = status?.pending || {};
-  const preferred = template || Object.keys(pending).find(key => pending[key]) || 'custom';
-  const input = document.querySelector(`input[name="template"][value="${preferred}"]`) || document.querySelector('input[name="template"]');
-  input.checked = true; $('heal-instruction').hidden = input.value !== 'custom';
-  $('heal-log').hidden = true; $('heal-log').innerHTML = ''; $('heal-reload').hidden = true; $('heal-status').textContent = '';
-  $('heal-run').disabled = false; $('heal-run').textContent = 'Run self-heal';
+  if (current) run = {template: current.template, instruction: current.instruction || '', since: current.startedAt};
+  if (run) { showRun(); return; }
+  const input = showChoose(template);
   if (!healDialog.open) healDialog.showModal();
   // showModal focuses the first radio; move focus to the preselected option, or its text box for a custom run.
   (input.value === 'custom' ? $('heal-instruction') : input).focus();
-  if (running) watchHeal();
+ }
+ function showChoose(template) {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  run = null;
+  healDialog.dataset.mode = 'choose'; healDialog.setAttribute('aria-labelledby', 'heal-title');
+  const pending = status?.pending || {};
+  const input = healOption(template || Object.keys(pending).find(key => pending[key]) || 'custom') || document.querySelector('input[name="template"]');
+  input.checked = true; $('heal-instruction').hidden = input.value !== 'custom';
+  $('heal-status').textContent = ''; $('heal-reload').hidden = true; $('heal-revert').hidden = !status?.heal?.hasBackup;
+  $('heal-run').disabled = false; $('heal-run').className = 'solid-button'; $('heal-run').textContent = 'Run self-heal';
+  return input;
+ }
+ function showRun() {
+  const input = healOption(run.template), label = input?.closest('label');
+  if (input) input.checked = true;
+  healDialog.dataset.mode = 'run'; healDialog.setAttribute('aria-labelledby', 'heal-run-title');
+  $('heal-run-title').textContent = label ? label.querySelector('b').firstChild.textContent.trim() : 'Self-heal';
+  $('heal-run-detail').textContent = run.template === 'custom' ? `“${run.instruction}”` : label?.querySelector(':scope > div > span')?.textContent || '';
+  $('heal-log').innerHTML = '';
+  setRunState('running');
+  if (!healDialog.open) healDialog.showModal();
+  $('heal-run-title').focus();
+  watchHeal();
+ }
+ function setRunState(state) {
+  const labels = {running:'Running', updated:'Page updated', unchanged:'No changes', failed:'Run failed'};
+  const messages = {running:'Claude is working. You can close this dialog; the run continues on the server.', updated:'The page was updated and validated. Reload to see the new version.', unchanged:'Claude finished without changing the page.', failed:'The run failed. The page was not changed.'};
+  $('heal-state').dataset.state = state; $('heal-state').textContent = labels[state];
+  $('heal-status').textContent = messages[state];
+  $('heal-back').hidden = state === 'running';
+  $('heal-revert').hidden = $('heal-reload').hidden = state !== 'updated';
+  const button = $('heal-run');
+  button.disabled = state === 'running';
+  // After an update, reloading is the next step, so it takes the solid style.
+  button.className = state === 'updated' ? 'outline-button' : 'solid-button';
+  if (state === 'running') button.innerHTML = '<span class="spinner"></span>Running…'; else button.textContent = 'Run again';
  }
  function appendLog(event) {
-  const log = $('heal-log'); log.hidden = false;
+  const log = $('heal-log'), following = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
   const line = document.createElement('div'); line.className = event.kind; line.textContent = event.kind === 'tool' ? '› '+event.text : event.text;
-  log.appendChild(line); log.scrollTop = log.scrollHeight;
+  log.appendChild(line);
+  if (following) log.scrollTop = log.scrollHeight;
  }
  function watchHeal() {
-  $('heal-run').disabled = true; $('heal-run').innerHTML = '<span class="spinner"></span>Running…';
-  $('heal-status').textContent = 'Claude is working. You can close this dialog; the run continues on the server.';
   if (eventSource) eventSource.close();
   eventSource = new EventSource('/api/heal/events');
   eventSource.onmessage = message => {
    const event = JSON.parse(message.data);
+   // The server replays its buffer on connect; skip what is left from the previous run.
+   if (run.since && event.at < run.since) return;
    if (event.kind === 'done') {
     eventSource.close(); eventSource = null;
     const result = event.result || {};
-    $('heal-run').disabled = false; $('heal-run').textContent = 'Run again';
-    $('heal-status').textContent = result.status === 'failed' ? 'The run failed. The page was not changed.' : result.status === 'unchanged' ? 'Claude finished without changing the page.' : 'The page was updated and validated. Reload to see the new version.';
-    $('heal-reload').hidden = result.status !== 'updated';
-    $('heal-revert').hidden = result.status !== 'updated';
+    run.done = true;
+    if (result.status === 'updated' && status?.heal) status.heal.hasBackup = true;
+    setRunState(result.status === 'updated' || result.status === 'unchanged' ? result.status : 'failed');
     return;
    }
    appendLog(event);
   };
   eventSource.onerror = () => { $('heal-status').textContent = 'Lost the connection to the server. Reload to check the result.'; };
  }
+ $('heal-back').addEventListener('click', () => {
+  const input = showChoose(run?.template);
+  (input.value === 'custom' ? $('heal-instruction') : input).focus();
+ });
  $('heal-form').addEventListener('submit', async event => {
   event.preventDefault();
-  const template = new FormData($('heal-form')).get('template');
-  const instruction = $('heal-instruction').value;
-  $('heal-log').innerHTML = ''; $('heal-reload').hidden = true;
-  const response = await fetch('/api/heal', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({template, instruction})});
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) { $('heal-status').textContent = result.error || 'Could not start the self-heal.'; return; }
-  watchHeal();
+  // Run again repeats the shown run, which may have been started from another tab or the CLI.
+  const template = run?.template || new FormData($('heal-form')).get('template');
+  const instruction = run ? run.instruction : $('heal-instruction').value;
+  const since = new Date().toISOString(), button = $('heal-run');
+  button.disabled = true;
+  try {
+   const response = await fetch('/api/heal', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({template, instruction})});
+   const result = await response.json().catch(() => ({}));
+   if (!response.ok) throw new Error(result.error || 'Could not start the self-heal.');
+  } catch (error) { button.disabled = false; $('heal-status').textContent = String(error.message || error); return; }
+  run = {template, instruction, since};
+  showRun();
  });
  $('heal-revert').addEventListener('click', async () => {
   if (!confirm('Restore the page from the backup taken before the last self-heal?')) return;
