@@ -25,8 +25,7 @@ Written when the page is created and edited by self-heal passes. Nothing here is
 | `targetDate`, `targetLabel` | Optional ISO date and a short label ("the wedding") for the focus phase's countdown, used only when none of its projects has an open milestone with a target date. |
 | `phases[]` | Ordered release phases. Each has `id`, `name`, `short` (nav caption), `title` and `description` (hero), `projects` (Linear project names that belong to it), and for later phases `intro` and `body` (the explanation shown instead of next-up cards). Optional `allWork` and `laterNote` replace the default work-list descriptions. |
 | `lanes[]` | Areas of the focus phase. Each has `id`, `name`, `summary`, `detail`, `ids` (identifiers in recommended order). Lanes group work; they are not blockers. |
-| `nextUp` | `{agent:[], owner:[], plan:[]}` identifier lists that order the three next-up cards before priority ordering takes over. |
-| `nextUpReasons` | Optional overrides for the caption a next-up card shows when its ticket has no `summary`: `agent`, `owner`, `plan`, `soon`. |
+| `nextUp` | Identifiers in the order the person would start them. Next-up cards rank by leverage and use this order to break ties; see Next-up cards below. An older `{agent, owner, plan}` object is read as one list. |
 | `finalTicket` | Optional `{id, label, note, enables}` for the ticket the phase converges on. |
 | `ownerLabel` | Linear label that marks work the person must do themselves. The server sets `owner` on tasks from it. |
 | `excludeLabelPrefixes` | Tickets with a label starting with one of these prefixes are not tracked (planning or meta tickets). |
@@ -99,7 +98,15 @@ Order matters; the first matching rule wins.
 
 The hero counts down to the earliest milestone of the viewed phase's projects that has a target date and is not `done`, showing it as overdue once the date passes. Milestones without a date are skipped, and with none left the focus phase falls back to `targetDate`.
 
-Next-up cards pick the first eligible ticket from `nextUp.agent` (workflow scope), `nextUp.owner`, `nextUp.plan` (workflow prep), falling back to Linear priority.
+## Next-up cards
+
+The three cards rank the open tickets of the focus phase by leverage: the number of open tickets that wait on a ticket through `blockedBy` or `gates`, directly or through other tickets. `nextUp` order, then Linear priority, break ties.
+
+1. "Start here": the ready agent ticket (`scope` or `prep`) with the most leverage. When none is ready, the card shows an agent ticket whose unmet blockers are all in progress as "Ready after current work", or names the blocked agent ticket with the most leverage and what it waits on.
+2. "Waiting on you": the ready owner ticket with the most leverage.
+3. "Also ready": the next ready agent ticket, which can proceed in parallel with the first.
+
+Each card states what the ticket unblocks, and an empty card says why nothing qualifies.
 
 ## Self-heal passes
 

@@ -14,7 +14,7 @@ const template = await readFile(new URL('../templates/roadmap.html', import.meta
 const config = {
   product: 'Demo', focus: 'now', ownerLabel: 'Owner Action', excludeLabelPrefixes: ['wayfinder:'],
   phases: [{ id: 'now', name: 'Now', projects: ['Alpha'] }, { id: 'next', name: 'Next', projects: ['Beta'] }],
-  lanes: [{ id: 'a', name: 'A', summary: '', detail: '', ids: ['DM-1'] }], nextUp: { agent: ['DM-1'], owner: [], plan: [] },
+  lanes: [{ id: 'a', name: 'A', summary: '', detail: '', ids: ['DM-1'] }], nextUp: ['DM-1'],
 }
 const page = (guidance = { tasks: [] }) => template.replace('{{CONFIG}}', JSON.stringify(config)).replace('{{GUIDANCE}}', JSON.stringify(guidance)).replace('{{SNAPSHOT}}', 'r.snapshot.js')
 

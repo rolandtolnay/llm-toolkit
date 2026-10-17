@@ -135,7 +135,8 @@ section { margin-top:56px; }
 .next-card h3 { font-family:var(--serif); font-size:var(--t-card); font-weight:400; line-height:1.2; letter-spacing:-.01em; margin:12px 0 10px; text-wrap:balance; }
 .next-card p { font-size:15px; line-height:1.55; color:var(--muted); display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
 .next-card.primary p { color:var(--on-fill-muted); }
-.next-card .card-end { margin-top:auto; padding-top:20px; font-size:var(--t-small); font-weight:500; display:flex; justify-content:space-between; width:100%; }
+.next-card .card-end { margin-top:auto; padding-top:20px; font-size:var(--t-small); font-weight:500; display:flex; justify-content:space-between; gap:8px 16px; flex-wrap:wrap; width:100%; }
+.next-card .card-end .impact { display:flex; gap:8px; margin-left:auto; }
 button.next-card:hover { box-shadow:var(--float-lg); transform:translateY(-2px); }
 
 /* In progress strip */
@@ -439,6 +440,13 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
  const inPhase = phaseId => tasks.filter(t => belongs(t, phaseId));
  const laneTasks = lane => lane.ids.map(id => byId[id]).filter(t => t && belongs(t, focus));
  const dependents = id => tasks.filter(other => (other.blockedBy || []).includes(id) && !other.referenceOnly && !closed(other));
+ // Leverage: how many open tickets wait on this one through blockers or gates, directly or through other tickets.
+ const waitsOn = (other, id) => (other.blockedBy || []).includes(id) || (other.gates || []).includes(id);
+ const leverage = Object.fromEntries(tasks.map(t => {
+  const seen = new Set(), queue = [t.id];
+  while (queue.length) { const id = queue.shift(); for (const other of tasks) if (!seen.has(other.id) && !other.referenceOnly && !closed(other) && waitsOn(other, id)) { seen.add(other.id); queue.push(other.id); } }
+  return [t.id, seen.size];
+ }));
  const aiUpdated = t => !t.reviewRequired && t.aiGuidance?.sourceHash === t.sourceHash && t.reviewedHash !== t.sourceHash;
  const byPriority = (a, b) => (a.priority || 5) - (b.priority || 5) || (a.number || 0) - (b.number || 0);
 
@@ -467,27 +475,33 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
   const a = availability(t);
   return `<button class="task-row" data-task="${esc(t.id)}"><span><h3><span class="task-id">${esc(t.id)}</span>${esc(t.title)}</h3><p>${esc(t.summary)}</p></span><span class="row-status ${a.kind}"><span class="status">${esc(a.label)}</span><small>${isNew(t) ? 'New from Linear' : t.reviewRequired ? 'Review the guidance' : workflows[t.workflow] || t.workflow}${t.estimate && sizes[t.estimate] ? ' · '+sizes[t.estimate] : ''}${aiUpdated(t) ? ' · AI-updated' : ''}</small></span><span class="arrow" aria-hidden="true">↗</span></button>`;
  }
- // The card shows the ticket's own summary; the reason only fills cards without one.
- function nextCard(t, label, reason, cls) {
-  if (!t) return `<div class="next-card"><span class="label">${esc(label)}</span><h3>Nothing to suggest here</h3><p>Check Linear for updates, or choose another area below.</p></div>`;
-  return `<button class="next-card ${cls || ''}" data-task="${esc(t.id)}"><span class="label">${esc(label)}</span><h3>${esc(t.title)}</h3><p>${esc(t.summary || reason)}</p><span class="card-end"><span>${esc(workflows[t.workflow] || t.workflow)}${t.estimate && sizes[t.estimate] ? ' · '+sizes[t.estimate] : ''}${aiUpdated(t) ? ' · AI-updated' : ''}</span><span aria-hidden="true">↗</span></span></button>`;
+ // Next-up cards rank by leverage; the config's nextUp order (an older {agent, owner, plan} object reads as one list) only breaks ties.
+ const nextUpOrder = Array.isArray(CONFIG.nextUp) ? CONFIG.nextUp : Object.values(CONFIG.nextUp || {}).flat();
+ const position = t => { const i = nextUpOrder.indexOf(t.id); return i < 0 ? nextUpOrder.length : i; };
+ const byLeverage = (a, b) => leverage[b.id] - leverage[a.id] || position(a) - position(b) || byPriority(a, b);
+ const unblocksNote = t => leverage[t.id] ? `Unblocks ${leverage[t.id]} ${leverage[t.id] === 1 ? 'ticket' : 'tickets'}` : '';
+ const titles = ids => ids.map(id => byId[id]?.title || id).join(', ');
+ // The footer carries the session type and, beside the arrow, what the ticket unblocks or waits on.
+ function nextCard(t, label, impact, cls) {
+  return `<button class="next-card ${cls || ''}" data-task="${esc(t.id)}"><span class="label">${esc(label)}</span><h3>${esc(t.title)}</h3><p>${esc(t.summary)}</p><span class="card-end"><span>${esc(workflows[t.workflow] || t.workflow)}${t.estimate && sizes[t.estimate] ? ' · '+sizes[t.estimate] : ''}${aiUpdated(t) ? ' · AI-updated' : ''}</span><span class="impact">${impact ? `<span>${esc(impact)}</span>` : ''}<span aria-hidden="true">↗</span></span></span></button>`;
  }
- function ordered(ids) {
-  const listed = (ids || []).map(id => byId[id]).filter(Boolean);
-  return [...listed, ...tasks.filter(t => !(ids || []).includes(t.id)).sort(byPriority)];
- }
+ const emptyCard = (label, title, body) => `<div class="next-card"><span class="label">${esc(label)}</span><h3>${esc(title)}</h3><p>${esc(body)}</p></div>`;
  function paintNext() {
-  const reasons = Object.assign({agent:'Bounded work an agent can frame and build in one session.',owner:'Clear setup and access decisions before the implementation needs them.',plan:'Settle the choices that shape it, then build from the plan.',soon:'Becomes ready when the work in progress lands.'}, CONFIG.nextUpReasons || {});
-  const eligible = t => t && belongs(t, focus) && !closed(t) && !unknownState(t);
-  const next = CONFIG.nextUp || {};
-  const agent = ordered(next.agent).find(t => eligible(t) && !t.owner && t.workflow === 'scope' && availability(t).ready);
-  const owner = ordered(next.owner).find(t => eligible(t) && (t.owner || t.workflow === 'owner') && availability(t).ready);
-  const plan = ordered(next.plan).find(t => eligible(t) && t.workflow === 'prep' && !t.assignee && !t.reviewRequired && !isNew(t) && ['backlog','unstarted'].includes(t.stateType));
-  const soon = agent ? null : ordered(next.agent).find(t => eligible(t) && !t.owner && t.workflow === 'scope' && readySoon(t));
-  $('next-cards').innerHTML = (agent ? nextCard(agent, 'Move the build forward', reasons.agent, 'primary')
-    : nextCard(soon, 'Ready after current work', reasons.soon, 'soon'))
-   + nextCard(owner, 'A useful action for you', reasons.owner, '')
-   + nextCard(plan, 'Worth planning together', reasons.plan, '');
+  const open = tasks.filter(t => belongs(t, focus) && !closed(t) && !unknownState(t)).sort(byLeverage);
+  const agentWork = open.filter(t => !t.owner && t.workflow !== 'owner');
+  const [lead, beside] = agentWork.filter(t => availability(t).ready);
+  const owner = open.find(t => (t.owner || t.workflow === 'owner') && availability(t).ready);
+  const soon = lead ? null : agentWork.find(readySoon);
+  const blocked = lead || soon ? null : agentWork.find(t => unmet(t.blockedBy).length);
+  const leadCard = lead ? nextCard(lead, 'Start here', unblocksNote(lead), 'primary')
+   : soon ? nextCard(soon, 'Ready after current work', `Waits on ${titles(unmet(soon.blockedBy))}`, 'soon')
+   : blocked ? emptyCard('Start here', 'Nothing can start yet', `${blocked.title} waits on ${titles(unmet(blocked.blockedBy))}.`)
+   : emptyCard('Start here', 'No agent work left to start', 'The remaining tickets are assigned, waiting for a guidance review or not selected to start.');
+  const ownerCard = owner ? nextCard(owner, 'Waiting on you', unblocksNote(owner), '')
+   : emptyCard('Waiting on you', 'Nothing waits on you', 'No decision or setup in this phase is ready for you right now.');
+  const besideCard = beside ? nextCard(beside, 'Also ready', unblocksNote(beside), '')
+   : emptyCard('Also ready', 'Nothing else can start', lead ? 'Everything else in this phase waits on other work.' : 'Check the areas below for what is waiting.');
+  $('next-cards').innerHTML = leadCard + ownerCard + besideCard;
  }
  function paintProgress() {
   const running = tasks.filter(t => !t.referenceOnly && t.stateType === 'started').sort(byPriority);
