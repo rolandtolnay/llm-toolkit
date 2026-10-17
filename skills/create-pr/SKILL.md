@@ -1,6 +1,6 @@
 ---
 name: create-pr
-description: Open a pull request whose description explains why the change exists and how much review it needs. Use when changes are ready to ship.
+description: Open a pull request whose description explains why the change exists and where it needs a careful read. Use when changes are ready to ship.
 argument-hint: "[commit instructions or additional context]"
 ---
 
@@ -10,7 +10,7 @@ Invoking this skill is the go-ahead for the whole flow: committing what the bran
 
 ## What good looks like
 
-A reviewer reads the description and understands the motivation before the mechanics. Linear tickets are linked inline where they add context, not dumped in a list. Changes are grouped by logical area, not by file. The risk paragraph tells the reviewer how deeply to read and where, since reviewers route depth by blast radius, reversibility, and sensitive areas rather than by diff size. The test plan says how to verify the change. Every claim comes from the diff, the conversation, or the ticket: when the rationale cannot be recovered, describe what the change does and flag the missing why rather than inventing one, and add no metrics or outcomes the PR does not contain.
+A reviewer reads the description and understands the motivation before the mechanics. Linear tickets are linked inline where they add context, not dumped in a list. Changes are grouped by logical area, not by file. The reviewer builds a mental model from the summary and the changes, then skims the diff and trusts the implementation unless the risk section sends them somewhere. The risk section is that routing: it names the files from the diff that deserve a line-by-line read and says what makes each one costly to get wrong. Automated reviewers already give a correctness verdict, so it is not that, and it is not a second list of what the PR touches. The test plan says how to verify the change. Every claim comes from the diff, the conversation, or the ticket: when the rationale cannot be recovered, describe what the change does and flag the missing why rather than inventing one, and add no metrics or outcomes the PR does not contain.
 
 ## Land the change
 
@@ -46,7 +46,7 @@ Combine the diff, the gathered why, and any arguments passed in:
 
 ## Risk
 
-[One short paragraph: what breaks and who notices if this is wrong; whether a plain revert undoes it or a migration, data change, or external side effect does not; which sensitive areas it touches (auth, money, secrets, schema, infra, a new dependency, a module boundary); and which hunks deserve a careful read versus a skim. Derive it from the diff, not from confidence in the change. A mechanical, revert-safe change gets one sentence saying so.]
+[Judge the diff the way a senior developer reading it cold would. A file earns a line-by-line read when it introduces or changes an invariant other code relies on, adds branching the reviewer must hold in their head, alters a happy path users run often, or has an effect a revert cannot undo (a migration, a sent message, a deployed resource). Name each such file by its path from the diff with a clause saying which of these applies; everything not named is a skim. When no file qualifies, the whole section is one sentence: the change is low risk, a revert undoes it, and we are confident merging. Risk is not diff size, and listing every area the PR touches tells the reviewer nothing.]
 
 ## Test plan
 
@@ -68,6 +68,6 @@ Check that the created PR's body is the description and not empty or a receipt, 
 ## Success criteria
 
 - The why is sourced from the conversation, and from past sessions, Linear, the PRD, or domain docs when the conversation was thin
-- The description leads with motivation, links tickets inline, groups changes by logical area, states risk from the diff, and ends with a test plan
+- The description leads with motivation, links tickets inline, groups changes by logical area, names the files that need a careful read or calls the change low risk, and ends with a test plan
 - The description was drafted first, humanized once, and used as humanized apart from targeted factual fixes
 - The PR exists with the humanized body and its URL is returned
