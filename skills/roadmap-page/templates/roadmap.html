@@ -511,7 +511,8 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
    return `<button class="progress-item" data-task="${esc(t.id)}"><h3><span class="task-id">${esc(t.id)}</span>${esc(t.title)}</h3><p>${esc(t.state)}${t.assignee ? ' · '+esc(t.assignee) : ''} · ${esc(phaseById[t.phase]?.name || t.projectName)}</p>${unblocks.length ? `<span class="unblocks">Unblocks: ${esc(unblocks.join(', '))}</span>` : '<span class="unblocks">Nothing on this page waits for it.</span>'}</button>`;
   }).join('');
  }
- let phase = focus, lane = lanes[0]?.id || 'all', filter = 'open', selected = null, history = [], returnFocus = null;
+ const firstOpenLane = () => (lanes.find(l => laneTasks(l).some(t => !closed(t))) || lanes[0])?.id || 'all';
+ let phase = focus, lane = firstOpenLane(), filter = 'open', selected = null, history = [], returnFocus = null;
  function matches(t, f = filter) {
   if (f === 'done') return closed(t);
   if (closed(t)) return false;
@@ -656,7 +657,7 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
   const harnessButton = event.target.closest('[data-harness-choice]');
   if (harnessButton) { setHarness(harnessButton.dataset.harnessChoice); return; }
   const phaseButton = event.target.closest('[data-phase]');
-  if (phaseButton) { phase = phaseButton.dataset.phase; filter = 'open'; lane = lanes[0]?.id || 'all'; paint(); return; }
+  if (phaseButton) { phase = phaseButton.dataset.phase; filter = 'open'; lane = firstOpenLane(); paint(); return; }
   const laneButton = event.target.closest('[data-lane]');
   if (laneButton) { lane = laneButton.dataset.lane; filter = 'open'; paint(); $('work-title').focus({preventScroll:true}); $('work-title').scrollIntoView({block:'nearest'}); return; }
   if (event.target.closest('#show-review')) { lane = 'all'; filter = 'review'; paint(); $('work-title').focus(); return; }
