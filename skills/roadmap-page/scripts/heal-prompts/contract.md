@@ -23,6 +23,8 @@ What each field carries:
 
 Keep entries short by choosing what to include, not by compressing the writing. Drop requirement lists, acceptance checks, tool versions and setup details first, and keep whatever changes whether or how the person starts the work. Never trade accuracy for brevity or readability: requirements, numbers, dates, privacy rules and permission boundaries you mention stay exact, hedges stay hedged, and no product decision is invented. Existing guidance can carry facts from outside the ticket, such as a project milestone date or a decision recorded elsewhere on the page; keep them unless Linear now contradicts them.
 
+When text already on the page needs any change, write the whole ticket entry or config field again from the current meaning and use the old text only as a draft. New facts spliced into old sentences read like notes, and the person reads each entry as one piece of writing.
+
 Write from the ticket's meaning rather than by trimming its sentences, so each entry reads like a colleague explaining the work:
 - Full sentences with a subject, a verb and articles, around 20 words and rarely over 25. Unpack slash-joined lists and stacked nouns, and use a verb for an action ("decide which packages replace them", not "package replacement decision").
 - Ordinary words and plain verbs (is, has, uses, needs). Expand an acronym or internal term the first time unless the page already uses it, and use one name for one thing, matching the names the page uses for components and phases.
@@ -35,7 +37,7 @@ Before saving, reread each entry as that reader. Check it against the ticket for
 
 ## Finishing
 
-Before you finish, check your work the way the server will: both JSON blocks must parse, the `roadmap-snapshot` script tag must stay, and the inline script must compile (`node --check` on the extracted script, or an equivalent one-liner). The server restores the backup if either check fails. Your final message is shown to the person on the page: lead with what changed and why, name any ticket you left for them to decide, and keep it under 200 words.
+Before you finish, check your work the way the server will: both JSON blocks must parse, the `roadmap-snapshot` script tag must stay, and the inline script must compile (`node --check` on the extracted script, or an equivalent one-liner). The server restores the backup if either check fails. Your final message is shown to the person on the page: lead with what changed and why, name any fact from the old text you dropped and any ticket you left for them to decide, and keep it under 200 words.
 
 ---
 
