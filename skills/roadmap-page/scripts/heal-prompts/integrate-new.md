@@ -1,12 +1,12 @@
 Integrate the tickets that are new to this roadmap page so each one has reader-facing guidance and a place in the plan.
 
-Findings from the last refresh (`uncurated` are tickets with only Linear facts; `unplaced` are curated focus-phase tickets missing from every lane; `inProgress` shows what is currently being worked on):
+Findings from the last refresh (`uncurated` are tickets with only Linear facts, each with its `description` and recent `comments` as Linear holds them now; `unplaced` are curated focus-phase tickets missing from every lane; `inProgress` shows what is currently being worked on):
 
 ```json
 {{findings}}
 ```
 
-For each uncurated ticket, read it with the Linear CLI (`get <ID> -V -c`) and then add an entry with its `id` to `roadmap-guidance`:
+For each uncurated ticket, add an entry with its `id` to `roadmap-guidance`:
 - write `title`, `summary`, `detail` and `input` as the contract's Writing guidance section describes;
 - set `workflow` by the contract's session workflow rules: `scope` for bounded work the agent can decide on its own, `prep` for anything substantial or anything the person will want to steer (the default when unsure), `owner` only for work with no code output, such as provider setup or business decisions;
 - set `curated` to true and copy the ticket's `sourceHash` from the findings into `reviewedHash`;

@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import {
-  readGuidance, readConfig, encodeSnapshotFile, parseSnapshotFile, readSnapshotFile, refreshFile, loadPage, validatePage, mergeSnapshot, fingerprint, findings, pendingCounts,
+  readGuidance, readConfig, encodeSnapshotFile, parseSnapshotFile, readSnapshotFile, refreshFile, loadPage, validatePage, mergeSnapshot, fingerprint, phaseFingerprint, findings, pendingCounts,
   resolveApiKey, makeCli, fetchFacts, parseClaudeEvents, runClaude, buildHealPrompt, Healer, RoadmapError,
 } from './roadmap.mjs'
 
@@ -178,6 +178,7 @@ test('makeCli surfaces CLI error envelopes and fetchFacts follows blockers acros
     'get DM-9': null,
     'milestones Alpha': { project: 'Alpha', milestones: [{ id: 'm1', name: 'Beta ready', status: 'next', targetDate: '2026-10-14', description: 'x' }, { id: 'm2', name: 'Published', status: 'unstarted' }] },
     'milestones Beta': { project: 'Beta', milestones: [] },
+    'get DM-7': issue('DM-7', { description: 'the plan', project: { id: 'p9', name: 'Planning' } }),
   }
   const run = async (_uv, args) => {
     // args = ['run', cli, command, ...options]
@@ -187,8 +188,15 @@ test('makeCli surfaces CLI error envelopes and fetchFacts follows blockers acros
     return { stdout: JSON.stringify({ success: true, result: responses[key] }) }
   }
   const linear = makeCli({ cli: 'linear.py', cwd: '/', apiKey: 'k', run })
-  const result = await fetchFacts(linear, config, { tasks: [] })
+  const sourced = { ...config, phases: [{ ...config.phases[0], sources: ['DM-7'] }, config.phases[1]] }
+  const result = await fetchFacts(linear, sourced, { tasks: [] })
   assert.deepEqual([...result.listed.keys()], ['DM-1', 'DM-2'])
+  assert.equal(result.issues.get('DM-7').description, 'the plan')
+  const merged = mergeSnapshot({ tasks: [] }, sourced, result)
+  assert.ok(!merged.tasks.some(task => task.id === 'DM-7'), 'a source issue is not a task')
+  assert.deepEqual(merged.phases.map(phase => phase.id), ['now', 'next'])
+  assert.deepEqual(merged.phases[0].sources, [{ id: 'DM-7', title: 'Title DM-7', url: 'https://linear.app/demo/issue/DM-7' }])
+  assert.equal(merged.phases[0].sourceHash, phaseFingerprint(sourced.phases[0], result.milestones, result.issues))
   assert.equal(result.issues.get('DM-9'), null)
   assert.ok(calls.includes('get DM-9'))
   assert.deepEqual(result.milestones, [
@@ -198,6 +206,27 @@ test('makeCli surfaces CLI error envelopes and fetchFacts follows blockers acros
   assert.deepEqual(mergeSnapshot({ tasks: [] }, config, result).milestones, result.milestones)
   const failing = makeCli({ cli: 'linear.py', cwd: '/', apiKey: 'k', run: async () => ({ stdout: JSON.stringify({ success: false, error: { code: 'MISSING_API_KEY', message: 'nope' } }) }) })
   await assert.rejects(failing(['states']), /MISSING_API_KEY/)
+})
+
+test('phase facts flag a recheck when milestones or sources change, never when status does', () => {
+  const alpha = [{ project: 'Alpha', name: 'Builds green', targetDate: null, status: 'next' }]
+  const issues = new Map([['DM-7', issue('DM-7', { description: 'the plan' })]])
+  const phase = { id: 'now', name: 'Now', projects: ['Alpha'], sources: ['DM-7'] }
+  const hash = phaseFingerprint(phase, alpha, issues)
+  assert.equal(phaseFingerprint(phase, [{ ...alpha[0], status: 'done' }], issues), hash, 'status is ignored')
+  assert.notEqual(phaseFingerprint(phase, [{ ...alpha[0], name: 'Builds pass' }], issues), hash, 'a rename counts')
+  assert.notEqual(phaseFingerprint(phase, [...alpha, { project: 'Alpha', name: 'Published', targetDate: null, status: 'unstarted' }], issues), hash, 'a new slice counts')
+  assert.notEqual(phaseFingerprint(phase, alpha, new Map([['DM-7', issue('DM-7', { description: 'a new plan' })]])), hash, 'a rewritten source counts')
+  const reviewed = { ...config, phases: [{ ...phase, reviewedHash: hash }, config.phases[1]] }
+  const snapshot = { tasks: [], milestones: alpha, phases: [{ id: 'now', sourceHash: hash, sources: [{ id: 'DM-7', title: 'Title DM-7', url: null }] }, { id: 'next', sourceHash: 'h2', sources: [] }] }
+  const found = findings(snapshot, reviewed)['recheck-guidance']
+  assert.deepEqual(found.phases.map(entry => [entry.id, entry.reviewedHash]), [['next', null]], 'an unchecked phase is flagged, a reviewed one is not')
+  assert.deepEqual(found.phases[0].sources, [])
+  assert.equal(pendingCounts(snapshot, reviewed)['recheck-guidance'], 1)
+  assert.equal(pendingCounts({ tasks: [], milestones: alpha }, reviewed)['recheck-guidance'], 0, 'a snapshot without phase facts flags nothing')
+  const stale = findings({ ...snapshot, phases: [{ id: 'now', sourceHash: 'moved', sources: [] }] }, reviewed)['recheck-guidance']
+  assert.deepEqual(stale.phases.map(entry => entry.id), ['now'])
+  assert.deepEqual(stale.phases[0].milestones, alpha)
 })
 
 const assistant = (...content) => ({ type: 'assistant', message: { content } })
@@ -248,6 +277,24 @@ test('buildHealPrompt fills findings and rejects empty custom instructions', asy
   const snapshot = mergeSnapshot({ tasks: [] }, config, facts([issue('DM-1')]))
   const built = await buildHealPrompt({ template: 'integrate-new', page: '/p/etc/r.html', root: '/p', cli: '/cli/linear.py', snapshot, config })
   assert.match(built.prompt, /"DM-1"/)
+  assert.doesNotMatch(built.prompt, /"description"/, 'no content without a ticket reader')
+  const reads = []
+  const fetchTicket = async id => { reads.push(id); return id === 'DM-1' ? { description: 'x'.repeat(13_000), comments: Array.from({ length: 12 }, (_, i) => ({ user: { name: 'Ann' }, createdAt: `t${i}`, body: `c${i}` })) } : null }
+  const rich = await buildHealPrompt({ template: 'integrate-new', page: '/p/etc/r.html', root: '/p', cli: '/cli/linear.py', snapshot, config, fetchTicket })
+  const embedded = JSON.parse(rich.prompt.match(/```json\n([\s\S]*?)\n```/)[1]).uncurated[0]
+  assert.deepEqual(reads, ['DM-1'])
+  assert.ok(embedded.description.endsWith(' [truncated]') && embedded.description.length === 12_000 + ' [truncated]'.length)
+  assert.deepEqual(embedded.comments.map(comment => comment.body), ['c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11'])
+  const phased = { ...config, phases: [{ ...config.phases[0], sources: ['DM-7'] }, config.phases[1]] }
+  const withPhase = { ...snapshot, phases: [{ id: 'now', sourceHash: 'h', sources: [{ id: 'DM-7', title: 't', url: null }] }] }
+  const recheck = await buildHealPrompt({ template: 'recheck-guidance', page: '/p/etc/r.html', root: '/p', cli: '/cli/linear.py', snapshot: withPhase, config: phased, fetchTicket: async () => ({ description: 'the plan', comments: [] }) })
+  const phaseFinding = JSON.parse(recheck.prompt.match(/```json\n([\s\S]*?)\n```/)[1]).phases[0]
+  assert.equal(phaseFinding.sources[0].description, 'the plan')
+  const laterPhase = mergeSnapshot({ tasks: [] }, config, facts([issue('DM-1', { state: { name: 'Done', type: 'completed' } }), issue('DM-2', { project: { id: 'p2', name: 'Beta' } })]))
+  const moving = await buildHealPrompt({ template: 'next-phase', page: '/p/etc/r.html', root: '/p', cli: '/cli/linear.py', snapshot: laterPhase, config, fetchTicket: async id => ({ description: `body of ${id}`, comments: [] }) })
+  assert.equal(JSON.parse(moving.prompt.match(/```json\n([\s\S]*?)\n```/)[1]).candidates[0].description, 'body of DM-2')
+  const failing = await buildHealPrompt({ template: 'integrate-new', page: '/p/etc/r.html', root: '/p', cli: '/cli/linear.py', snapshot, config, fetchTicket: async () => { throw new RoadmapError('down') } })
+  assert.match(failing.prompt, /"contentError": "down"/)
   assert.match(built.system, /etc\/r\.html/)
   assert.match(built.system, /uv run \/cli\/linear\.py/)
   await assert.rejects(buildHealPrompt({ template: 'custom', page: '/p/r.html', root: '/p', cli: 'c', snapshot, config }), /instruction/)

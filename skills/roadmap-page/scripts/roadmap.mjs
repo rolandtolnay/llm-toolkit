@@ -254,7 +254,10 @@ export async function fetchFacts(linear, config, previous, log = () => {}) {
     const result = await linear(['milestones', project])
     for (const milestone of result.milestones || []) milestones.push({ project, name: milestone.name, targetDate: milestone.targetDate || null, status: milestone.status || null })
   }
-  const wanted = new Set([...listed.keys(), ...previous.tasks.filter(task => task.curated).map(task => task.id)])
+  // Source issues (a planning map, a brief) are fetched so a change to the plan behind a phase is noticed; they
+  // become tasks only when something tracked depends on them.
+  const sources = config.phases.flatMap(phase => phase.sources || [])
+  const wanted = new Set([...listed.keys(), ...previous.tasks.filter(task => task.curated).map(task => task.id), ...sources])
   const issues = new Map()
   const requested = new Set(wanted)
   const queue = [...wanted]
@@ -293,8 +296,26 @@ export function fingerprint(issue, blockedBy, ownerLabel) {
   })).digest('hex')
 }
 
+// What the copy written for a phase (hero, lanes, guide) rests on: its projects' milestones and the bodies of its
+// source issues. Milestone status is left out so progress never flags a review; a rename, a new slice or a rewritten
+// plan does.
+export function phaseFingerprint(phase, milestones, issues) {
+  const own = milestones.filter(milestone => phase.projects.includes(milestone.project))
+    .map(milestone => ({ project: milestone.project, name: milestone.name, targetDate: milestone.targetDate || null }))
+    .sort((a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name))
+  const sources = (phase.sources || []).map(id => {
+    const issue = issues.get(id)
+    return { id, title: issue?.title || null, description: issue?.description || '' }
+  })
+  return createHash('sha256').update(JSON.stringify({ milestones: own, sources })).digest('hex')
+}
+
 export function mergeSnapshot(previous, config, facts, now = new Date().toISOString()) {
   const { stateTypes, listed, issues, milestones = [] } = facts
+  const phases = config.phases.map(phase => ({
+    id: phase.id, sourceHash: phaseFingerprint(phase, milestones, issues),
+    sources: (phase.sources || []).map(id => ({ id, title: issues.get(id)?.title || null, url: issues.get(id)?.url || null })),
+  }))
   const oldTasks = new Map(previous.tasks.map(task => [task.id, task]))
   const phaseOf = projectName => config.phases.find(phase => phase.projects.includes(projectName))?.id || 'later'
   const excluded = labels => (config.excludeLabelPrefixes || []).some(prefix => labels.some(label => label.startsWith(prefix)))
@@ -346,7 +367,7 @@ export function mergeSnapshot(previous, config, facts, now = new Date().toISOStr
   }
   for (const id of roots) add(id)
   return combine({
-    ...previous, checkedAt: now, trackingSince: previous.trackingSince || now, stateTypes, milestones,
+    ...previous, checkedAt: now, trackingSince: previous.trackingSince || now, stateTypes, milestones, phases,
     refresh: { ok: true, attemptedAt: now }, tasks: [...tasks.values()],
   }, { tasks: [] })
 }
@@ -398,6 +419,14 @@ export function findings(snapshot, config) {
   const emptyProjects = config.phases.flatMap(phase => phase.projects).filter(project => !snapshot.tasks.some(task => task.projectName === project))
   const danglingConfig = [...laneIds, ...Object.values(config.nextUp || {}).flat(), config.finalTicket?.id].filter(id => id && !snapshot.tasks.some(task => task.id === id))
   const review = snapshot.tasks.filter(task => open(task) && task.curated && task.reviewRequired)
+  // A phase's copy needs a look when the facts it rests on changed, or were never checked (no reviewedHash yet).
+  // Only after a refresh that recorded phase facts, so an older snapshot flags nothing.
+  const milestonesOf = phase => (snapshot.milestones || []).filter(milestone => phase.projects.includes(milestone.project))
+  const phaseReview = config.phases.flatMap(phase => {
+    const fact = (snapshot.phases || []).find(entry => entry.id === phase.id)
+    if (!fact || fact.sourceHash === phase.reviewedHash) return []
+    return [{ id: phase.id, name: phase.name, isFocus: phase.id === focus, sourceHash: fact.sourceHash, reviewedHash: phase.reviewedHash ?? null, milestones: milestonesOf(phase), sources: fact.sources || [] }]
+  })
   const inProgress = snapshot.tasks.filter(task => open(task) && task.stateType === 'started')
   const openIn = phaseId => snapshot.tasks.filter(task => open(task) && task.phase === phaseId)
   const phaseIds = config.phases.map(phase => phase.id)
@@ -407,8 +436,8 @@ export function findings(snapshot, config) {
   return {
     'integrate-new': { uncurated: uncurated.map(brief), unplaced: unplaced.map(brief), inProgress: inProgress.map(brief) },
     'reconcile-states': { unknownStates: unknownStates.map(brief), missing: missing.map(brief), truncated: truncated.map(task => ({ id: task.id, truncated: task.truncated })), emptyProjects, danglingConfig, stateTypes: snapshot.stateTypes || {} },
-    'recheck-guidance': { review: review.map(task => ({ ...brief(task), title: task.title, summary: task.summary, workflow: task.workflow, opener: task.opener })) },
-    'next-phase': { focus, remaining: openIn(focus).map(brief), next, candidates: next ? openIn(next).map(brief) : [], milestones: (snapshot.milestones || []).filter(milestone => nextProjects.has(milestone.project)), inProgress: inProgress.map(brief) },
+    'recheck-guidance': { review: review.map(task => ({ ...brief(task), title: task.title, summary: task.summary, workflow: task.workflow, opener: task.opener })), phases: phaseReview },
+    'next-phase': { focus, remaining: openIn(focus).map(brief), next, candidates: next ? openIn(next).map(brief) : [], milestones: (snapshot.milestones || []).filter(milestone => nextProjects.has(milestone.project)), inProgress: inProgress.map(brief), phaseHashes: Object.fromEntries((snapshot.phases || []).map(entry => [entry.id, entry.sourceHash])) },
     custom: {},
   }
 }
@@ -418,7 +447,7 @@ export function pendingCounts(snapshot, config) {
   return {
     'integrate-new': all['integrate-new'].uncurated.length + all['integrate-new'].unplaced.length,
     'reconcile-states': all['reconcile-states'].unknownStates.length + all['reconcile-states'].missing.length + all['reconcile-states'].emptyProjects.length + all['reconcile-states'].danglingConfig.length,
-    'recheck-guidance': all['recheck-guidance'].review.length,
+    'recheck-guidance': all['recheck-guidance'].review.length + all['recheck-guidance'].phases.length,
     // The focus phase has no open work left and a later phase does: the page is ready to move on.
     'next-phase': all['next-phase'].next && !all['next-phase'].remaining.length ? 1 : 0,
   }
@@ -427,17 +456,40 @@ export function pendingCounts(snapshot, config) {
 // ---------------------------------------------------------------------------
 // Self-heal with headless Claude Code
 
-export async function buildHealPrompt({ template, instruction = '', page, root, cli, snapshot, snapshotPath, config }) {
+// The ticket text a heal run works from, read once by the server rather than by the agent through shell loops.
+// Long bodies and old comments are clipped; the agent can still read the full ticket with the CLI.
+const CONTENT_LIMITS = Object.freeze({ description: 12_000, comment: 4_000, comments: 10 })
+const clip = (text, max) => { const value = String(text || ''); return value.length > max ? `${value.slice(0, max)} [truncated]` : value }
+async function ticketContent(id, fetchTicket) {
+  try {
+    const issue = await fetchTicket(id)
+    if (!issue) return { description: null }
+    return {
+      description: clip(issue.description, CONTENT_LIMITS.description),
+      comments: (issue.comments || []).slice(-CONTENT_LIMITS.comments).map(comment => ({ author: comment.user?.name || null, createdAt: comment.createdAt || null, body: clip(comment.body, CONTENT_LIMITS.comment) })),
+    }
+  } catch (error) { return { description: null, contentError: errorMessage(error) } }
+}
+const withContent = (items, fetchTicket) => Promise.all(items.map(async item => ({ ...item, ...(await ticketContent(item.id, fetchTicket)) })))
+
+export async function buildHealPrompt({ template, instruction = '', page, root, cli, snapshot, snapshotPath, config, fetchTicket = null }) {
   if (!HEAL_TEMPLATES.includes(template)) throw new RoadmapError(`Unknown self-heal template: ${template}.`)
   if (template === 'custom' && !instruction.trim()) throw new RoadmapError('A custom self-heal needs an instruction.')
   const read = name => readFile(join(here, 'heal-prompts', name), 'utf8')
   const contract = await read('contract.md')
   const body = await read(`${template}.md`)
+  const found = findings(snapshot, config)[template]
+  if (fetchTicket && template === 'integrate-new') found.uncurated = await withContent(found.uncurated, fetchTicket)
+  if (fetchTicket && template === 'recheck-guidance') {
+    found.review = await withContent(found.review, fetchTicket)
+    found.phases = await Promise.all(found.phases.map(async phase => ({ ...phase, sources: await withContent(phase.sources, fetchTicket) })))
+  }
+  if (fetchTicket && template === 'next-phase') found.candidates = await withContent(found.candidates, fetchTicket)
   const values = {
     page, pageRelative: relative(root, page), root, linearCli: `uv run ${cli}`,
     snapshotRelative: snapshotPath ? relative(root, snapshotPath) : '',
     contract: await readFile(join(here, '../references/page-contract.md'), 'utf8'),
-    findings: JSON.stringify(findings(snapshot, config)[template], null, 1),
+    findings: JSON.stringify(found, null, 1),
     instruction: instruction.trim(), product: config.product || basename(root), model: MODEL,
   }
   const fill = text => text.replace(/\{\{(\w+)\}\}/g, (_, key) => values[key] ?? '')
@@ -562,7 +614,9 @@ export class Healer {
   async run({ template, instruction = '', spawnAgent, dryRun = false }) {
     if (this.running) throw new RoadmapError('A self-heal is already running.')
     const { html, snapshot, snapshotPath, config } = await loadPage(this.page)
-    const built = await buildHealPrompt({ template, instruction, page: this.page, root: this.root, cli: this.cli, snapshot, snapshotPath, config })
+    const linear = makeCli({ cli: this.cli, cwd: this.root, apiKey: this.apiKey })
+    const fetchTicket = id => linear(['get', id, '-V', '-c'])
+    const built = await buildHealPrompt({ template, instruction, page: this.page, root: this.root, cli: this.cli, snapshot, snapshotPath, config, fetchTicket })
     if (dryRun) return built
     this.running = true
     this.events = []
