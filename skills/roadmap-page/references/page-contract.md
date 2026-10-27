@@ -37,7 +37,7 @@ Written when the page is created and edited by self-heal passes. Nothing here is
 | `guide[]`, `guideFooter` | The "Working with an agent" section: `{title, body}` items and a closing note. |
 | `fallbacks` | Optional `{title, paragraphs[]}` for a "if the schedule gets tight" section. |
 
-Skill commands in `openers`, `prepFollowUp` and `guide` are written as `{skill:name}`. The page spells them for the agent harness picked in its header or in a drawer's session box, one choice remembered per browser: `/name` for Claude Code, `/skill:name` for Pi, `$name` for Codex.
+Skill commands in `openers`, `prepFollowUp` and `guide` are written as `{skill:name}`. The page spells them per harness: `/name` for Claude Code, `/skill:name` for Pi, `$name` for Codex. Each skill has a home harness set in the template: `wayfinder` runs in Claude Code, and `scope`, `prep` and `cook-prd` in Pi. A session prompt opens in the home of its first skill, and a prompt that names no skill, such as an owner walk-through, opens in Claude Code. The drawer's session box can respell its prompt and the prep follow-up for another harness; the choice is not remembered, so the next drawer opens on its own default. The guide spells each command for its skill's home.
 
 ## roadmap-guidance: per-ticket guidance
 

@@ -85,11 +85,10 @@ small,.small { font-size:var(--t-caption); }
 .prefs { position:relative; }
 .prefs-panel { position:absolute; z-index:20; top:calc(100% + 8px); right:0; display:grid; gap:8px; width:max-content; min-width:248px; padding:14px; border-radius:var(--radius-s); background:var(--surface); box-shadow:var(--float-lg),inset 0 0 0 1px var(--line); }
 .prefs-panel p { color:var(--muted); font-size:var(--t-caption); font-weight:500; }
-.prefs-panel p + div + p { margin-top:6px; }
-.theme-switch, .harness-switch { display:flex; gap:2px; padding:3px; border-radius:999px; background:var(--wash); }
-.theme-switch button, .harness-switch button { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; height:30px; padding:0 12px; border-radius:999px; color:var(--muted); font-size:var(--t-caption); font-weight:500; white-space:nowrap; }
-.theme-switch button:hover, .harness-switch button:hover { color:var(--ink); }
-.theme-switch button[aria-pressed=true], .harness-switch button[aria-pressed=true] { background:var(--raised); color:var(--ink); box-shadow:var(--float-sm); }
+.theme-switch { display:flex; gap:2px; padding:3px; border-radius:999px; background:var(--wash); }
+.theme-switch button { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; height:30px; padding:0 12px; border-radius:999px; color:var(--muted); font-size:var(--t-caption); font-weight:500; white-space:nowrap; }
+.theme-switch button:hover { color:var(--ink); }
+.theme-switch button[aria-pressed=true] { background:var(--raised); color:var(--ink); box-shadow:var(--float-sm); }
 .theme-switch svg { width:14px; height:14px; }
 .text-button { padding:8px 4px; color:var(--muted); text-decoration:underline; text-underline-offset:4px; font-size:var(--t-small); }
 .text-button:hover { color:var(--ink); }
@@ -238,7 +237,7 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
 .gate-links .relation-button { width:auto; }
 .session-box { padding:22px 24px; border-radius:var(--radius); background:var(--wash); }
 .session-box > code { display:block; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.65; font-size:var(--t-small); margin:10px 0 16px; }
-/* The session box picks its harness in place: one tap on a brand mark respells the prompt and is remembered like the header preference. */
+/* The session box picks its harness in place: one tap on a brand mark respells this prompt only; the next drawer opens on its own default. */
 .session-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .session-head h3 { margin:0; }
 .harness-pick { display:flex; gap:2px; flex:none; margin:-4px -6px -4px 0; }
@@ -339,12 +338,6 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
    <div class="prefs">
     <button class="icon-button" id="prefs-button" aria-expanded="false" aria-controls="prefs-panel" aria-label="Preferences" title="Preferences"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 6.5h7M15.5 6.5h1M3.5 13.5h1M9.5 13.5h7"/><circle cx="13" cy="6.5" r="2"/><circle cx="7" cy="13.5" r="2"/></svg></button>
     <div class="prefs-panel" id="prefs-panel" hidden>
-     <p id="harness-label">Write session prompts for</p>
-     <div class="harness-switch" role="group" aria-labelledby="harness-label">
-      <button data-harness-choice="claude" aria-pressed="true">Claude Code</button>
-      <button data-harness-choice="pi" aria-pressed="false">Pi</button>
-      <button data-harness-choice="codex" aria-pressed="false">Codex</button>
-     </div>
      <p id="theme-label">Theme</p>
      <div class="theme-switch" role="group" aria-labelledby="theme-label">
       <button data-theme-choice="system" aria-pressed="true"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="10" rx="2"/><path d="M7 16.5h6M10 13.5v3"/></svg>System</button>
@@ -589,30 +582,35 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
   if (!t) return `<span class="relation-button">${esc(id)}<small>Not on this page</small></span>`;
   return `<button class="relation-button" data-task="${esc(id)}">${esc(t.title)}<small>${done(id) ? 'Done in Linear' : started(id) ? 'In progress' : phaseById[t.phase]?.name || 'Outside the release phases'} · ${esc(t.id)}</small></button>`;
  }
- // Session prompts spell skill commands for the harness picked in the header or a session box; config writes them as {skill:name}.
+ // Session prompts spell skill commands per harness; config writes them as {skill:name}. Each skill has a home harness, and a session prompt
+ // defaults to the home of its first skill (Claude Code when it names none). A session box can respell its own prompt; nothing is remembered.
  // Marks are each product's monochrome logo, drawn in the text colour.
  const HARNESSES = {
   claude: {name:'Claude Code', skill:name => '/'+name, viewBox:'0 0 24 24', mark:'<path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z"/>'},
   pi: {name:'Pi', skill:name => '/skill:'+name, viewBox:'0 0 560 560', mark:'<path d="M420 280H280V140H0V0H420V280Z"/><path d="M560 560H420V280H560V560Z"/><path d="M140 560H0V140H140V280H280V420H140V560Z"/>'},
   codex: {name:'Codex', skill:name => '$'+name, viewBox:'0 0 24 24', mark:'<path fill-rule="evenodd" d="M8.086.457a6.105 6.105 0 013.046-.415c1.333.153 2.521.72 3.564 1.7a.117.117 0 00.107.029c1.408-.346 2.762-.224 4.061.366l.063.03.154.076c1.357.703 2.33 1.77 2.918 3.198.278.679.418 1.388.421 2.126a5.655 5.655 0 01-.18 1.631.167.167 0 00.04.155 5.982 5.982 0 011.578 2.891c.385 1.901-.01 3.615-1.183 5.14l-.182.22a6.063 6.063 0 01-2.934 1.851.162.162 0 00-.108.102c-.255.736-.511 1.364-.987 1.992-1.199 1.582-2.962 2.462-4.948 2.451-1.583-.008-2.986-.587-4.21-1.736a.145.145 0 00-.14-.032c-.518.167-1.04.191-1.604.185a5.924 5.924 0 01-2.595-.622 6.058 6.058 0 01-2.146-1.781c-.203-.269-.404-.522-.551-.821a7.74 7.74 0 01-.495-1.283 6.11 6.11 0 01-.017-3.064.166.166 0 00.008-.074.115.115 0 00-.037-.064 5.958 5.958 0 01-1.38-2.202 5.196 5.196 0 01-.333-1.589 6.915 6.915 0 01.188-2.132c.45-1.484 1.309-2.648 2.577-3.493.282-.188.55-.334.802-.438.286-.12.573-.22.861-.304a.129.129 0 00.087-.087A6.016 6.016 0 015.635 2.31C6.315 1.464 7.132.846 8.086.457zm-.804 7.85a.848.848 0 00-1.473.842l1.694 2.965-1.688 2.848a.849.849 0 001.46.864l1.94-3.272a.849.849 0 00.007-.854l-1.94-3.393zm5.446 6.24a.849.849 0 000 1.695h4.848a.849.849 0 000-1.696h-4.848z"/>'}
  };
- let harness = 'claude';
- try { if (HARNESSES[localStorage.getItem('roadmap-harness')]) harness = localStorage.getItem('roadmap-harness'); } catch {}
- const skills = text => String(text ?? '').replace(/\{skill:([\w-]+)\}/g, (_, name) => HARNESSES[harness].skill(name));
- const harnessPick = () => `<div class="harness-pick" role="group" aria-label="Write this prompt for">${Object.entries(HARNESSES).map(([id, h]) => `<button data-harness-choice="${id}" aria-pressed="${id === harness}" aria-label="${h.name}" title="${h.name}"><svg viewBox="${h.viewBox}" aria-hidden="true">${h.mark}</svg></button>`).join('')}</div>`;
- const prepFollowUp = () => skills(CONFIG.prepFollowUp || 'Then build it in a fresh session with {skill:cook-prd} and the PRD path that {skill:prep} returns.');
- function opener(t) {
+ const SKILL_HOMES = {wayfinder:'claude', scope:'pi', prep:'pi', 'cook-prd':'pi'};
+ const homeOf = name => SKILL_HOMES[name] || 'claude';
+ // Without a harness, each command is spelled for its own skill's home.
+ const skills = (text, harness) => String(text ?? '').replace(/\{skill:([\w-]+)\}/g, (_, name) => HARNESSES[harness || homeOf(name)].skill(name));
+ let pickedHarness = null;
+ const harnessPick = harness => `<div class="harness-pick" role="group" aria-label="Write this prompt for">${Object.entries(HARNESSES).map(([id, h]) => `<button data-harness-choice="${id}" aria-pressed="${id === harness}" aria-label="${h.name}" title="${h.name}"><svg viewBox="${h.viewBox}" aria-hidden="true">${h.mark}</svg></button>`).join('')}</div>`;
+ const prepFollowUp = harness => skills(CONFIG.prepFollowUp || 'Then build it in a fresh session with {skill:cook-prd} and the PRD path that {skill:prep} returns.', harness);
+ function promptHarness(t) { return pickedHarness || homeOf(/\{skill:([\w-]+)\}/.exec(openerTemplate(t))?.[1]); }
+ function opener(t) { return skills(openerTemplate(t), promptHarness(t)).replaceAll('{id}', t.id).replaceAll('{title}', t.title); }
+ function openerTemplate(t) {
   const openers = CONFIG.openers || {};
-  const fill = text => skills(text).replaceAll('{id}', t.id).replaceAll('{title}', t.title);
-  if (isNew(t)) return fill(openers.new || 'Review {id} in Linear and run the "Integrate new tickets" self-heal on this roadmap page so it gets plain-language guidance and a place in an area. Do not start implementation.');
-  if (t.reviewRequired) return fill(openers.review || 'Review {id} against its current Linear description, comments and dependencies. Update only its roadmap explanation and session suggestion on the roadmap page. Do not start implementation or change Linear.');
-  if (t.opener) return fill(t.opener);
-  if (t.workflow === 'owner') return fill(openers.owner || 'Help me work through {id}. Read the ticket and its comments, then walk me through it one step at a time: explain each step or decision plainly with its implications and trade-offs, ask for my call where one is needed, and verify each step worked before moving to the next. Do not assume account, spending or production permissions.');
-  if (t.workflow === 'scope') return fill(openers.scope || '{skill:scope} {id}');
-  return fill(openers.prep || '{skill:prep} {id}');
+  if (isNew(t)) return openers.new || 'Review {id} in Linear and run the "Integrate new tickets" self-heal on this roadmap page so it gets plain-language guidance and a place in an area. Do not start implementation.';
+  if (t.reviewRequired) return openers.review || 'Review {id} against its current Linear description, comments and dependencies. Update only its roadmap explanation and session suggestion on the roadmap page. Do not start implementation or change Linear.';
+  if (t.opener) return t.opener;
+  if (t.workflow === 'owner') return openers.owner || 'Help me work through {id}. Read the ticket and its comments, then walk me through it one step at a time: explain each step or decision plainly with its implications and trade-offs, ask for my call where one is needed, and verify each step worked before moving to the next. Do not assume account, spending or production permissions.';
+  if (t.workflow === 'scope') return openers.scope || '{skill:scope} {id}';
+  return openers.prep || '{skill:prep} {id}';
  }
  function renderTask() {
   const t = byId[selected], a = availability(t);
+  pickedHarness = null;
   const down = tasks.filter(other => (other.blockedBy || []).includes(t.id));
   const gatedDown = tasks.filter(other => (other.gates || []).includes(t.id));
   const gates = CONFIG.gates || {};
@@ -633,7 +631,7 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
    <div class="drawer-section"><h3>How it connects</h3><div class="relations"><div><p class="relation-label">Needs first</p>${t.blockedBy?.length ? t.blockedBy.map(relation).join('') : '<p>No ticket blockers.</p>'}</div><span class="arrow" aria-hidden="true">→</span><div><p class="relation-label">This makes possible</p>${down.length ? down.map(x => relation(x.id)).join('') : '<p>'+esc(final && final.id === t.id && final.enables ? final.enables : 'No direct ticket dependents.')+'</p>'}</div></div>
    ${t.gates?.length ? `<div class="gate-note"><h3>${esc(gates.title || 'Also needs')}</h3><p>${esc(gates.body || 'These prerequisites are tracked separately and do not block local preparation.')}</p><div class="gate-links">${t.gates.map(relation).join('')}</div></div>` : ''}
    ${gatedDown.length ? `<div class="gate-note"><h3>${esc(gates.enablesTitle || 'Also enables')}</h3><p>${esc(gates.enablesBody || 'These tasks can prepare before this is complete.')}</p><div class="gate-links">${gatedDown.map(x => relation(x.id)).join('')}</div></div>` : ''}</div>
-   <div class="drawer-section session-box"><div class="session-head"><h3>${isNew(t) || t.reviewRequired ? 'Ask for a guidance review' : t.workflow === 'owner' ? 'Ask an agent to help' : 'Start a session'}</h3>${harnessPick()}</div><code id="session-prompt">${esc(opener(t))}</code><button class="solid-button copy-button" id="copy-prompt"><span class="copy-idle">Copy session prompt</span><span class="copy-done" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4.5 10.5 8 14l7.5-8"/></svg>Copied</span></button><p id="copy-status" class="small" role="status"></p>${t.workflow === 'prep' && !t.reviewRequired ? `<p id="prep-follow-up" style="margin-top:14px">${esc(prepFollowUp())}</p>` : ''}</div>
+   <div class="drawer-section session-box"><div class="session-head"><h3>${isNew(t) || t.reviewRequired ? 'Ask for a guidance review' : t.workflow === 'owner' ? 'Ask an agent to help' : 'Start a session'}</h3>${harnessPick(promptHarness(t))}</div><code id="session-prompt">${esc(opener(t))}</code><button class="solid-button copy-button" id="copy-prompt"><span class="copy-idle">Copy session prompt</span><span class="copy-done" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4.5 10.5 8 14l7.5-8"/></svg>Copied</span></button><p id="copy-status" class="small" role="status"></p>${t.workflow === 'prep' && !t.reviewRequired ? `<p id="prep-follow-up" style="margin-top:14px">${esc(prepFollowUp(promptHarness(t)))}</p>` : ''}</div>
    <div class="drawer-footer">${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener">Read the full ticket in Linear ↗</a>` : ''}<p style="margin-top:14px">Completion comes from Linear. ${server ? 'Use Refresh from Linear after a ticket changes.' : 'Run <code>'+esc(CONFIG.command || 'the roadmap command')+'</code> after a ticket changes to refresh this page.'}</p></div>`;
  }
  function openTask(id, source) {
@@ -709,19 +707,14 @@ button.relation-button:hover { box-shadow:var(--float-sm),inset 0 0 0 1px var(--
  $('brand-name').textContent = (CONFIG.product || 'roadmap').toLowerCase();
  $('brand-subtitle').textContent = CONFIG.title || 'Your roadmap';
  function renderGuide() { $('guide-grid').innerHTML = (CONFIG.guide || []).map(item => `<div><h3>${esc(skills(item.title))}</h3><p>${esc(skills(item.body))}</p></div>`).join(''); }
+ // Respell the open session box in place so focus stays on the tapped mark.
  function setHarness(choice) {
-  harness = choice;
-  try { localStorage.setItem('roadmap-harness', choice); } catch {}
+  pickedHarness = choice;
   document.querySelectorAll('[data-harness-choice]').forEach(b => b.setAttribute('aria-pressed', b.dataset.harnessChoice === choice));
-  renderGuide();
-  // Respell an open session box in place so focus stays on the tapped mark.
-  if (selected) {
-   $('session-prompt').textContent = opener(byId[selected]);
-   if ($('prep-follow-up')) $('prep-follow-up').textContent = prepFollowUp();
-   clearTimeout(copiedTimer); $('copy-prompt').classList.remove('copied'); $('copy-status').textContent = '';
-  }
+  $('session-prompt').textContent = opener(byId[selected]);
+  if ($('prep-follow-up')) $('prep-follow-up').textContent = prepFollowUp(choice);
+  clearTimeout(copiedTimer); $('copy-prompt').classList.remove('copied'); $('copy-status').textContent = '';
  }
- document.querySelectorAll('[data-harness-choice]').forEach(b => b.setAttribute('aria-pressed', b.dataset.harnessChoice === harness));
  renderGuide();
  $('guide-footer').textContent = CONFIG.guideFooter || 'Session choices on this page are suggestions. Ticket estimates describe scope, not hours. Read the full ticket before starting.';
  if (CONFIG.fallbacks) { $('fallbacks').hidden = false; $('fallbacks-title').textContent = CONFIG.fallbacks.title; $('fallbacks-body').innerHTML = (CONFIG.fallbacks.paragraphs || [CONFIG.fallbacks.body]).map(text => `<p>${esc(text)}</p>`).join(''); }
