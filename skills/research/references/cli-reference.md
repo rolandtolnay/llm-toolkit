@@ -8,20 +8,19 @@ All commands output JSON with a consistent envelope: `{ success, command, query,
 
 ---
 
-### `ask "<query>"` — Synthesized answer (~$0.02)
+### `ask "<query>"` — Synthesized answer (~$0.01)
 
-Perplexity sonar-pro. Returns a synthesized answer with inline citations.
+Perplexity Agent API at effort `low`: a short research loop (up to 5 steps) that searches, may fetch pages, and writes a cited answer. Perplexity's tuned prompt is used as-is.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--site` / `-s` | none | Filter to specific websites, e.g. `stripe.com` (repeatable) |
 | `--recency` / `-r` | none | Preset window: `hour`, `day`, `week`, `month`, `year` |
-| `--context` / `-c` | `high` | Search context size: `low`, `medium`, `high` |
-| `--after` | none | Only results after date (YYYY-MM-DD) |
-| `--before` | none | Only results before date (YYYY-MM-DD) |
+| `--after` | none | Only results published after date (YYYY-MM-DD) |
+| `--before` | none | Only results published before date (YYYY-MM-DD) |
 | `--no-cache` | false | Bypass cache |
 
-**Output fields:** `answer` (string), `citations` (list of URLs)
+**Output fields:** `answer` (string with inline `[web:N]` markers), `sources` (list of `{ id, url, title, date }`; `id` is the `N` in the markers), `metadata.effort` (pinned effort version that ran, e.g. `low@2026-10-24.0`), `metadata.model`, `metadata.cost_usd` (exact), `metadata.usage` (`input_tokens`, `output_tokens`, `searches`, `url_fetches`). `metadata.incomplete` appears when the run hit its step budget before finishing.
 
 **Example:**
 ```bash
@@ -30,22 +29,25 @@ uv run ~/.agents/skills/research/scripts/research.py ask "what is the latest ver
 
 ---
 
-### `search "<query>"` — Raw search results (~$0.005)
+### `search "<query>" ["<query>" ...]` — Raw search results (~$0.005 per request)
 
-Perplexity Search API. Returns URLs + titles + snippets. Best for broad discovery.
+Perplexity Search API. Returns URLs + titles + snippets, no AI synthesis. Best for broad discovery. Pass up to 5 phrasings in one call: they run independently, are billed as one request, and come back merged with duplicate URLs removed.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--site` / `-s` | none | Filter to specific websites, e.g. `stripe.com` (repeatable) |
 | `--recency` / `-r` | none | Preset window: `hour`, `day`, `week`, `month`, `year` |
-| `--limit` / `-l` | 10 | Max results |
+| `--after` | none | Only results published after date (YYYY-MM-DD) |
+| `--before` | none | Only results published before date (YYYY-MM-DD) |
+| `--country` | none | 2-letter country code to bias results (e.g., `US`, `RO`) |
+| `--limit` / `-l` | 10 (20 with several queries) | Max results in total across all queries (1-20); the API caps the merged list, not each query |
 | `--no-cache` | false | Bypass cache |
 
-**Output fields:** `results` (list of `{ url, title, snippet }`)
+**Output fields:** `results` (list of `{ url, title, snippet, date?, last_updated? }`), `metadata.queries` (number of queries sent)
 
 **Example:**
 ```bash
-uv run ~/.agents/skills/research/scripts/research.py search "shadcn claude code skill"
+uv run ~/.agents/skills/research/scripts/research.py search "shadcn claude code skill" "shadcn official claude code integration" "shadcn CLI agent skill"
 ```
 
 ---
@@ -70,19 +72,19 @@ uv run ~/.agents/skills/research/scripts/research.py google "ANAF microintreprin
 
 ---
 
-### `reason "<query>"` — Deep reasoning (~$0.02)
+### `reason "<query>"` — Multi-step research (~$0.02-0.03)
 
-Perplexity sonar-reasoning-pro. Chain-of-thought reasoning with web search. Use for complex comparisons, evaluations, and multi-step questions.
+Perplexity Agent API at effort `medium`: up to 15 rounds of search, page fetching and reasoning, chaining evidence across many sources. Use for complex comparisons, evaluations, and multi-step questions. Usually finishes within a couple of minutes.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--site` / `-s` | none | Filter to specific websites, e.g. `stripe.com` (repeatable) |
 | `--recency` / `-r` | none | Preset window: `hour`, `day`, `week`, `month`, `year` |
-| `--context` / `-c` | `high` | Search context size: `low`, `medium`, `high` |
-| `--effort` / `-e` | `high` | Reasoning effort: `low`, `medium`, `high` |
+| `--after` | none | Only results published after date (YYYY-MM-DD) |
+| `--before` | none | Only results published before date (YYYY-MM-DD) |
 | `--no-cache` | false | Bypass cache |
 
-**Output fields:** `answer` (string), `citations` (list of URLs)
+**Output fields:** same shape as `ask` (`answer`, `sources`, `metadata.effort`, `metadata.cost_usd`, `metadata.usage`).
 
 **Example:**
 ```bash

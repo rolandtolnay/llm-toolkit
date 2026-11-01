@@ -43,15 +43,15 @@ All CLI commands and Pi `web_search` / `web_fetch` calls are logged to `~/.cache
 | `command` | YouTube CLI subcommand: `search`, `transcript`, or `comments` (youtube entries only) |
 | `query` | The query string or URL |
 | `backend` | `perplexity`, `context7`, `firecrawl`, `scrapecreators`, `yt-dlp`, `mixed`, or `builtin` |
-| `model` | Perplexity model name (if applicable) |
+| `model` | Perplexity effort version for `ask`/`reason` (e.g. `low@2026-10-24.0`), `search` for the Search API (if applicable) |
 | `cache_hit` | Whether the result was served from cache |
 | `success` | Whether the call succeeded |
 | `url` | Request URL (builtin WebFetch only) |
 | `error` | Truncated error message, max 200 chars (builtin only, when `success` is false) |
 | `response_length` | Length of successful response body (builtin only, when `success` is true) |
 | `duration_ms` | API call duration in milliseconds |
-| `usage` | Token usage from Perplexity (prompt_tokens, completion_tokens) |
-| `cost_usd` | Estimated cost (0 for free/cached calls) |
+| `usage` | Perplexity Agent API usage for `ask`/`reason`: `input_tokens`, `output_tokens`, `searches`, `url_fetches` |
+| `cost_usd` | Cost in USD: the exact charge reported by the Perplexity Agent API for `ask`/`reason`, a flat estimate for other paid calls, 0 for free/cached calls |
 | `credits` | Provider credits consumed: Firecrawl for `map`/`scrape`, ScrapeCreators for `google`/`youtube`/`reddit`/`thread`/`shortform` (actual `credits_charged` where the API reports it, otherwise 1 per request) |
 
 Logs are retained for 30 days and automatically cleaned up on the first write of each new day.

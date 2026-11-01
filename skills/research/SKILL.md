@@ -17,7 +17,11 @@ hooks:
 <objective>
 Web research orchestration — find, verify, and structure information from online sources. Scales from quick single-source lookups to comprehensive multi-subagent investigations.
 
-This skill handles **web research only**. Claude handles codebase exploration natively — don't use this skill for questions answerable from the local project.
+The user runs this instead of searching by hand because they expect deeper and more reliable results than a manual search: the answer usually feeds a decision, so a confident claim that is wrong or a well-known option that goes unmentioned costs more than a slower run. Source diversity and verification against primary sources are how the skill earns that trust.
+
+This skill handles **web research only**. Claude handles codebase exploration natively — don't use this skill for questions answerable from the local project. When a request mixes both, explore the codebase with the usual tools, use this skill for the web part, and synthesize the two together.
+
+The user's explicit instructions take precedence over anything in this skill. Ask the user a question only when the missing detail would change which sub-questions to pursue or what counts as done; otherwise state the assumption and proceed.
 </objective>
 
 <cli_cheatsheet>
@@ -26,10 +30,10 @@ Quick syntax reference — all commands on one line each.
 Script path: `~/.agents/skills/research/scripts/research.py`
 
 ```
-uv run <script> ask "<query>"       [--site S] [--recency R] [--context C] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--no-cache]
-uv run <script> search "<query>"    [--site S] [--recency R] [--limit N] [--no-cache]
+uv run <script> ask "<query>"       [--site S] [--recency R] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--no-cache]
+uv run <script> search "<q1>" ["<q2>" ... up to 5] [--site S] [--recency R] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--country CC] [--limit N] [--no-cache]
 uv run <script> google "<query>"    [--region CC] [--recency R] [--page N] [--no-cache]
-uv run <script> reason "<query>"    [--site S] [--recency R] [--context C] [--effort E] [--no-cache]
+uv run <script> reason "<query>"    [--site S] [--recency R] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--no-cache]
 uv run <script> docs <lib> "<query>" [--max-tokens N] [--no-cache]
 uv run <script> map <url>           [--search KW] [--limit N] [--no-cache]
 uv run <script> scrape <url>        [--no-cache]
@@ -40,7 +44,8 @@ uv run <script> prior "<query>"    [--since S] [--limit N] [--min-score N]
 
 --site: a real domain name like stripe.com or pay.uk (NOT topics/phrases). Repeatable.
 --recency: preset window — hour | day | week | month | year. For custom ranges use --after/--before with YYYY-MM-DD dates.
-Cost: search ~$0.005 | ask/reason ~$0.02 | google 1 SC credit | docs free | map/scrape 1 FC credit each | prior free (local)
+Cost: search ~$0.005 per request (one request covers up to 5 queries) | ask ~$0.01 | reason ~$0.02-0.03 | google 1 SC credit | docs free | map/scrape 1 FC credit each | prior free (local)
+`ask` and `reason` run Perplexity Agent API research loops (effort `low` and `medium`): the answer cites sources as `[web:N]`, and `sources` lists each `N` with its URL, title and date. `metadata.cost_usd` is the exact charge.
 
 Also available: WebSearch (free, broad), WebFetch (free, page summary)
 All CLI calls and WebSearch/WebFetch usage are logged to ~/.cache/research/logs/YYYY-MM-DD.jsonl
@@ -66,19 +71,11 @@ Requires: SCRAPECREATORS_API_KEY in ~/.claude/research/.env. ScrapeCreators cred
 </cli_cheatsheet>
 
 <complexity_assessment>
-Before executing, assess query complexity:
+Before executing, decide the mode from the shape of the question:
 
-**QUICK** — Simple factual question, single clear answer expected.
-Examples: "what version of X is latest?", "does Y support Z?", "what's the URL for X?"
-- No subagents. Answer from one or two direct lookups.
+**QUICK** — a single clear answer is expected ("what version of X is latest?", "does Y support Z?", "what's the URL for X?"). Resolve it directly, no subagents.
 
-**STANDARD** — Moderate question, 2-3 information angles.
-Examples: "how do I set up X?", "what tools exist for Y?", "how are people handling X?"
-- 2-3 subagents in parallel.
-
-**DEEP** — Complex multi-faceted question, many angles.
-Examples: "best practices for X + Y", "evaluate X vs Y for our use case", "comprehensive guide to X"
-- 3-4 subagents in parallel.
+**STANDARD / DEEP** — the question has several information angles, asks for a comparison or recommendation, or depends on practitioner experience ("how do I set up X?", "what tools exist for Y?", "evaluate X vs Y for our use case"). Decompose it and run one subagent per sub-question; the number of subagents follows from the decomposition, not from a tier.
 </complexity_assessment>
 
 <quick_mode>
@@ -96,7 +93,7 @@ Analyze the question and generate 2-4 specific sub-questions. For each, assign a
 
 - **Broad discovery**: WebSearch, `research google` (real Google SERP; `--region` for country-specific topics), `research search` (Perplexity ranking). Different engines surface different results — use a second engine when the first pass looks thin.
 - **Official/primary sources**: WebFetch a known page, `research scrape` when pages are JS-heavy or block fetching, `research map` to find pages on a site, `research docs` for library APIs.
-- **Synthesis and reasoning**: `research ask` / `research reason` (Perplexity). Useful as a supplementary triangulation pass — treat output as tertiary evidence, never as the sole source for a claim.
+- **Synthesis and reasoning**: `research ask` / `research reason` (Perplexity Agent API; `reason` chains several rounds of search and page fetching). Useful as a supplementary triangulation pass — treat the answer as tertiary evidence, never as the sole source for a claim; the returned `sources` list is what to verify against.
 - **YouTube**: `youtube search` when watching someone show, explain, or review would help (tutorials, talks, product reviews, "what is X actually like?"); `youtube transcript <url>` when a specific video is already known; `youtube comments <url>` for community corrections under a video you've used as evidence.
 - **Reddit**: `social reddit` when real people's experiences and recommendations matter ("best X for Y", troubleshooting, local knowledge, "has anyone tried X?"). Defaults to all-time search; add `--timeframe` only when recency genuinely matters. Follow up with `social thread <url>` to read a promising thread in full.
 - **Short-form video**: `social shortform` only when trends/viral consumer sentiment is clearly relevant.
@@ -166,7 +163,7 @@ WRITE PROTOCOL:
   level, source URLs. Do NOT paste the full findings body — it lives in the file.
 ```
 
-Include relevant prior-research excerpts (from STEP 2) as verified context to extend. Source depth is not rationed — subagents should pull full transcripts, full threads, and scraped pages whenever that evidence fits the sub-question, and stop when the sub-question is answered with cited evidence, not when a budget runs out.
+Include relevant prior-research excerpts (from STEP 2) as verified context to extend. The DONE WHEN line is the subagent's stopping rule: it stops when that comparison or decision is supported by cited evidence, not when a budget runs out.
 
 The parent owns local baseline/history and synthesis, not a duplicate discovery pass over delegated angles. Fetch shared live data once and pass it to the children.
 
@@ -186,14 +183,9 @@ Then:
    - From community discussion → note it's community-sourced
    - Single unverified source → flag as unverified
 
-3. **Auto-detect output format:**
-   - Comparison questions → table format
-   - "Does X exist?" → lead with yes/no answer
-   - "How do people feel about X?" → include sentiment distribution
-   - Implementation questions → actionable steps with code examples
-   - Tool/library discovery → structured list with links
+3. **Follow up only where it changes the answer.** Spawn one more targeted subagent when a load-bearing claim is still unverified or two sources contradict each other on a point the decision turns on. Otherwise report the uncertainty and stop.
 
-4. **Cite sources** throughout the response. Every non-obvious claim should have a source.
+4. **Write the answer for the decision it feeds.** Lead with the answer or recommendation, then the evidence that supports it, the material caveats and contradictions, and the next action. Drop detail that would not change what the reader does next. Let the format follow the question: a table when options are being compared, a yes/no first when existence is asked, steps with code when the reader will implement, sentiment proportions when the question is how people feel; plain prose otherwise. Every non-obvious claim carries its source.
 
 ## STEP 5: PERSIST
 
@@ -202,7 +194,7 @@ After synthesis, persist the run to disk. **First run `research config`** — if
 The run directory already exists (created in STEP 3) and sub-agents have already written their angle files. Your job here is verification, synthesis, and indexing.
 
 1. **Verify angle files.** Read each expected angle path. For any that are missing or malformed, write the file yourself from the sub-agent's text return and set `write_fallback: true` in the frontmatter.
-2. **Write the synthesis.** Create `<run-dir>/00-synthesis.md` with the decision-oriented style described in the persistence-format reference. Short. Links to angle files for evidence. Do NOT duplicate finding bodies. Tags = union of angle tags + any synthesis-level additions.
+2. **Write the synthesis.** Create `<run-dir>/00-synthesis.md` in the decision-oriented style described in the persistence-format reference: the decision or answer, its confidence, the contradictions that remain, and a link to each angle file for the evidence. Finding bodies live in the angle files, not here. Tags = union of angle tags + any synthesis-level additions.
 3. **Prepend to INDEX.md.** Add a new entry at the top: title + date line, `**Tags:**` line, one bullet per angle file + one for the synthesis, each with a one-line finding.
 4. **Return the user-facing answer.** Can be the synthesis body verbatim or a tighter version of it.
 

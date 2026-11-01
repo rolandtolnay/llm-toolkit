@@ -18,9 +18,9 @@ Usage:
     uv run research.py <command> [options]
 
 Commands:
-    ask       Synthesized answer via Perplexity sonar-pro
-    search    Raw web search results via Perplexity Search API
-    reason    Deep reasoning via Perplexity sonar-reasoning-pro
+    ask       Synthesized answer via Perplexity Agent API (effort: low)
+    search    Raw web search results via Perplexity Search API (up to 5 queries)
+    reason    Multi-step research via Perplexity Agent API (effort: medium)
     docs      Library documentation via Context7
     map       Discover URLs on a site via Firecrawl
     scrape    Extract page content as markdown via Firecrawl
@@ -85,6 +85,18 @@ FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY", "")
 SCRAPECREATORS_API_KEY = os.environ.get("SCRAPECREATORS_API_KEY", "")
 
 PERPLEXITY_BASE_URL = "https://api.perplexity.ai"
+PERPLEXITY_AGENT_URL = f"{PERPLEXITY_BASE_URL}/v1/agent"
+PERPLEXITY_SEARCH_URL = f"{PERPLEXITY_BASE_URL}/search"
+
+# Agent API effort levels: a Perplexity-managed bundle of model, system prompt,
+# step budget, search config and tools. `low` runs up to 5 steps with web search
+# and page fetching; `medium` runs up to 15 steps of multi-hop research.
+PERPLEXITY_EFFORT = {
+    "ask": "low",
+    "reason": "medium",
+}
+SEARCH_MAX_QUERIES = 5  # Search API limit per request (billed as one request)
+SEARCH_MAX_RESULTS = 20  # Search API cap on results per request, shared across all queries
 CONTEXT7_BASE_URL = "https://context7.com/api/v2"
 
 CACHE_DIR = Path.home() / ".cache" / "research"
@@ -100,12 +112,13 @@ CACHE_TTL = {
     "scrape": 12 * 3600,   # 12h
 }
 
-# Timeouts in seconds
+# Timeouts in seconds. Agent API runs are multi-step loops: `low` (ask) runs up
+# to 5 steps, `medium` (reason) up to 15, so they need far longer than a chat call.
 TIMEOUTS = {
-    "ask": 60.0,
+    "ask": 180.0,
     "search": 30.0,
     "google": 30.0,
-    "reason": 90.0,
+    "reason": 600.0,
     "docs": 60.0,
     "map": 30.0,
     "scrape": 30.0,
@@ -140,12 +153,14 @@ SYNTHESIS_SCORE_FACTOR = 0.75
 DEFAULT_PRIOR_MIN_SCORE = 0.15
 MAX_PRIOR_SOURCES = 5
 
-# Approximate per-call cost in USD (0 = free or credit-based)
+# Approximate per-call cost in USD (0 = free or credit-based). Agent API calls
+# (ask/reason) log the exact cost the API reports; these values are the fallback
+# when a response carries no cost.
 COST_USD = {
-    "ask": 0.02,
+    "ask": 0.01,
     "search": 0.005,
     "google": 0.0,
-    "reason": 0.02,
+    "reason": 0.025,
     "docs": 0.0,
     "map": 0.0,
     "scrape": 0.0,
@@ -193,9 +208,14 @@ def _log_call(
     success: bool = True,
     duration_ms: int | None = None,
     usage: dict | None = None,
+    cost_usd: float | None = None,
     error: str | None = None,
 ) -> None:
-    """Append a call record to the daily JSONL log. Never raises."""
+    """Append a call record to the daily JSONL log. Never raises.
+
+    `cost_usd` is the exact cost when the provider reports one; otherwise the
+    COST_USD estimate for the command is used.
+    """
     try:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         log_file = LOG_DIR / f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.jsonl"
@@ -217,7 +237,12 @@ def _log_call(
             entry["duration_ms"] = duration_ms
         if usage:
             entry["usage"] = usage
-        entry["cost_usd"] = COST_USD.get(command, 0.0) if not cache_hit else 0.0
+        if cache_hit:
+            entry["cost_usd"] = 0.0
+        elif cost_usd is not None:
+            entry["cost_usd"] = cost_usd
+        else:
+            entry["cost_usd"] = COST_USD.get(command, 0.0)
         entry["credits"] = CREDIT_COST.get(command, 0) if not cache_hit else 0
         if error:
             entry["error"] = error
@@ -226,37 +251,6 @@ def _log_call(
     except Exception:
         pass  # Logging must never break the main flow
 
-
-# ---------------------------------------------------------------------------
-# System prompts
-# ---------------------------------------------------------------------------
-
-ASK_SYSTEM_PROMPT = (
-    "You are a research assistant. Return a synthesized answer with inline citations.\n\n"
-    "FORMAT:\n"
-    "- Lead with the direct answer\n"
-    "- Support with key findings as bullet points\n"
-    "- Every factual claim must cite its source URL inline\n"
-    "- Include code examples when relevant\n"
-    "- Flag caveats or edge cases\n"
-)
-
-REASON_SYSTEM_PROMPT = (
-    "You are a technical research assistant. Think step-by-step to analyze the query, "
-    "search for authoritative sources, and synthesize actionable findings.\n\n"
-    "RESEARCH APPROACH:\n"
-    "1. Identify the core technical question\n"
-    "2. Search for current best practices from official docs and trusted sources\n"
-    "3. Verify claims across multiple sources when possible\n"
-    "4. Synthesize into practical guidance\n\n"
-    "OUTPUT FORMAT:\n"
-    "- Lead with the recommended approach or answer\n"
-    "- Support with 8-12 key findings as bullet points\n"
-    "- Each finding cites its source inline [Source]\n"
-    "- Include code examples when relevant\n"
-    "- Flag any caveats or edge cases\n"
-    "- End with clear next steps if applicable\n"
-)
 
 # ---------------------------------------------------------------------------
 # Error handling
@@ -442,10 +436,6 @@ def truncate_results(results: list[dict], max_tokens: int) -> tuple[list[dict], 
 # ---------------------------------------------------------------------------
 # Strip <think> tags from reasoning models
 # ---------------------------------------------------------------------------
-
-
-def strip_think_tags(content: str) -> str:
-    return re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -786,146 +776,197 @@ def _validate_recency(recency: str | None) -> None:
         )
 
 
+def _to_api_date(value: str | None, flag: str) -> str | None:
+    """Convert a CLI date (YYYY-MM-DD) to the Perplexity filter format (MM/DD/YYYY)."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        raise ResearchError(
+            ErrorCode.API_ERROR,
+            f"Invalid {flag} value: '{value}'. Expected YYYY-MM-DD (e.g., 2026-03-01).",
+        )
+    return parsed.strftime("%m/%d/%Y")
+
+
+def _search_filters(
+    *,
+    domains: list[str] | None,
+    recency: str | None,
+    after: str | None,
+    before: str | None,
+) -> dict[str, Any]:
+    """Build the filter block shared by the Agent API web_search tool and the Search API."""
+    _validate_recency(recency)
+    filters: dict[str, Any] = {}
+    if domains:
+        filters["search_domain_filter"] = domains
+    if recency:
+        filters["search_recency_filter"] = recency
+    if after:
+        filters["search_after_date_filter"] = _to_api_date(after, "--after")
+    if before:
+        filters["search_before_date_filter"] = _to_api_date(before, "--before")
+    return filters
+
+
 def _perplexity_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {PERPLEXITY_API_KEY}", "Content-Type": "application/json"}
 
 
-def perplexity_ask(
+def _perplexity_post(url: str, payload: dict, *, timeout: float) -> Any:
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(url, headers=_perplexity_headers(), json=payload)
+            resp.raise_for_status()
+            return _safe_json(resp, "Perplexity")
+    except httpx.HTTPStatusError as e:
+        raise _handle_http_error(e, "Perplexity")
+    except httpx.RequestError as e:
+        raise ResearchError(ErrorCode.NETWORK_ERROR, f"Network error connecting to Perplexity: {e}")
+
+
+def parse_agent_response(data: dict) -> dict:
+    """Normalize an Agent API response for an LLM reader.
+
+    The answer text carries inline markers such as [web:3] (or [1] on the fast
+    effort level). Every `search_results` output item shares one id space, so the
+    returned `sources` list is the lookup table for those markers.
+    """
+    status = data.get("status")
+    if status in ("failed", "cancelled"):
+        err = data.get("error") or {}
+        message = err.get("message", str(err)) if isinstance(err, dict) else str(err)
+        raise ResearchError(ErrorCode.API_ERROR, f"Perplexity run {status}: {message}")
+
+    answer_parts: list[str] = []
+    sources: list[dict[str, Any]] = []
+    seen_ids: set[Any] = set()
+    for item in data.get("output", []):
+        kind = item.get("type")
+        if kind == "message":
+            for part in item.get("content", []):
+                if part.get("type") == "output_text" and part.get("text"):
+                    answer_parts.append(part["text"])
+        elif kind == "search_results":
+            for r in item.get("results", []):
+                rid = r.get("id")
+                if rid in seen_ids:
+                    continue
+                seen_ids.add(rid)
+                source: dict[str, Any] = {"id": rid, "url": r.get("url", ""), "title": r.get("title", "")}
+                if r.get("date"):
+                    source["date"] = r["date"]
+                sources.append(source)
+
+    sources.sort(key=lambda s: (s["id"] is None, s["id"]))
+
+    usage = data.get("usage") or {}
+    cost = (usage.get("cost") or {}).get("total_cost")
+    tool_calls = usage.get("tool_calls_details") or {}
+    compact_usage: dict[str, Any] = {
+        "input_tokens": usage.get("input_tokens"),
+        "output_tokens": usage.get("output_tokens"),
+        "searches": (tool_calls.get("search_web") or {}).get("invocation", 0),
+        "url_fetches": (tool_calls.get("fetch_url") or {}).get("invocation", 0),
+    }
+
+    result: dict[str, Any] = {
+        "answer": "\n\n".join(answer_parts).strip(),
+        "sources": sources,
+        "effort": data.get("effort"),
+        "model": data.get("model"),
+        "cost_usd": cost,
+        "usage": compact_usage,
+    }
+    if status == "incomplete":
+        result["incomplete"] = data.get("incomplete_details")
+    return result
+
+
+def perplexity_agent(
+    command: str,
     query: str,
     *,
     domains: list[str] | None = None,
     recency: str | None = None,
-    context: str = "high",
     after: str | None = None,
     before: str | None = None,
 ) -> dict:
-    """Perplexity sonar-pro chat completion."""
+    """Run a Perplexity Agent API request at the effort level configured for `command`.
+
+    No `instructions` are sent: that field replaces the effort level's tuned system
+    prompt (query construction, citation discipline) rather than appending to it.
+    Search constraints go on the web_search tool, which merges with the effort
+    level's own tool settings.
+    """
     _check_perplexity_key()
-    _validate_recency(recency)
+    filters = _search_filters(domains=domains, recency=recency, after=after, before=before)
 
     payload: dict[str, Any] = {
-        "model": "sonar-pro",
-        "messages": [
-            {"role": "system", "content": ASK_SYSTEM_PROMPT},
-            {"role": "user", "content": query},
-        ],
-        "web_search_options": {"search_context_size": context},
+        "effort": PERPLEXITY_EFFORT[command],
+        "input": query,
     }
-    if domains:
-        payload["search_domain_filter"] = domains
-    if recency:
-        payload["search_recency_filter"] = recency
-    if after:
-        payload["search_after_date_filter"] = after
-    if before:
-        payload["search_before_date_filter"] = before
+    if filters:
+        payload["tools"] = [{"type": "web_search", "filters": filters}]
 
-    try:
-        with httpx.Client(timeout=TIMEOUTS["ask"]) as client:
-            resp = client.post(f"{PERPLEXITY_BASE_URL}/chat/completions", headers=_perplexity_headers(), json=payload)
-            resp.raise_for_status()
-            data = _safe_json(resp, "Perplexity")
-    except httpx.HTTPStatusError as e:
-        raise _handle_http_error(e, "Perplexity")
-    except httpx.RequestError as e:
-        raise ResearchError(ErrorCode.NETWORK_ERROR, f"Network error connecting to Perplexity: {e}")
-
-    # Extract answer and citations
-    answer = ""
-    choices = data.get("choices", [])
-    if choices:
-        answer = choices[0].get("message", {}).get("content", "")
-    citations = data.get("citations", [])
-
-    return {"answer": answer, "citations": citations, "model": "sonar-pro", "usage": data.get("usage", {})}
+    data = _perplexity_post(PERPLEXITY_AGENT_URL, payload, timeout=TIMEOUTS[command])
+    return parse_agent_response(data)
 
 
 def perplexity_search(
-    query: str,
+    queries: list[str],
     *,
     domains: list[str] | None = None,
     recency: str | None = None,
+    after: str | None = None,
+    before: str | None = None,
+    country: str | None = None,
     limit: int = 10,
 ) -> dict:
-    """Perplexity Search API — raw search results."""
-    _check_perplexity_key()
-    _validate_recency(recency)
+    """Perplexity Search API — raw ranked results for up to SEARCH_MAX_QUERIES queries.
 
-    payload: dict[str, Any] = {"query": query}
-    if domains:
-        payload["search_domain_filter"] = domains
-    if recency:
-        payload["search_recency_filter"] = recency
+    Multiple queries are processed independently and billed as one request; results
+    are merged and deduplicated by URL. `limit` caps the merged list, not each query.
+    """
+    _check_perplexity_key()
+    if not queries:
+        raise ResearchError(ErrorCode.API_ERROR, "At least one search query is required.")
+    if len(queries) > SEARCH_MAX_QUERIES:
+        raise ResearchError(
+            ErrorCode.API_ERROR,
+            f"Too many queries ({len(queries)}). The Search API accepts at most {SEARCH_MAX_QUERIES} per request.",
+        )
+
+    payload: dict[str, Any] = {"query": queries[0] if len(queries) == 1 else queries}
+    payload.update(_search_filters(domains=domains, recency=recency, after=after, before=before))
+    if country:
+        payload["country"] = country.upper()
     if limit != 10:
         payload["max_results"] = limit
 
-    try:
-        with httpx.Client(timeout=TIMEOUTS["search"]) as client:
-            resp = client.post(f"{PERPLEXITY_BASE_URL}/search", headers=_perplexity_headers(), json=payload)
-            resp.raise_for_status()
-            data = _safe_json(resp, "Perplexity")
-    except httpx.HTTPStatusError as e:
-        raise _handle_http_error(e, "Perplexity")
-    except httpx.RequestError as e:
-        raise ResearchError(ErrorCode.NETWORK_ERROR, f"Network error connecting to Perplexity: {e}")
+    data = _perplexity_post(PERPLEXITY_SEARCH_URL, payload, timeout=TIMEOUTS["search"])
 
-    # Normalize results
-    results = []
+    results: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
     for item in data.get("results", []):
-        results.append({
-            "url": item.get("url", ""),
+        url = item.get("url", "")
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        entry: dict[str, Any] = {
+            "url": url,
             "title": item.get("title", ""),
             "snippet": item.get("snippet", item.get("content", "")),
-        })
+        }
+        if item.get("date"):
+            entry["date"] = item["date"]
+        if item.get("last_updated"):
+            entry["last_updated"] = item["last_updated"]
+        results.append(entry)
 
     return {"results": results}
-
-
-def perplexity_reason(
-    query: str,
-    *,
-    domains: list[str] | None = None,
-    recency: str | None = None,
-    context: str = "high",
-    effort: str = "high",
-) -> dict:
-    """Perplexity sonar-reasoning-pro chat completion."""
-    _check_perplexity_key()
-    _validate_recency(recency)
-
-    payload: dict[str, Any] = {
-        "model": "sonar-reasoning-pro",
-        "messages": [
-            {"role": "system", "content": REASON_SYSTEM_PROMPT},
-            {"role": "user", "content": query},
-        ],
-        "web_search_options": {"search_context_size": context},
-        "reasoning_effort": effort,
-    }
-    if domains:
-        payload["search_domain_filter"] = domains
-    if recency:
-        payload["search_recency_filter"] = recency
-
-    try:
-        with httpx.Client(timeout=TIMEOUTS["reason"]) as client:
-            resp = client.post(f"{PERPLEXITY_BASE_URL}/chat/completions", headers=_perplexity_headers(), json=payload)
-            resp.raise_for_status()
-            data = _safe_json(resp, "Perplexity")
-    except httpx.HTTPStatusError as e:
-        raise _handle_http_error(e, "Perplexity")
-    except httpx.RequestError as e:
-        raise ResearchError(ErrorCode.NETWORK_ERROR, f"Network error connecting to Perplexity: {e}")
-
-    # Extract and clean answer
-    answer = ""
-    choices = data.get("choices", [])
-    if choices:
-        raw = choices[0].get("message", {}).get("content", "")
-        answer = strip_think_tags(raw)
-    citations = data.get("citations", [])
-
-    return {"answer": answer, "citations": citations, "model": "sonar-reasoning-pro", "usage": data.get("usage", {})}
 
 
 # ---------------------------------------------------------------------------
@@ -1228,85 +1269,132 @@ def _validate_sites(sites: list[str] | None) -> list[str] | None:
     return sites
 
 
-@app.command()
-def ask(
-    query: str = typer.Argument(..., help="Question to answer"),
-    site: Optional[list[str]] = typer.Option(None, "--site", "-s", help="Filter to specific sites (e.g., stripe.com)"),
-    recency: Optional[str] = typer.Option(None, "--recency", "-r", help="Preset window: hour, day, week, month, year"),
-    context: str = typer.Option("high", "--context", "-c", help="Search context size: low, medium, high"),
-    after: Optional[str] = typer.Option(None, "--after", help="Only results after date (YYYY-MM-DD)"),
-    before: Optional[str] = typer.Option(None, "--before", help="Only results before date (YYYY-MM-DD)"),
-    no_cache: bool = typer.Option(False, "--no-cache", help="Bypass cache"),
+def _run_agent_command(
+    cmd: str,
+    query: str,
+    *,
+    site: list[str] | None,
+    recency: str | None,
+    after: str | None,
+    before: str | None,
+    no_cache: bool,
 ) -> None:
-    """Synthesized answer via Perplexity sonar-pro (~$0.02/query)."""
-    cmd = "ask"
-    cache_parts = [query, str(site), str(recency), context, str(after), str(before)]
+    """Shared driver for the Agent API commands (ask, reason): cache, call, log, emit."""
+    effort = PERPLEXITY_EFFORT[cmd]
+    cache_parts = [query, str(site), str(recency), str(after), str(before), effort]
 
     if not no_cache:
         cached = cache_get(cmd, *cache_parts)
         if cached is not None:
             cached["metadata"]["cache_hit"] = True
-            _log_call(cmd, query, backend="perplexity", model="sonar-pro", cache_hit=True)
+            _log_call(cmd, query, backend="perplexity", model=effort, cache_hit=True)
             emit(cached)
             return
 
     try:
         t0 = time.monotonic()
-        result = perplexity_ask(query, domains=_validate_sites(site), recency=recency, context=context, after=after, before=before)
+        result = perplexity_agent(
+            cmd, query, domains=_validate_sites(site), recency=recency, after=after, before=before
+        )
         duration_ms = int((time.monotonic() - t0) * 1000)
+        metadata: dict[str, Any] = {
+            "backend": "perplexity",
+            "effort": result["effort"] or effort,
+            "model": result["model"],
+            "cache_hit": False,
+            "cost_usd": result["cost_usd"],
+            "usage": result["usage"],
+        }
+        if result.get("incomplete"):
+            metadata["incomplete"] = result["incomplete"]
         response = output_success(
             cmd,
             query,
-            metadata={"backend": "perplexity", "model": result["model"], "cache_hit": False, "usage": result.get("usage")},
+            metadata=metadata,
             answer=result["answer"],
-            citations=result["citations"],
+            sources=result["sources"],
         )
         if not no_cache:
             cache_set(cmd, *cache_parts, value=response)
-        _log_call(cmd, query, backend="perplexity", model=result["model"], duration_ms=duration_ms, usage=result.get("usage"))
+        _log_call(
+            cmd,
+            query,
+            backend="perplexity",
+            model=metadata["effort"],
+            duration_ms=duration_ms,
+            usage=result["usage"],
+            cost_usd=result["cost_usd"],
+        )
         emit(response)
     except ResearchError as e:
-        _log_call(cmd, query, backend="perplexity", success=False, error=str(e))
+        _log_call(cmd, query, backend="perplexity", model=effort, success=False, error=str(e))
         emit(output_error(cmd, e))
         raise typer.Exit(code=1)
 
 
 @app.command()
-def search(
-    query: str = typer.Argument(..., help="Search query"),
+def ask(
+    query: str = typer.Argument(..., help="Question to answer"),
     site: Optional[list[str]] = typer.Option(None, "--site", "-s", help="Filter to specific sites (e.g., stripe.com)"),
     recency: Optional[str] = typer.Option(None, "--recency", "-r", help="Preset window: hour, day, week, month, year"),
-    limit: int = typer.Option(10, "--limit", "-l", help="Max results"),
+    after: Optional[str] = typer.Option(None, "--after", help="Only results published after date (YYYY-MM-DD)"),
+    before: Optional[str] = typer.Option(None, "--before", help="Only results published before date (YYYY-MM-DD)"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Bypass cache"),
 ) -> None:
-    """Raw web search results via Perplexity Search API (~$0.005/query)."""
+    """Synthesized answer via Perplexity Agent API, effort `low` (~$0.01/query)."""
+    _run_agent_command("ask", query, site=site, recency=recency, after=after, before=before, no_cache=no_cache)
+
+
+@app.command()
+def search(
+    query: list[str] = typer.Argument(..., help="Search query. Pass up to 5 phrasings; they run in one request and are billed once."),
+    site: Optional[list[str]] = typer.Option(None, "--site", "-s", help="Filter to specific sites (e.g., stripe.com)"),
+    recency: Optional[str] = typer.Option(None, "--recency", "-r", help="Preset window: hour, day, week, month, year"),
+    after: Optional[str] = typer.Option(None, "--after", help="Only results published after date (YYYY-MM-DD)"),
+    before: Optional[str] = typer.Option(None, "--before", help="Only results published before date (YYYY-MM-DD)"),
+    country: Optional[str] = typer.Option(None, "--country", help="2-letter country code to bias results (e.g., US, RO)"),
+    limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Max results in total across all queries (1-20). Default 10 for one query, 20 for several."),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Bypass cache"),
+) -> None:
+    """Raw web search results via Perplexity Search API (~$0.005/request, up to 5 queries)."""
     cmd = "search"
-    cache_parts = [query, str(site), str(recency), str(limit)]
+    if limit is None:
+        limit = 10 if len(query) == 1 else SEARCH_MAX_RESULTS
+    query_label: Any = query[0] if len(query) == 1 else query
+    cache_parts = [" | ".join(query), str(site), str(recency), str(after), str(before), str(country), str(limit)]
 
     if not no_cache:
         cached = cache_get(cmd, *cache_parts)
         if cached is not None:
             cached["metadata"]["cache_hit"] = True
-            _log_call(cmd, query, backend="perplexity", model="search", cache_hit=True)
+            _log_call(cmd, cache_parts[0], backend="perplexity", model="search", cache_hit=True)
             emit(cached)
             return
 
     try:
         t0 = time.monotonic()
-        result = perplexity_search(query, domains=_validate_sites(site), recency=recency, limit=limit)
+        result = perplexity_search(
+            query,
+            domains=_validate_sites(site),
+            recency=recency,
+            after=after,
+            before=before,
+            country=country,
+            limit=limit,
+        )
         duration_ms = int((time.monotonic() - t0) * 1000)
         response = output_success(
             cmd,
-            query,
-            metadata={"backend": "perplexity", "model": "search", "cache_hit": False},
+            query_label,
+            metadata={"backend": "perplexity", "model": "search", "queries": len(query), "cache_hit": False},
             results=result["results"],
         )
         if not no_cache:
             cache_set(cmd, *cache_parts, value=response)
-        _log_call(cmd, query, backend="perplexity", model="search", duration_ms=duration_ms)
+        _log_call(cmd, cache_parts[0], backend="perplexity", model="search", duration_ms=duration_ms)
         emit(response)
     except ResearchError as e:
-        _log_call(cmd, query, backend="perplexity", success=False, error=str(e))
+        _log_call(cmd, cache_parts[0], backend="perplexity", success=False, error=str(e))
         emit(output_error(cmd, e))
         raise typer.Exit(code=1)
 
@@ -1360,44 +1448,15 @@ def google(
 
 @app.command()
 def reason(
-    query: str = typer.Argument(..., help="Complex question requiring reasoning"),
+    query: str = typer.Argument(..., help="Complex question requiring multi-step research"),
     site: Optional[list[str]] = typer.Option(None, "--site", "-s", help="Filter to specific sites (e.g., stripe.com)"),
     recency: Optional[str] = typer.Option(None, "--recency", "-r", help="Preset window: hour, day, week, month, year"),
-    context: str = typer.Option("high", "--context", "-c", help="Search context size: low, medium, high"),
-    effort: str = typer.Option("high", "--effort", "-e", help="Reasoning effort: low, medium, high"),
+    after: Optional[str] = typer.Option(None, "--after", help="Only results published after date (YYYY-MM-DD)"),
+    before: Optional[str] = typer.Option(None, "--before", help="Only results published before date (YYYY-MM-DD)"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Bypass cache"),
 ) -> None:
-    """Deep reasoning via Perplexity sonar-reasoning-pro (~$0.02/query)."""
-    cmd = "reason"
-    cache_parts = [query, str(site), str(recency), context, effort]
-
-    if not no_cache:
-        cached = cache_get(cmd, *cache_parts)
-        if cached is not None:
-            cached["metadata"]["cache_hit"] = True
-            _log_call(cmd, query, backend="perplexity", model="sonar-reasoning-pro", cache_hit=True)
-            emit(cached)
-            return
-
-    try:
-        t0 = time.monotonic()
-        result = perplexity_reason(query, domains=_validate_sites(site), recency=recency, context=context, effort=effort)
-        duration_ms = int((time.monotonic() - t0) * 1000)
-        response = output_success(
-            cmd,
-            query,
-            metadata={"backend": "perplexity", "model": result["model"], "cache_hit": False, "usage": result.get("usage")},
-            answer=result["answer"],
-            citations=result["citations"],
-        )
-        if not no_cache:
-            cache_set(cmd, *cache_parts, value=response)
-        _log_call(cmd, query, backend="perplexity", model=result["model"], duration_ms=duration_ms, usage=result.get("usage"))
-        emit(response)
-    except ResearchError as e:
-        _log_call(cmd, query, backend="perplexity", success=False, error=str(e))
-        emit(output_error(cmd, e))
-        raise typer.Exit(code=1)
+    """Multi-step research via Perplexity Agent API, effort `medium` (~$0.02-0.03/query)."""
+    _run_agent_command("reason", query, site=site, recency=recency, after=after, before=before, no_cache=no_cache)
 
 
 @app.command()
