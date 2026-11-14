@@ -1,12 +1,12 @@
 # Interview Calibration
 
-Load this before composing Stage 1 questions. Do NOT use a generic template — generate per-category questions using the frame below, calibrated against the examples.
+Load this before composing Stage 1 questions. Generate the questions for this category from the frame below, calibrated against the examples. A fixed list reused across categories misses what makes each one hard to buy.
 
 ## The frame
 
 Compose questions as if you were:
 
-> **A trusted friend who has owned this category of product through multiple generations and also happens to understand how they're designed.** Your job is to ask the 4-6 questions that will most change the recommendation — questions that surface what this person actually needs vs. what they think they need. Skip questions whose answers don't change the shortlist. Ask the questions someone would only know to ask after getting it wrong once before.
+> **A trusted friend who has owned this category of product through multiple generations and also happens to understand how they're designed.** Your job is to ask the questions that will most change the recommendation — questions that surface what this person actually needs vs. what they think they need. Skip questions whose answers don't change the shortlist. Ask the questions someone would only know to ask after getting it wrong once before.
 
 Two load-bearing clauses in that frame:
 - *"questions that will most change the recommendation"* — filters out ceremonial questions
@@ -14,9 +14,9 @@ Two load-bearing clauses in that frame:
 
 ## Rules
 
-- **Every question must plausibly change the shortlist.** If the answer wouldn't move a product on or off the list, drop the question. Fewer, sharper questions beat a longer set with padding.
-- **Skip budget unless the user likely has a hard cap.** The pipeline already surfaces budget-to-premium tiers. Budget questions are only worth asking when a hard ceiling would exclude entire tiers (e.g., "strollers range from 200 to 2000 EUR — is any of that off the table?").
-- **Always allow a "help me decide" escape** on subjective questions. Users often don't know their own preferences for categories they haven't owned before.
+- **The count follows the category.** A toaster may need three questions, a mattress six. Drop any question whose answer wouldn't move a product on or off the list.
+- **Close with one budget question anchored on real prices.** Look up the category's price bands in Romania first, then show them: "Toasters here run about 100 RON for a basic one, about 350 for a good mid-range one, and 700 and up for premium. What is the most you would want to pay?" Offer the bands as options ("up to about 150", "up to about 400", "up to about 800"), plus "show me the spread". People cannot name a budget in the abstract, and "any hard cap?" gets a truthful "no" from someone who would never pay the premium price. The upper number of the chosen band is the ceiling for every tier; "show me the spread" means no ceiling.
+- **Offer a "help me decide" option** on subjective questions. Users often don't know their own preferences for categories they haven't owned before.
 - **Ask concrete situations, not abstract priorities.** "What have you replaced that you hated?" beats "rank reliability vs price vs features".
 - **Ask about past experience with this category.** First-time buyers and replacement buyers need very different questions.
 - **Skip questions your next subagent will answer.** Don't ask "what brands are reliable" — that's what research is for.
@@ -27,7 +27,7 @@ Two load-bearing clauses in that frame:
 |---|---|
 | "What features matter to you?" | Meaningless without category knowledge — the user doesn't know yet |
 | "Rank reliability, performance, price, aesthetics" | People can't accurately rank in the abstract |
-| "What's your budget?" as Q1 | Anchors the whole conversation to price before needs |
+| "What's your budget?" as Q1, or without prices | Anchors the conversation to price before needs; unanchored, the answer is a guess |
 | "Do you want good quality?" | Ceremonial — no one says no |
 | "What brands do you like?" | Shifts interview into research territory |
 | "Do you care about energy efficiency?" | Too abstract; ask about usage patterns that imply it instead |
@@ -46,9 +46,7 @@ Three categories with strong question sets. Do not copy these verbatim for other
    - *Why this:* previous-ownership data is the highest-signal input for "what you'll actually care about"
 4. **Quietness sensitivity** — "How close is the microwave to where people sleep or work? Is a quiet beep-pattern important?"
    - *Why this:* open-plan apartments make microwave noise a real issue; cheap units are notoriously loud
-5. **Interior vs exterior priorities** — "Do you care more about how it looks or how long it lasts? Many quiet, durable ones are a bit uglier; many sleek ones die after 3-4 years."
-   - *Why this:* forces an explicit tradeoff rather than leaving it to research guess
-6. *(Only if the category has a hard-cap risk)* **Budget** — "Microwaves range from 50 to 500+ EUR — is any of that range off the table for you?"
+5. **Budget, anchored** — "Microwaves here run about 300 RON for a basic one, about 900 for a quiet, durable mid-range one, and 1,800 and up with grill or convection. What is the most you would want to pay?"
 
 ### Example 2: Mattress
 
@@ -64,6 +62,7 @@ Three categories with strong question sets. Do not copy these verbatim for other
    - *Why this:* some mattresses void warranty if slat gap is too wide; constraint you can't fix post-purchase
 6. **Trial/return policy tolerance** — "How long a home-trial window would make you comfortable deciding? 30 days? 100?"
    - *Why this:* in EU this varies dramatically by retailer; affects shortlist ordering
+7. **Budget, anchored** — same form as the microwave example, with the mattress price bands found for Romania.
 
 ### Example 3: Vacuum
 
@@ -77,13 +76,13 @@ Three categories with strong question sets. Do not copy these verbatim for other
    - *Why this:* stick vacuums that need wall-mount charging are useless if there's no wall to mount to
 5. **How often do you vacuum now** — "Daily, weekly, when-you-notice? Would a robot change that, or do you actually want to do it yourself?"
    - *Why this:* different use pattern, different category entirely
-6. *(Only if the category has a hard-cap risk)* **Budget** — "Vacuums range from 100 to 1000+ EUR — is any of that off the table?"
+6. **Budget, anchored** — same form, with the vacuum price bands found for Romania.
 
 ## Second-round triggers
 
-Fire a follow-up round via AskUserQuestion only when the first round's answers would lead to a wrong shortlist. Examples:
+Ask a follow-up round only when the first round's answers would lead to a wrong shortlist. Examples:
 
 1. **Contradictory constraints** — e.g., "quiet" + "cheap" + "powerful" for a blender. Ask user to rank the top 2 of the three.
 2. **Critical category variable missed** — orchestrator judgment; rare. For a dishwasher, if built-in vs freestanding wasn't captured. For a camera, if the primary use case (stills vs video) wasn't captured.
 
-Do NOT fire a second round for mild gaps. Preliminary phase research can fill those in. A second round is expensive in attention budget — use it only when proceeding would produce a materially wrong result.
+Preliminary research can fill mild gaps, and a second round costs the user attention they are short of.

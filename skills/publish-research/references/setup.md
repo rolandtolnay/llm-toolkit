@@ -60,7 +60,7 @@ Choose one `images.mode`. The example profile defaults to `placeholder` so the f
 
 ### Reference pages
 
-- `referencePage`: Optional project-relative path to a page already validated against this template. It may guide cross-page consistency.
+- `referencePage`: Optional project-relative path to a page already validated against this template. It may guide editorial consistency, such as title style and footer wording. Structure comes from the bundled template.
 - `mockupPath`: Optional project-relative design mockup. It is secondary to the bundled template unless the user explicitly decides otherwise.
 
 Do not point either field at a private checkout path that will not exist for other users.
@@ -131,12 +131,13 @@ Never store access tokens, service-account JSON, passwords, or private keys in `
 
 ## 4. Optional tools
 
-- A fresh-context subagent or reviewer is needed for the documented content and structure checks.
+- A fresh-context subagent or reviewer is needed for the documented content check.
+- Python 3 runs the bundled structure check, `scripts/check-page.py`.
 - `agent-browser` is recommended for desktop and mobile verification.
 - `curl` and `file` support remote image validation.
 - Python 3 can serve the static output locally with `python3 -m http.server`.
 - A provider CLI is needed only when `deployment.command` uses it.
-- The `humanizer` skill improves the editorial pass when installed, but the publishing skill includes the same preserve-facts boundary.
+- The `humanizer` skill improves the reader copy when installed, but the publishing skill includes the same preserve-facts boundary.
 
 ## 5. Verify customization after installation
 

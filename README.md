@@ -144,7 +144,7 @@ Check the installed research CLI's `config` command before a real run. It report
 
 This is for buying one thing well, whether that is a mattress, microwave, vacuum, or another household or personal product. The workflow asks only about constraints that could change the shortlist. It then researches the category before comparing models, so the final criteria come from evidence instead of mirroring the user's first assumptions.
 
-Owner reports, expert reviews, and retailer data are gathered separately. Product quality and current stock also stay separate: an ambiguous retailer page adds a verification warning, but it does not quietly replace the better product with whatever happens to be available.
+Owner reports, expert reviews, and retailer data are gathered separately. One budget question, anchored on real price bands, sets a ceiling that every pick stays under. Once the picks are chosen, a final sweep reads the seller pages for exactly those models to confirm price and stock. A page that cannot be read adds a plain warning and leaves the pick in place. A pick that is out of stock everywhere, or priced above the ceiling, is replaced by its runner-up, and the report says so.
 
 A completed run looks like this:
 
@@ -157,6 +157,7 @@ A completed run looks like this:
 ├── 04-owner-voice.md
 ├── 05-expert-voice.md
 ├── 06-retailer-voice.md
+├── 07-finalist-sweep.md
 └── aspects/
 ```
 
@@ -191,14 +192,14 @@ Use the same env files as [Research](#research). Missing optional sources reduce
 
 The skill comes with the article template, shared CSS, a generic navigation script, and a separate article script for sites that block inline JavaScript. The original version published to one Firebase site for one reader. This version has no built-in domain, Firebase project, personal name, or deployment command. Those values live in `.publish-research.json` inside the target site.
 
-The normal flow is local first: generate the article, run factual and structural reviews, humanize the editorial copy without changing specs or prices, add verified product images or placeholders, update the manifest, and inspect desktop and mobile layouts. Deployment runs only when the site profile contains a command and you confirm that exact external write.
+The normal flow is local first: write the reader copy and humanize it without changing specs or prices, generate the article, run the bundled structure check and a fresh-context factual review, add verified product images or placeholders, update the manifest, and inspect desktop and mobile layouts. Deployment runs only when the site profile contains a command and you confirm that exact external write.
 
 This is meant for the output shape produced by `product-research`, not arbitrary Markdown. The bundled design is opinionated, remote product images can disappear, and good visual verification still benefits from `agent-browser`. Local image mode is more durable but leaves image licensing and repository size with the publisher.
 
 <details>
 <summary><strong>Publish Research setup and site customization</strong></summary>
 
-Install the complete `publish-research` directory so its `assets/` and `references/` come with the skill. Then copy [`site-config.example.json`](skills/publish-research/references/site-config.example.json) to `.publish-research.json` in the target site's project root. The example leaves the public URL, footer disclosure, sign-off, and deployment unset, and starts with image placeholders.
+Install the complete `publish-research` directory so its `assets/`, `references/` and `scripts/` come with the skill. Then copy [`site-config.example.json`](skills/publish-research/references/site-config.example.json) to `.publish-research.json` in the target site's project root. The example leaves the public URL, footer disclosure, sign-off, and deployment unset, and starts with image placeholders.
 
 The profile asks for:
 

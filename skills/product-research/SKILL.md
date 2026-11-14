@@ -1,53 +1,51 @@
 ---
 name: product-research
 disable-model-invocation: true
-description: Run staged buying-decision research for a household or personal product (microwave, mattress, vacuum, dishwasher, appliance, furniture, electronics). Use when picking what to buy and wanting ranked picks with tradeoffs, not just information.
+description: Run staged buying-decision research for one household or personal product and produce ranked picks with tradeoffs. Use when deciding what to buy, not when asking how something works.
 ---
 
 <objective>
-Produce a trustworthy buying decision for a single product category through a staged pipeline that resists SEO/affiliate noise. The output includes a comprehensive standalone masterclass document that educates the user on all dimensions of the category, and a synthesis with ranked recommendations (primary + runner-up per tier) grounded in owner voice, expert voice, and current EU/RO retailer availability.
+Produce a buying decision for one product category that the user can act on without redoing the research. The result often becomes a page for someone else to read, through `/publish-research`. The research has to resist SEO and affiliate noise, and every pick has to be something a buyer in Romania can order today at a price this household would pay.
 
-Run persists to `~/Documents/Research/` in the same format as the generic research skill, with a product-specific synthesis structure.
+Two documents carry the result:
+
+- A masterclass (`02-masterclass.md`) that teaches every dimension of the category well enough that the reader could judge products alone.
+- A synthesis (`00-synthesis.md`) with ranked picks, a primary and a runner-up per tier, grounded in owner voice, expert voice and what is sold now.
+
+The run is done when:
+
+- every pick sits inside the user's hard limits and budget ceiling (the one exception is in `<edge_cases>`), with a seller link and a price read from the seller's page during this run, or a plain note that it could not be confirmed
+- the masterclass covers every discovered aspect, not only the ones the user asked about
+- every model that any stage evaluated appears in the synthesis's candidate table with a one-line verdict
+- blocked sources, thin evidence and unconfirmed stock are stated in the synthesis and in the closing message
+- the run is persisted and `INDEX.md` has its entry
 </objective>
 
-<core_rules>
-1. **One product per run.** If the invocation mentions multiple products, push back — do not silently pick one.
-2. **Research-derived criteria supersede user priorities.** User priorities are input signal + tiebreaker only. Contradictions with 2+ quality sources become master-class teaching moments.
-3. **No `--recency` flags on CLI calls.** Mature products have valid older reviews. Use verification scrape instead.
-4. **Availability tiering:** Green (RO retailer) → full recommend. Yellow (EU retailer, Amazon DE / Bol.nl / etc.) → recommend, flag import. Red (US-only / non-EU) → exclude.
-5. **Never invent a tier** to fill a slot. Substitute the tier name with a use-case axis, or omit the tier.
-6. **Scrape-only verification.** Flag recommendations — never rewrite them based on verification result.
-7. **Stage order is sequential.** Preliminary (Stage 2) — including aspect discovery, deep-dives, and masterclass assembly — must finish before Product phase (Stage 3) spawns. Product subagents consume the ranked criteria extracted from the masterclass.
-</core_rules>
+<rules>
+1. **One product per run.** If the request names several, ask which to start with and suggest a fresh session for the next, so each gets its own depth and its own research folder.
+2. **Research overrules preferences. It does not overrule hard limits.** Stated priorities are an input signal and a tiebreaker. A hard limit (budget ceiling, physical constraint, explicit dealbreaker) bounds the picks. When research suggests a limit is costing the user something, say so in the synthesis and keep the picks inside it.
+3. **No recency filters on research calls.** Good products are often three or four years old and their best reviews are too. Current price and stock come from the finalist sweep.
+4. **Availability tiers.** Green: a Romanian retailer, recommend fully. Yellow: an EU retailer that ships to Romania (Amazon DE, Bol.nl, a brand's EU store), recommend with the landed cost, price plus shipping. Red: outside the EU (UK, US), leave out. The exception is a thin market where nothing in the EU fills a tier: then include the import and state duty, VAT, shipping, plug and warranty caveats.
+5. **Never invent a tier to fill a slot.** Rename the tier to a use-case axis ("best for small spaces") or omit it.
+6. **Stages run in order.** Each consumes the previous one's output: the candidate stage needs the ranked criteria from the masterclass, and the finalist sweep needs the picks.
+7. **Running this skill authorizes its research spending.** The paid search, scrape and social calls a run makes are expected; do not ask for cost confirmation.
+8. **The user's instructions for this run win over this skill.** If they ask to skip the interview or want only the masterclass, do that. When asked to go faster, cut scope (fewer aspects, no product stages) and keep the source depth. A masterclass built from Perplexity answers alone does not teach much; its value comes from owner threads, long video reviews and expert sources.
+</rules>
 
 <shared_infrastructure>
-This skill reuses the research skill's infrastructure via cross-reference. Do not duplicate these:
+This skill reuses the `research` skill's infrastructure. Install the two side by side; the research skill is then at `../research/` relative to this skill's directory.
 
-- **CLI commands** — see `../research/references/cli-reference.md` for `ask`, `search`, `reason`, `scrape`, `docs`, `youtube`, `social reddit` invocations
-- **Angle file frontmatter + run directory layout** — see `../research/references/persistence-format.md`
-- **Subagent spawning** — use the `Task` tool with `subagent_type: "research-subagent"` (has API logging hooks). Same pattern as the research skill.
-- **Output directory** — `~/Documents/Research/`
+- **CLI commands:** `references/cli-reference.md` in the research skill.
+- **Angle-file frontmatter, run directory layout, INDEX.md format:** `references/persistence-format.md` in the research skill.
+- **Subagents:** spawn with the `research-subagent` agent type where the harness has it; it logs API usage and already carries a sourcing policy (Perplexity answers are leads, failures are reported, claims are cited). Otherwise use a general subagent.
+- **Run directory:** create `~/Documents/Research/YYYY-MM-DD-<category>-product-research/` at the start. Every file name in this skill is relative to it.
 
-Differences from generic research:
-- Staged pipeline (5 sequential stages) instead of single parallel spawn
-- Slug convention: `YYYY-MM-DD-<category>-product-research` (e.g., `2026-04-23-microwave-product-research`)
-- Synthesis file uses product-specific structure (see `references/synthesis-template.md`)
+Subagents write their own files. Give each one the absolute path of its file. If one returns without writing it, write the file from the returned text and set `write_fallback: true`.
 </shared_infrastructure>
 
-<trigger_and_routing>
-This skill runs only via explicit invocation (`/product-research`).
-
-If the invocation message mentions multiple products, respond:
-
-> Product research runs one product at a time so we can go deep on criteria, market, and availability. You mentioned [X] and [Y] — which one should we start with? I'd suggest running the second in a fresh session when you're ready, so each gets full focus and its own persisted research folder.
-
-If the invocation is ambiguous about which product is the subject (e.g., user discussed several in conversation), ask once via AskUserQuestion which category to research.
-
-Out of scope — redirect to generic `/research`:
-- "Should I keep my current X or replace it?" (replacement analysis — different pipeline)
-- "Tell me about X" / "how does X work" (educational, not buying)
-- "Compare X and Y" where the user already has a shortlist and wants analysis (not discovery)
-</trigger_and_routing>
+<routing>
+Redirect to `/research` when the request is not a buying decision from scratch: whether to keep or replace something, how a product works, or a comparison of a shortlist the user already has. If it is unclear which product the run is about, ask once.
+</routing>
 
 <pipeline>
 
@@ -55,200 +53,182 @@ Out of scope — redirect to generic `/research`:
 
 **Read `references/interview-calibration.md` before composing questions.**
 
-**Outcome:** A filled interview handoff block (see `<handoff_contracts>`) with enough signal to rank the masterclass criteria and differentiate tiers. Every question must plausibly change the final shortlist — drop any that won't.
+**Outcome:** a filled interview handoff (see `<handoff_contracts>`) with enough signal to rank the criteria and bound the picks. A question earns its place when its answer could change the shortlist.
 
-Generate category-specific questions using the frame in that reference. The pipeline already surfaces budget-to-premium tiers for every run, so skip budget unless the user likely has a hard cap that would exclude entire tiers. Fewer, sharper questions beat a longer list with padding.
+Before composing questions:
 
-AskUserQuestion accepts at most 4 questions per call. Batch accordingly; use multiple sequential calls if needed.
+- Use what the project already records about the household (location, people, standing constraints) and what the user said in the request. Do not ask for it again.
+- Look up the category's real price bands in Romania with one or two quick calls, so the budget question can show numbers.
 
-Fire a follow-up round only when answers reveal a genuine ambiguity that would lead to a wrong shortlist — e.g., contradictory constraints the user needs to rank, or a critical category-specific variable that wasn't captured. Mild gaps can be filled by preliminary-phase research.
+Ask category-specific questions using the frame in the reference, and close with one budget question anchored on those bands. Use the harness's question tool; Claude Code's AskUserQuestion takes at most 4 questions per call, so send larger sets in batches.
 
-Write full Q&A and the structured handoff block to `01-interview.md` with angle-file frontmatter (`role: angle`, `sub_question: "interview"`).
+Ask a follow-up round only when the answers would lead to a wrong shortlist; the reference lists the triggers.
 
-## Stage 2: Preliminary phase — aspect discovery, deep research, and masterclass
+An answer is a hard limit only when the user states it as one: a budget ceiling, a physical constraint, an explicit dealbreaker. Everything else is a preference, including a selected option that bundles several things. After the interview, tell the user in two or three lines what you are treating as hard limits and what as preferences, then continue without waiting. They can correct it while the research runs.
 
-Three sub-stages executed sequentially (2a → 2b → 2c). The availability subagent runs in parallel with 2b.
+Write the full Q&A and the handoff block to `01-interview.md` with angle-file frontmatter (`role: angle`, `sub_question: "interview"`).
 
-### Stage 2a: Aspect Discovery (main context)
+## Stage 2: Preliminary — aspects, retailers, masterclass
 
-**Goal:** Identify the key dimensions of this product category — broadly, not scoped by interview priorities.
+### 2a: Aspect discovery (main context)
 
-Run 2-3 broad searches in the main context. Do NOT reference the user's stated priorities in these queries — the goal is pure category discovery.
+**Outcome:** 8–12 fundamental dimensions that differentiate products in this category, clustered into 3–4 groups that each make a coherent research topic. For a stroller: `{wheels, suspension, terrain}`, `{fold, weight, portability}`, `{safety, materials, build}`, `{canopy, storage, ergonomics}`.
 
-1. `research.py ask "what are the most important factors and dimensions to evaluate when buying a [category]? Cover all aspects: performance, build quality, ergonomics, safety, materials, maintenance, durability, accessories" --context high`
-2. `youtube.py search "[category] buying guide what to look for [current year]"`
-3. `research.py ask "[category] common buyer mistakes things people overlook biggest regrets after buying"`
+Discover them from the category alone. Leave the user's priorities out of these queries, so the masterclass teaches the whole category and can contradict an assumption. Two or three broad searches are enough, for example:
 
-From the combined results, compile a list of 8-12 key aspects of the product category. These should be fundamental dimensions that differentiate products — not features of specific models.
+- `research.py ask "what are the most important factors to evaluate when buying a [category]? Cover performance, build quality, ergonomics, safety, materials, maintenance, durability, accessories"`
+- `youtube.py search "[category] buying guide what to look for [current year]"`
+- `research.py ask "[category] common buyer mistakes, things people overlook, biggest regrets after buying"`
 
-Cluster the aspects into 3-4 groups of related dimensions. Each cluster should make sense as a coherent research topic (e.g., for a stroller: `{wheels, suspension, terrain handling}`, `{fold mechanism, weight, portability}`, `{safety, materials, build quality}`, `{canopy, storage, accessories, ergonomics}`).
+### 2b: Aspect deep-dives and the retailer map (subagents in parallel)
 
-### Stage 2b: Aspect Deep-Dives + Availability (all subagents in parallel)
+Spawn one subagent per cluster plus one for the retailer map, all in one message.
 
-Spawn all subagents with `subagent_type: "research-subagent"`. Run 3-4 aspect subagents + 1 availability subagent in parallel.
+**Aspect subagent brief.** Give it the category and the use case, without the user's stated priorities.
 
-#### Aspect deep-dive subagents (3-4)
-
-Each subagent receives the product category and use case context from the interview, but NOT the user's stated priorities — the goal is category education, not priority validation.
-
-**Prompt skeleton (per cluster):**
-> You are researching [aspect cluster name] for [category] to build a buying guide that educates a first-time buyer on what truly matters.
+> You are researching [cluster name] for [category]. The findings go into a buying guide that teaches a first-time buyer what matters, so this is research about the aspects themselves. Do not rank or score specific products.
 >
-> Your assigned aspects: [list of 2-3 aspects in this cluster]
+> Your aspects: [2–3 aspects]
 >
-> For each aspect, research and document:
-> 1. **What it is and why it matters** — plain-language explanation of the engineering or design dimension
-> 2. **What to look for** — specific specs, features, or qualities that indicate quality vs. cost-cutting
-> 3. **What to avoid** — red flags, misleading specs, marketing traps specific to this aspect
-> 4. **Real-world owner experience** — things people discover only after purchase (from Reddit, forums, YouTube long-form owner reviews)
-> 5. **Engineering tradeoffs** — where improving this aspect necessarily compromises another aspect (e.g., bigger wheels = harder fold)
+> For each aspect, document:
+> 1. What it is and why it matters, in plain language
+> 2. What to look for: the specs, features or qualities that separate quality from cost-cutting, with numbers where they exist
+> 3. What to avoid: red flags, misleading specs, marketing traps
+> 4. What owners find out only after buying (Reddit, forums, long owner reviews on YouTube)
+> 5. The engineering tradeoff: what improving this aspect costs elsewhere
 >
-> Use `research.py ask`, `social.py reddit`, `youtube.py search`, and `research.py scrape` as needed. Aim for 3-5 quality sources per aspect. Do NOT use `--recency` flags.
->
-> Do NOT rank or score specific products. This is educational research about the ASPECTS themselves, not about models.
+> Three to five solid sources per aspect is typical; stop when new sources repeat what you have. Do not filter by recency. End the file with a "Coverage gaps" section naming any source you could not reach and what the finding rests on instead.
 >
 > Write to `aspects/[cluster-slug].md` with angle-file frontmatter.
 
-#### Availability subagent
+**Retailer map brief.**
 
-**Goal:** Map the retailer universe for this category in RO (first) + EU/import fallback, then identify the best starting platforms. Do not narrow discovery to 3-4 platforms too early.
-
-**Prompt skeleton:**
-> Build a retailer universe for buying [category] with delivery to Romania. Start with Romanian retailers, but do not stop at eMAG/Altex/Flanco. Include:
-> 1. Big-box / marketplace retailers (eMAG, Altex/Media Galaxy, Flanco, Cel.ro, Dedeman, etc.)
-> 2. Official brand stores or official local distributors when relevant (e.g. russellhobbs.ro, shop.tefal.ro, smeg.com.ro)
-> 3. Specialty/category retailers (e.g. etbm.ro for lights, avstore for audio, coffeegear.ro for coffee, KitchenShop/Conox-type kitchen specialty stores)
-> 4. Romanian price/discovery aggregators (Compari.ro, Price.ro, Pricy.ro/PriceFlux-like pages when available) as discovery surfaces for additional seller domains
-> 5. EU retailers shipping to RO (Amazon DE, Bol.nl, category-specific EU specialty) when Romanian coverage is thin or a globally strong model is unavailable domestically
+> Map where a buyer in Romania can buy [category]. Start with Romanian sellers and go past eMAG, Altex and Flanco, which are starting points and not the whole market. Cover:
+> 1. Big-box and marketplace retailers (eMAG, Altex/Media Galaxy, Flanco, Cel.ro, Dedeman)
+> 2. Official brand stores and local distributors (russellhobbs.ro, shop.tefal.ro, smeg.com.ro)
+> 3. Specialty retailers for the category (etbm.ro for lights, avstore for audio, coffeegear.ro for coffee, KitchenShop-type stores)
+> 4. Romanian price aggregators (Compari.ro, Price.ro, Pricy.ro) as a way to discover more seller domains
+> 5. EU retailers that ship to Romania (Amazon DE, Bol.nl, category specialists), for when Romanian coverage is thin or a strong model is not sold domestically
 >
-> Produce two sections:
-> 1. `retailer_universe`: all valid seller/discovery domains found, grouped by seller type. For each: name, base/category URL, seller type, strength, caveats, and whether it should be used as primary, secondary, or verify-only.
-> 2. `availability_shortlist`: the 3-6 best starting platforms for Stage 3, chosen from the universe. This shortlist is a starting point, not a boundary; Stage 3 must still run model-level deal sweeps across the wider web.
->
-> Add a `market_depth_judgment`: `broad`, `moderate`, or `thin`, with a short rationale. Use human judgment: if many Romanian sellers/categories are clearly present, keep the universe broad; if the category is genuinely sparse, document the dead ends and make import options explicit.
+> Produce:
+> - `retailer_universe`: every valid seller or discovery domain found, grouped by seller type, each with name, base or category URL, seller type, strength, caveats, and whether to use it as primary, secondary or verify-only.
+> - `availability_shortlist`: the 3–6 best starting platforms. This is a starting point for later stages, not a boundary.
+> - `market_depth_judgment`: `broad`, `moderate` or `thin`, with a short rationale. Use judgment. If many Romanian sellers clearly carry the category, keep the universe broad. If it is sparse, document the dead ends and make the import options explicit.
 >
 > Write to `03-availability.md` with angle-file frontmatter.
 
-Wait for all subagents to complete. Check that all aspect files in `aspects/` and `03-availability.md` exist and have expected content.
+Before moving on, confirm every aspect file and `03-availability.md` exists and has real content.
 
-### Stage 2c: Masterclass Assembly (main context)
+### 2c: Masterclass (main context)
 
 **Read `references/masterclass-template.md` before writing.**
 
-Read all aspect deep-dive files from `aspects/`. Compose `02-masterclass.md` following the masterclass template structure:
+Read every file in `aspects/` and write `02-masterclass.md` to the template. The aspect sections are for any buyer. The interview shapes only the closing sections: the ranked criteria, the decision framework, and any "worth reconsidering" note. The interview changes how the criteria rank, never which aspects are covered.
 
-- Organize by aspect cluster (educational structure, not priority order)
-- Each aspect: what it is, what to look for, what to avoid, real-world gotchas, key tradeoffs
-- Conclude with three sections:
-  - **Ranked criteria** (5-10 items) — personalized to the user's use case using interview context. The interview priorities influence the RANKING of criteria, not the COVERAGE of aspects.
-  - **Marketing myths** (2-5 items) — consolidated from aspect research, with source basis
-  - **Decision framework** — practical guidance for the user's specific situation
+A contradiction with a stated priority is reported only when two or more independent quality sources support it. Carry those forward to the synthesis. Extract the ranked criteria and the myths into the handoff for Stage 3.
 
-Extract the ranked criteria and marketing myths into the handoff block for Stage 3. If aspect research reveals contradictions with the user's stated priorities (2+ independent sources), note them in the masterclass and carry them forward to the synthesis.
+## Stage 3: Candidates — three subagents in parallel
 
-## Stage 3: Product phase — 3 subagents in parallel
+Each receives the full interview handoff, the ranked criteria, the myths and the retailer map. They work independently, and Stage 4 merges their files into one candidate table and picks from it; tell them so. Ask each to:
 
-Each subagent receives: full interview handoff + ranked_criteria + myths_to_ignore + retailer_universe + availability_shortlist + market_depth_judgment. Spawn all three in parallel with `subagent_type: "research-subagent"`.
+- identify each model by its EU or Romanian model number, and say when the reviews it relies on cover a different regional variant and whether that changes anything
+- evaluate any model the user named in the interview
+- search without recency filters
+- end the file with a "Coverage gaps" section naming any source it could not reach and what the finding rests on instead
 
-### Owner voice subagent
-**Goal:** Real-world ownership signal.
+**Owner voice** → `04-owner-voice.md`
 
-**Prompt skeleton:**
-> Find owner perspectives on [category] from Reddit long-form (r/BuyItForLife, r/[category], category-specific subs) and non-affiliate YouTube reviewers. Use `social.py reddit` and `youtube.py search`.
+> Find what owners say about [category] after living with it: long Reddit threads (r/BuyItForLife, category subreddits) and non-affiliate YouTube reviewers. Look for multi-year reliability, quirks that expert reviews miss, and dealbreakers that only show up in daily use. Score candidates against the ranked criteria. Produce 5–8 candidate models, each with what owners love, what fails and what makes people return or regret it.
+
+**Expert voice** → `05-expert-voice.md`
+
+> Compare the leading models in [category] using named expert reviewers, trade publications and specialist review sites. Skip generic "best of" roundups from affiliate and SEO sites. Score candidates against the ranked criteria. Produce 5–8 candidates with comparative notes and explicit scores per criterion.
+
+**Retailer voice** → `06-retailer-voice.md`
+
+> Find out which [category] models are sold to buyers in Romania now and at what prices. Start from the availability shortlist and widen through the retailer universe, aggregators and web search. Cover each price band and each seller class before going deep on any one model; the per-model deal hunt happens later, for the final picks.
 >
-> Focus on: multi-year reliability, quirks not mentioned in expert reviews, deal-breakers that only surface with real use. Score candidates against the ranked criteria provided.
+> Produce 5–8 candidate models that are well stocked and plausible on the ranked criteria, each with the sellers found, price (RON or EUR), stock state where visible, and the EU model number. Add the price bands for the market: entry, sweet spot, premium.
 >
-> Produce 5-8 candidate models with owner-voice summary per model (what owners love, what fails, deal-breakers).
->
-> Write to `04-owner-voice.md`.
+> Close with a `coverage_judgment`. If the category is broadly stocked, say which seller classes you covered. If it is thin, say which searches and sites you tried, why coverage looks thin, and which import options exist. Claim that only a few options exist only after aggregators, official stores and specialty sellers were checked or attempted.
 
-### Expert voice subagent
-**Goal:** Comparative analysis against the ranked criteria.
+## Stage 4: Picks and the finalist sweep
 
-**Prompt skeleton:**
-> Compare top models in [category] using expert/trade sources. Use `research.py ask` with context=high, `research.py reason` for comparative analysis, and `research.py scrape` for 2-3 trusted expert/trade source pages.
->
-> Avoid affiliate/SEO sites (generic "best of" roundups). Prefer named expert reviewers, trade publications, and specialized review sites.
->
-> Score candidates against the ranked criteria. Produce 5-8 candidates with comparative notes per model and explicit criteria scoring.
->
-> Write to `05-expert-voice.md`.
+### 4a: Choose the picks (main context)
 
-### Retailer voice subagent
-**Goal:** Current availability, pricing, and best reputable deal for candidate models.
+Merge the three candidate files into one candidate table: one row per model, with the voices that covered it, the price seen, the availability tier and its standing. This table goes into the synthesis.
 
-**Prompt skeleton:**
-> For [category], identify 5-8 candidate models via WebSearch (owner/expert subagents run in parallel — do not read their outputs). Use the availability shortlist as a starting point, but use the wider retailer_universe and model-level web searches to avoid overindexing on eMAG/Altex/Flanco.
+Choose up to three tiers, each with a primary and a runner-up, from models inside the hard limits and the budget ceiling. Default tiers are overall, budget and premium. With a ceiling, "premium" means the best inside it.
+
+When a model would make the picks on one voice alone, because the others never looked at it, run one targeted follow-up before picking: a subagent or a few calls for the missing owner, expert or seller evidence. One round is enough. A pick that still rests on one voice gets a `low` confidence tag.
+
+### 4b: Finalist sweep (one subagent)
+
+**Outcome:** for each chosen model, the best reputable deal available to a buyer in Romania today, confirmed on the seller's page.
+
+> For each of these models: [the picks and runner-ups, with EU model numbers and the sellers already found]. The user's hard limits are: [hard limits]. The budget ceiling is: [ceiling, or none].
 >
-> For each candidate/model family, run a model-level deal sweep before concluding availability:
-> - Search exact model number/name + Romanian buying terms: `"<model>" pret Romania`, `"<model>" site:.ro`, `"<model>" [Romanian category term]`, and `"<model>" compari.ro OR price.ro OR pricy.ro`.
-> - Check official brand/local distributor stores when the brand has a Romanian presence.
-> - Use aggregators as discovery surfaces: follow seller domains they reveal; do not cite only the aggregator when a seller page can be found.
-> - Run `research.py scrape` or WebFetch on product pages where possible. If a site blocks scraping, record the dead end and use search-result snippets only as lower-confidence evidence.
+> 1. Sweep sellers for the exact model: `"<model>" pret`, `"<model>" site:.ro`, `"<model>" compari.ro OR price.ro OR pricy.ro`, the brand's Romanian store or distributor, and the sellers in the retailer universe. Follow aggregator results to the seller's own page.
+> 2. Open the best candidate pages and read them. Use `research.py scrape` first. When a page blocks it or renders with JavaScript (Altex, Flanco, Trendyol, Bebe Tei), read it with the `agent-browser` skill.
+> 3. On the page, confirm the title is this exact model, read the current price and the stock state, and check the specs against the hard limits. Note warranty, returns and delivery time when shown. For an EU import, work out the landed cost and use it as the price.
 >
-> Per candidate: availability per seller (in stock / out / not listed / unverified), current price (RON or EUR), seller type, warranty/returns if visible, delivery window if visible, and the best reputable deal found.
+> Report one status per model:
+> - `confirmed`: a seller page was read and shows this model, a price and stock
+> - `unconfirmed`: no seller page could be read; say what was tried and why it failed
+> - `unavailable`: pages were read, and the model is out of stock or discontinued at every seller found
+> - `fails_limit`: the product page contradicts a hard limit, or the best price found is above the budget ceiling; say which
 >
-> Add a `coverage_judgment` section. Use human judgment, not a hard seller count:
-> - If the category/model clearly appears across many Romanian sites, keep expanding beyond the shortlist until the main seller classes are represented and the best deal is plausibly found.
-> - If the category/model is genuinely limited, say which searches/sites were tried, why coverage appears thin, and whether EU/UK/US import options should be considered.
-> - Do not claim "only X options exist" unless broad searches, aggregators, official stores, and specialty sellers were checked or attempted.
+> For each model give the best reputable deal (seller, URL, price, stock, date read) and the other sellers checked. Stop sweeping a model when the main seller classes have been checked and further searches stop turning up a better reputable price. Do not change or re-rank the models.
 >
-> Write to `06-retailer-voice.md`.
+> Write to `07-finalist-sweep.md` with angle-file frontmatter.
 
-## Stage 4: Verification
+### 4c: Act on the sweep (main context)
 
-After all three product-phase subagents return, orchestrator identifies the 6 final recommendations (3 tiers × primary + runner-up). For each:
+- `confirmed`: use the sweep's seller, link and price in the synthesis.
+- `unconfirmed`: keep the pick, and say next to the link that stock could not be confirmed and why. A blocked page says nothing about the product.
+- `unavailable` or `fails_limit` on a primary: promote its runner-up, provided the runner-up came back `confirmed` or `unconfirmed`. Then fill the runner-up position as below.
+- `unavailable` or `fails_limit` on a runner-up, or a runner-up position left open by a promotion: take the next-best model from the candidate table and sweep it. If it also fails, leave the tier without a runner-up.
+- A tier whose primary and runner-up both failed: sweep the next-best model from the table once. If that fails too, omit the tier.
 
-1. Scrape the primary retailer URL via `research.py scrape <url>` (no `--recency` flag).
-2. Check for:
-   - Out-of-stock signals: "out of stock", "discontinued", "not available", "indisponibil", "stoc epuizat", 404, redirect to category page
-   - Current price
-   - Title match (did we land on the right product?)
-3. Tag each recommendation:
-   - `verification: verified` (default; omit from output to reduce noise)
-   - `verification: manual — link didn't confirm availability` (scrape ambiguous or failed)
-   - `price-changed: was X, now Y` (>20% price delta from research-captured value)
-
-**Do not rewrite recommendations based on verification results.** Flag only. The recommendation reflects quality; the flag reflects current stock state.
+Say in the synthesis which model was replaced and why.
 
 ## Stage 5: Synthesis
 
 **Read `references/synthesis-template.md` before writing.**
 
-Write `00-synthesis.md` following the exact structure. Key reminders:
-- Master class section is a condensed summary (400-800 words) of the full masterclass document (`02-masterclass.md`), with a link to it. Include ranked criteria highlights and key myths. Omit the "what we learned vs your initial assumptions" subsection entirely if no contradictions cleared the 2-source threshold.
-- Market reality line is standard; include for every run.
-- 3 tiers by default (overall / budget / premium). Substitute tier name with use-case axis if default doesn't fit the category. Omit a tier entirely if no strong candidate exists.
-- Considered-and-discarded section: 2-3 items from (1) shortlist fallout, (2) SEO-popular but expert-rejected. Each MUST cite specific source/finding. Do not pad.
-- Confidence tag per recommendation with a one-line reason.
-- Verification flags go on "Where to buy" line, not on the recommendation itself.
+Write `00-synthesis.md` to the template. The template holds the structure, the length targets and the rules for tiers, discards, confidence and flags. Prepend the run entry to `~/Documents/Research/INDEX.md` in the format from `persistence-format.md`, with one bullet per numbered file (`00`–`07`).
 
-Prepend a run entry to `~/Documents/Research/INDEX.md` following the format in `../research/references/persistence-format.md`.
+Close the run with a short message to the user: the picks with price and where to buy, anything swapped or unconfirmed, coverage gaps that lower confidence, and that `/publish-research` turns the run into a page.
 
 </pipeline>
+
+<revising_a_finished_run>
+When the user corrects a limit or adds candidates after the synthesis exists, rerun only what the change touches. For a new budget or constraint, re-pick from the candidate table. For new models, gather owner and expert evidence for them and add them to the table. In both cases run the finalist sweep on every pick that changed, then update `00-synthesis.md` in place and add a dated revision line under Context. Picks taken from search snippets without a sweep are not finished.
+</revising_a_finished_run>
 
 <handoff_contracts>
 
 ## Interview → Preliminary
 
-Adaptive YAML. `category` and `stated_priorities` are required. Others optional:
+`category`, `stated_priorities` and `budget` are required; the rest are filled when known.
 
 ```yaml
 category: <product category>
 use_case: <free-form summary>
-stated_priorities: [ordered list, top 2-3]
-stated_dealbreakers: [list]
-budget_signal:
-  type: fixed | range | flexible | none_given
-  value: <if applicable>
-constraints: [space/physical/environmental notes captured]
+stated_priorities: [ordered, top 2-3; preferences]
+hard_limits: [only what the user stated as a must: physical constraints, explicit dealbreakers]
+budget:
+  ceiling: <amount and currency, or none>
+  note: <e.g. "show me the spread", "would stretch for a quieter one">
+constraints: [softer space, physical or environmental notes]
 experience: first-time | replacing-known | upgrading | not-asked
-raw_qa: [full Q&A for exact phrasing reference]
+named_models: [models the user mentioned]
+raw_qa: [full Q&A for exact phrasing]
 ```
 
-## Preliminary → Product phase
+## Preliminary → Candidates
 
-Ranked criteria and myths are extracted from the masterclass (Stage 2c). Retailer data comes from the availability subagent. Adds the following on top of the interview block:
+Added on top of the interview block. Criteria and myths come from the masterclass; retailer data from the retailer map.
 
 ```yaml
 ranked_criteria:
@@ -258,78 +238,47 @@ myths_to_ignore:
   - myth: <name>
     source_basis: <short note>
 contradictions_with_user_priorities:
-  - user_priority: <what user said>
+  - user_priority: <what the user said>
     research_finding: <counter-signal>
     sources: [url1, url2]
 retailer_universe:
   - platform: <name>
-    url: <base/category URL>
+    url: <base or category URL>
     seller_type: big_box | marketplace | official_brand_store | specialty | aggregator | eu_import | other
     use_as: primary | secondary | verify_only
     strength: <short note for this category>
     caveats: <optional>
 availability_shortlist:
   - platform: <name>
-    url: <base/category URL>
-    strength: <short note for this category>
+    url: <base or category URL>
+    strength: <short note>
     caveats: <optional>
 market_depth_judgment:
   level: broad | moderate | thin
-  rationale: <why the market appears broad/moderate/thin and what import fallback, if any, should be considered>
+  rationale: <why, and which import fallback to consider>
 ```
 
-## Product phase → Synthesis
+## Candidates → Synthesis
 
-No separate contract. Orchestrator reads `04-owner-voice.md`, `05-expert-voice.md`, `06-retailer-voice.md` and composes the synthesis.
+No separate contract. The orchestrator reads `04`–`06`, builds the candidate table, and reads `07-finalist-sweep.md` for prices, links and statuses.
 
 </handoff_contracts>
 
 <edge_cases>
-- **Thin aspect research** (sparse sources for obscure category) → masterclass assembly works with best available data; flag lower confidence in synthesis and note which aspects had thin coverage
-- **Masterclass fails to produce ranked criteria** → fall back to user priorities for Stage 3 scoring rubric; note the fallback in synthesis
-- **Unrealistic budget** (user says 1500, market starts at 3000) → no explicit warning; the market-reality line in synthesis does the educating naturally
-- **Tier with no strong candidate** → substitute tier name with use-case axis (e.g., "best for small spaces"), or omit tier entirely. Never invent.
-- **Thin retailer market** → document searched retailer classes and dead ends, then consider EU/UK/US import options as Yellow/Red availability rather than forcing a domestic recommendation
-- **Whole category is US-only** → flag in synthesis that no EU-available options exist at meaningful tiers; still produce what's available
-- **Verification fails for a recommendation** → tag `verification: manual`, keep recommendation in the output
-- **User's stated priorities fully align with research** → omit "what we learned vs your initial assumptions" subsection; don't pad
-- **User named specific models in interview** → ensure product-phase subagents evaluate those models. If they don't make the shortlist, address them in the considered-and-discarded section regardless of the 2-item minimum.
+- **Thin aspect research** for an obscure category: write the masterclass from what exists, name the thin aspects, and lower the confidence tags.
+- **No ranked criteria come out of the masterclass:** score candidates on the user's priorities and say so in the synthesis.
+- **Ceiling below the market's credible entry:** say so under Market reality and offer the cheapest credible option as the single pick, marked as above the ceiling. This is the only case where a pick exceeds the ceiling.
+- **Whole category is sold only outside the EU:** say so, and produce what is available under the Red-tier exception.
+- **Stated priorities fully agree with the research:** leave out the "what we learned" subsection.
+- **A model the user named does not make the picks:** explain why under "Considered and discarded".
 </edge_cases>
 
-<anti_patterns>
-- Do NOT surface single-source contradictions in the master class. Only 2+ independent quality sources trigger the "what we learned" subsection.
-- Do NOT pad the considered-and-discarded section to hit 3 items. One well-justified discard beats three padded.
-- Do NOT write "no contradictions found" or "no myths to note" filler. Omit those subsections entirely when empty.
-- Do NOT use a generic interview question list. Generate per-category questions using the interview-calibration frame.
-- Do NOT treat eMAG/Altex/Flanco as the whole Romanian market. They are starting points, not boundaries.
-- Do NOT claim a model/category has only a few Romanian options unless broad web search, official brand stores, specialty sellers, and price aggregators were checked or attempted.
-</anti_patterns>
-
 <reference_index>
-Lazy-loaded during specific stages:
+Loaded at the stage that needs them:
 
-- `references/interview-calibration.md` — load at **Stage 1 (Interview)** before composing questions. Contains the question-generation frame and 3 calibration examples (microwave, mattress, vacuum).
-- `references/masterclass-template.md` — load at **Stage 2c (Masterclass Assembly)** before writing `02-masterclass.md`. Contains the document structure, voice guidelines, and length targets.
-- `references/synthesis-template.md` — load at **Stage 5 (Synthesis)** before writing `00-synthesis.md`. Contains the exact output structure and a worked example.
+- `references/interview-calibration.md` — Stage 1. The question-generation frame, the budget question and calibration examples.
+- `references/masterclass-template.md` — Stage 2c. Document structure, voice and length.
+- `references/synthesis-template.md` — Stage 5. Output structure, rules for tiers, discards, confidence and flags, and a worked example.
 
-Cross-references to the research skill (same project):
-- `../research/references/cli-reference.md` — CLI invocations for `research.py`, `youtube.py`, `social.py`
-- `../research/references/persistence-format.md` — angle-file frontmatter, run directory conventions, INDEX.md format
+From the research skill: `references/cli-reference.md` (CLI commands) and `references/persistence-format.md` (frontmatter, run layout, INDEX.md).
 </reference_index>
-
-<success_criteria>
-Ordered by skip risk (highest first).
-
-- [ ] Pipeline runs all 5 stages in order. Preliminary (Stage 2) — including aspect discovery (2a), deep-dives (2b), and masterclass assembly (2c) — completed before Product phase (Stage 3) spawned.
-- [ ] Interview questions generated per-category using the interview-calibration frame, not from a generic template.
-- [ ] Aspect discovery searches are category-generic, not scoped by interview priorities.
-- [ ] Masterclass document (`02-masterclass.md`) covers all discovered aspects with educational depth, not just user-priority-aligned criteria.
-- [ ] Ranked criteria (extracted from masterclass, not raw user priorities) used to score and order candidates in product phase.
-- [ ] Availability phase produces a retailer universe plus a shortlist; the shortlist is not treated as an exclusive boundary.
-- [ ] Retailer voice performs model-level deal sweeps for finalists/candidates, including official brand stores, specialty sellers, and Romanian price aggregators when available.
-- [ ] "What we learned vs your initial assumptions" subsection appears ONLY when 2+ quality sources contradict a user priority; omitted entirely otherwise.
-- [ ] Synthesis follows synthesis-template.md structure: master class + market reality line + 3 tiers × (primary + runner-up) + tradeoffs + considered-and-discarded.
-- [ ] Verification flags ambiguous recommendations with `verification: manual` — never rewrites them.
-- [ ] Run persisted to `~/Documents/Research/<slug>/` with slug `YYYY-MM-DD-<category>-product-research` — `00-synthesis.md` + `01-interview.md` + `02-masterclass.md` + `03-availability.md` + `04-06` voice files + `aspects/*.md`; INDEX.md updated with a single run entry.
-- [ ] No `--recency` flags used on any CLI call during the run.
-</success_criteria>

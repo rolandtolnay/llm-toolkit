@@ -2,8 +2,10 @@
   Page Template: Published Product Research
 
   Generic HTML skeleton for published research pages.
-  Replace every {{PLACEHOLDER}}. Repeating components show one representative item.
-  Editorial rules live in section-mapping.md; class semantics live in design-system.md.
+  Replace every double-brace placeholder. Repeating components show one representative item.
+  This file is the structural authority: scripts/check-page.py reads the element for
+  each class from here. Editorial rules live in section-mapping.md; class semantics
+  live in design-system.md.
 -->
 <!DOCTYPE html>
 <html lang="{{LANGUAGE}}">
@@ -77,7 +79,7 @@
 
       <div class="criteria-stack">
         <!-- REPEAT: one details.crit per criterion/aspect group -->
-        <details class="crit" id="crit-{{SLUG}}">
+        <details class="crit" id="crit-{{CRIT_SLUG}}">
           <summary>
             <span class="crit__num">01</span>
             <div class="crit__head">
@@ -142,13 +144,13 @@
         <div class="pick__specs">{{SPECS}}</div>
         <!-- Image step fills src with this pick's photo (hotlinked). -->
         <div class="pick__media"><img src="{{PICK_IMG_URL}}" alt="{{MODEL_NAME}}" loading="lazy" referrerpolicy="no-referrer"></div>
-        <p class="pick__verdict">{{VERBATIM_VERDICT}}</p>
+        <p class="pick__verdict">{{VERDICT}}</p>
         <div class="pc">
-          <div class="pc__col pc__col--pro"><h4>Why this one</h4><ul><li>{{PRO}} <a class="refer" data-deep-dive="crit-{{SLUG}}">→ {{REF_TEXT}}</a></li></ul></div>
+          <div class="pc__col pc__col--pro"><h4>Why this one</h4><ul><li>{{PRO}} <a class="refer" data-deep-dive="crit-{{CRIT_SLUG}}">→ {{REF_TEXT}}</a></li></ul></div>
           <div class="pc__col pc__col--con"><h4>Watch out for</h4><ul><li>{{CON}}</li></ul></div>
         </div>
         <div class="btn-row"><a class="btn btn--primary" href="{{URL}}" target="_blank" rel="noopener">Buy at {{RETAILER}} — {{PRICE}}</a></div>
-        <p class="pick__meta">{{PRICE_VERIFICATION_STATUS}}</p>
+        <p class="pick__meta">{{PRICE_AND_STOCK_NOTE}}</p>
         <div class="pick__warning">{{OPTIONAL_WARNING}}</div>
         <!-- Runner-up: thumbnail is the FIRST child of .pick__runner. One block per runner-up
              (a pick may have several). If a runner says "None recommended" but names a product,

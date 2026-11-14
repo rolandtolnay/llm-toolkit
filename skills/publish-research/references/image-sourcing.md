@@ -161,4 +161,4 @@ Close browser sessions and local servers after verification.
 
 ## Report
 
-Return a per-product list with the chosen source, mode, final URL or path, and validation result. Note placeholders, failed sources, licensing concerns, and any checks that still need a human browser pass.
+Return a per-product list with the chosen source, mode, final URL or path, and validation result. Note placeholders, failed sources, licensing concerns, any buy link that was dead or showed a different product than the page names, and any checks that still need a human browser pass.

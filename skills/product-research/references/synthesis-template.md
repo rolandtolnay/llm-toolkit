@@ -1,10 +1,10 @@
 # Synthesis Template
 
-Load this before writing Stage 5. The synthesis file (`00-synthesis.md`) follows this exact structure.
+Load this before writing Stage 5. The synthesis file (`00-synthesis.md`) follows this structure; the rules below say when a section is renamed or omitted.
 
 ## Frontmatter
 
-Use the standard research synthesis frontmatter (see `../../research/references/persistence-format.md`), with:
+Use the standard research synthesis frontmatter (`references/persistence-format.md` in the research skill), with:
 - `role: synthesis`
 - `query`: the user's original product request, verbatim if short, paraphrased if long
 - `tags`: product category + 3-5 criteria-relevant nouns + `product-research`
@@ -40,7 +40,7 @@ Use the standard research synthesis frontmatter (see `../../research/references/
 
 ### What we learned vs your initial assumptions
 
-{{ONLY INCLUDE IF contradictions were found with 2+ quality sources. Omit this section entirely otherwise — do not write "no contradictions found".}}
+{{Include only for contradictions supported by 2+ independent quality sources.}}
 
 {{Per contradiction — 1 short paragraph. Frame as "what we learned", not "you were wrong".}}
 
@@ -54,12 +54,14 @@ Use the standard research synthesis frontmatter (see `../../research/references/
 
 Entry at **~{{X}} RON** · Sweet spot around **~{{Y}} RON** · Premium starts **~{{Z}} RON**.
 {{Optional 1-line anchor note if prices are currency-mixed, e.g. "(EU imports quoted in EUR are 1 EUR ≈ 5 RON)".}}
+{{If the user gave a ceiling: "Your ceiling: {{amount}}. Every pick below sits inside it." If nothing credible exists under it, say that here instead.}}
+{{Only if research found something material above the ceiling: one line on what the next step up buys and for how much. It is information, not a pick.}}
 
 ## Recommendations
 
 ### Best overall — {{Model name}}
 
-**Price:** {{X}} RON · **Availability:** {{Green/Yellow + retailer}} · **Confidence:** {{high/medium/low}} — {{one-line reason}}
+**Price:** {{X}} RON {{for an EU import: landed cost, price + shipping}} · **Availability:** {{Green/Yellow + retailer}} · **Confidence:** {{high/medium/low}} — {{one-line reason}}
 
 {{1-2 sentence tier framing: "why this is the default pick".}}
 
@@ -73,7 +75,7 @@ Entry at **~{{X}} RON** · Sweet spot around **~{{Y}} RON** · Premium starts **
 - {{Con 1}}
 - {{Con 2}}
 
-**Where to buy:** [{{Retailer}}]({{URL}}) · {{verification tag if flagged}}
+**Where to buy:** [{{Retailer}}]({{URL}}) · {{flag in plain words if stock could not be confirmed}}
 
 **Runner-up: {{Model name}}** ({{price}} RON) — {{2-3 line why-this}}. Pick this instead if {{specific condition}}.
 
@@ -103,28 +105,39 @@ Entry at **~{{X}} RON** · Sweet spot around **~{{Y}} RON** · Premium starts **
 
 ## Considered and discarded
 
-{{2-3 items. Each a short paragraph.}}
+{{1-3 items. Each a short paragraph.}}
 
 - **{{Model name}}** — {{Why the user might have heard of it / why it seemed plausible}}. Discarded because {{specific finding from which source}}. {{Optional: when this would actually be the right pick}}.
 
 - **{{Model 2}}** — {{Same pattern}}.
+
+## All candidates
+
+{{Every model any stage evaluated, one row each: picks first, then runner-ups, considered, ruled out.}}
+
+| Model | Role | Price | Availability | Verdict | Evidence |
+|---|---|---|---|---|---|
+| {{EU model name/number}} | {{pick / runner-up / considered / ruled out}} | {{price or "not found"}} | {{Green / Yellow / Red / not verified + seller}} | {{one line: why it is where it is}} | {{04 / 05 / 06 / 07}} |
 
 ## Evidence
 
 See angle files in this directory for full findings, source URLs, and verbatim quotes:
 - [Interview](01-interview.md) — Q&A + priorities
 - [Masterclass](02-masterclass.md) — comprehensive buying guide covering all product dimensions
-- [Availability](03-availability.md) — RO/EU platform shortlist
+- [Availability](03-availability.md) — RO/EU retailer universe and starting platforms
 - [Owner voice](04-owner-voice.md) — Reddit + YouTube owner synthesis
 - [Expert voice](05-expert-voice.md) — expert/trade comparative
-- [Retailer voice](06-retailer-voice.md) — current availability and price
+- [Retailer voice](06-retailer-voice.md) — what is sold in Romania and at what prices
+- [Finalist sweep](07-finalist-sweep.md) — best deal, stock and price for each pick, read from seller pages
 - [Aspect research](aspects/) — deep-dive research files per aspect cluster
 
 ## Verification
 
-{{Only include if any recommendation is flagged.}}
+{{Only include if a pick is unconfirmed or was replaced, or if a source gap lowers confidence.}}
 
-- {{Model}} at {{retailer URL}}: {{verification: manual | price-changed: was X, now Y}}
+- {{Model}} at {{retailer URL}}: stock not confirmed — {{what was tried and why it failed}}
+- {{Tier}}: {{original model}} was replaced by {{model}} because {{out of stock at every seller found / fails the {{limit}} limit}}
+- Coverage: {{source that could not be reached, and what the affected finding rests on instead}}
 ```
 
 ## Length targets
@@ -144,18 +157,18 @@ Default tiers: **best overall / best budget / best premium**.
 Substitute tier names when the default doesn't fit:
 - If "premium" has no meaningful candidates (e.g., niche category where top-tier options don't exist), replace with a use-case axis: "best for heavy use", "best for small spaces", "best for specific feature".
 - If "budget" and "overall" collapse into the same shortlist (category has no meaningful budget differentiation), rename one to a use-case axis or omit.
-- Never invent a premium pick just to fill the slot. Omitting a tier with honest framing is better than padded content.
+- Omitting a tier with honest framing is better than padded content.
 
 ## Rules for the discarded section
 
-Sources, in priority order:
-1. **Shortlist fallout** — models that appeared in 04/05/06 research but didn't make the top 6. Strongest signal because you have specific findings to cite.
-2. **SEO-popular but expert-rejected** — models that top affiliate/SEO sites push but that the expert-voice or owner-voice research disagrees with. Adds anti-affiliate trust signal.
-3. **User-anchored** — if the user named specific models in the interview, address them here even if they didn't make the shortlist.
+This section explains the discards a reader would wonder about. The candidate table lists the rest. Sources, in priority order:
+1. **User-anchored** — every model the user named in the interview that did not make the picks.
+2. **Shortlist fallout** — models that appeared in 04/05/06 research but didn't make the picks, including any model a voice ranked first. Strongest signal because you have specific findings to cite.
+3. **SEO-popular but expert-rejected** — models that top affiliate/SEO sites push but that the expert-voice or owner-voice research disagrees with. Adds anti-affiliate trust signal.
 
-Minimum: 2 items. Maximum: 3. If fewer than 2 legitimate discards exist, omit the section entirely rather than pad.
+One well-justified discard beats three padded ones. Three is the usual ceiling; user-named models can take it higher. If there is nothing worth explaining, omit the section.
 
-Each entry MUST cite the specific source or finding that led to exclusion. "Didn't make the cut" is not acceptable. "Owner threads on r/Appliances consistently flagged compressor failure within 2 years — 04-owner-voice.md" is acceptable.
+Each entry cites the specific source or finding that led to exclusion. "Didn't make the cut" is not acceptable. "Owner threads on r/Appliances consistently flagged compressor failure within 2 years — 04-owner-voice.md" is acceptable.
 
 ## Confidence tags
 
@@ -166,14 +179,17 @@ Per recommendation, assign one of:
 
 Always include a one-line reason after the tag. `high — 3 independent expert reviews + Reddit BIFL consensus` is useful; `high` alone is not.
 
-## Verification tags
+## Prices, links and flags
 
-Applied per recommendation after Stage 4 scrape:
-- `verification: verified` — default; omit from output to reduce noise
-- `verification: manual — link didn't confirm availability` — scrape ambiguous, user should check before ordering
-- `price-changed: was {X}, now {Y}` — current price differs from research-captured by >20%
+Prices, sellers and links on the recommendation cards come from the finalist sweep (`07-finalist-sweep.md`), which read them from seller pages during this run.
 
-Never rewrite the recommendation based on a verification flag. The flag goes in the "Where to buy" line; the recommendation itself is about quality, not current stock state.
+- `confirmed` picks carry no flag.
+- `unconfirmed` picks keep their place and get a plain flag on the "Where to buy" line: "stock not confirmed, check before ordering". A blocked page says nothing about the product.
+- A pick the sweep found `unavailable` or failing a hard limit has already been replaced in Stage 4. The Verification section says which model was replaced and why.
+
+## Empty sections
+
+Omit a subsection that has nothing to say ("What we learned vs your initial assumptions", Verification, Considered and discarded). Do not write "none found" in its place.
 
 ## Worked example: microwave research (excerpt)
 

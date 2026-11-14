@@ -4,7 +4,7 @@ Load this at Stage 2c before assembling `02-masterclass.md`. The masterclass is 
 
 ## Frontmatter
 
-Use the standard research angle-file frontmatter (see `../../research/references/persistence-format.md`), with:
+Use the standard research angle-file frontmatter (`references/persistence-format.md` in the research skill), with:
 - `role: angle`
 - `sub_question`: "What should a first-time buyer understand about [category]?"
 - `tags`: product category + aspect-related nouns + `masterclass` + `product-research`
@@ -89,17 +89,16 @@ Write as if explaining to a smart friend who's buying this category for the firs
 - **Concrete over abstract.** "25cm+ rear wheels" beats "large wheels." "170-180° recline" beats "good recline."
 - **Explain the WHY.** Don't just list specs — explain the engineering or design reason something matters.
 - **Owner voice over expert voice.** When owners and experts disagree, lead with what owners actually experience daily.
-- **Tradeoffs are mandatory.** Every aspect that matters competes with something else. Never present an aspect as pure upside.
+- **Show the tradeoff.** Every aspect that matters competes with something else. An aspect presented as pure upside usually means its cost was missed.
 - **No product recommendations.** The masterclass educates on dimensions, not models. Specific products belong in Stages 3-5.
 
 ## Length Targets
 
-- Each aspect subsection: 100-200 words
-- Each aspect cluster: 300-600 words (2-3 aspects per cluster)
+- Each aspect subsection: 150-300 words
 - Marketing vs Reality: 150-300 words
 - Ranked criteria: 200-400 words
 - Decision framework: 50-100 words
-- **Total document: 2000-3000 words**
+- **Total document: 2500-4000 words**, depending on how many aspects the category has
 
 If it runs much shorter, aspects are too shallow — the reader won't learn enough to evaluate products independently. If much longer, trim the "what to look for" lists and fold edge cases into the aspect angle files.
 
@@ -110,7 +109,7 @@ The masterclass is a synthesis of the `aspects/*.md` deep-dive files, not a copy
 1. Read all aspect files from `aspects/`
 2. Identify cross-aspect tradeoffs that individual subagents may not have surfaced (e.g., wheel size vs fold size is a tradeoff between two different clusters)
 3. Consolidate overlapping findings — if two clusters both mention the same myth, merge into one Marketing vs Reality entry
-4. Apply interview context ONLY to the "What matters most for your situation" and "Decision framework" sections — the rest of the document should be universally useful regardless of the buyer's priorities
+4. Apply interview context only to the "What matters most for your situation" and "Decision framework" sections, so the rest of the document stays useful to any buyer
 
 ## Relationship to Synthesis
 
